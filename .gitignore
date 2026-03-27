@@ -15,8 +15,10 @@ frontend/.next/
 frontend/node_modules/
 frontend/out/
 
-# Claude
+# Claude / AI config
 .claude/
+frontend/CLAUDE.md
+frontend/AGENTS.md
 
 # OS
 .DS_Store
