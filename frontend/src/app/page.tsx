@@ -134,7 +134,7 @@ export default function Home() {
           ) : (
             <button
               onClick={stopRecording}
-              className="w-full sm:w-auto self-start inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-red-600 text-white font-medium text-sm animate-pulse"
+              className="w-full sm:w-auto self-start inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-red-600 text-white font-medium text-sm motion-safe:animate-pulse"
               aria-label="Stop und Analysieren"
             >
               <StopIcon />
@@ -144,7 +144,7 @@ export default function Home() {
 
           {isRecording && (
             <p className="flex items-center gap-2 text-sm text-red-400">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
+              <span className="w-2 h-2 rounded-full bg-red-500 motion-safe:animate-ping inline-block" />
               Aufnahme läuft…
             </p>
           )}
@@ -302,7 +302,7 @@ function AlertIcon() {
 function Spinner() {
   return (
     <svg
-      className="w-4 h-4 animate-spin text-indigo-400 shrink-0"
+      className="w-4 h-4 motion-safe:animate-spin text-indigo-400 shrink-0"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
