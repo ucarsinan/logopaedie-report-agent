@@ -22,7 +22,7 @@ export function ThemeToggle() {
       aria-checked={isDark}
       aria-label={isDark ? "Light Mode aktivieren" : "Dark Mode aktivieren"}
       className="relative w-8 h-[18px] rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      style={{ background: isDark ? "var(--accent)" : "#e5e7eb" }}
+      style={{ background: isDark ? "var(--accent)" : "var(--border-strong)" }}
     >
       <span
         className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-200"
