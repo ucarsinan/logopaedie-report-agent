@@ -17,6 +17,7 @@ frontend/out/
 
 # Claude / AI config
 .claude/
+.superpowers/
 frontend/CLAUDE.md
 frontend/AGENTS.md
 
