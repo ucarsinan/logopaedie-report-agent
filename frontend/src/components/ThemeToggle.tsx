@@ -10,7 +10,7 @@ export function ThemeToggle() {
   useEffect(() => setMounted(true), []);
 
   if (!mounted) {
-    return <div className="w-7.5 h-7.5" aria-hidden="true" />;
+    return <div className="w-8 h-[18px]" aria-hidden="true" />;
   }
 
   const isDark = resolvedTheme === "dark";
@@ -18,27 +18,16 @@ export function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
+      role="switch"
+      aria-checked={isDark}
       aria-label={isDark ? "Light Mode aktivieren" : "Dark Mode aktivieren"}
+      className="relative w-8 h-[18px] rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      style={{ background: isDark ? "var(--accent)" : "#e5e7eb" }}
     >
-      {isDark ? <SunIcon /> : <MoonIcon />}
+      <span
+        className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-200"
+        style={{ transform: isDark ? "translateX(16px)" : "translateX(2px)" }}
+      />
     </button>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
   );
 }
