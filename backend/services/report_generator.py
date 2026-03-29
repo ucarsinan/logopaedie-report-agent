@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.models.schemas import (
+from models.schemas import (
     Abschlussbericht,
     Befundbericht,
     Diagnose,
@@ -11,8 +11,8 @@ from backend.models.schemas import (
     TherapieberichtKurz,
     TherapieberichtLang,
 )
-from backend.services.groq_client import GroqService
-from backend.services.session_store import Session
+from services.groq_client import GroqService
+from services.session_store import Session
 
 # ── Base prompt shared by all report types ──────────────────────────────────
 _BASE_PROMPT = """\

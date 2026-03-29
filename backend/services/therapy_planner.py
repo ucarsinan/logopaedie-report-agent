@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from backend.models.schemas import TherapyPlan
-from backend.services.groq_client import GroqService
-from backend.services.session_store import Session
+from models.schemas import TherapyPlan
+from services.groq_client import GroqService
+from services.session_store import Session
 
 _SYSTEM_PROMPT = """\
 Du bist ein erfahrener Logopäde/eine erfahrene Logopädin und erstellst

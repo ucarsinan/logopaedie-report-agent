@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from backend.models.schemas import TextSuggestion
-from backend.services.groq_client import GroqService
+from models.schemas import TextSuggestion
+from services.groq_client import GroqService
 
 _SYSTEM_PROMPT = """\
 Du bist ein Textbaustein-Assistent für logopädische Berichte. Du vervollständigst

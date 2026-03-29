@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from backend.models.schemas import ReportComparison
-from backend.services.file_processor import extract_text
-from backend.services.groq_client import GroqService
+from models.schemas import ReportComparison
+from services.file_processor import extract_text
+from services.groq_client import GroqService
 
 _SYSTEM_PROMPT = """\
 Du bist ein erfahrener Logopäde/eine erfahrene Logopädin und analysierst

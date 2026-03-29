@@ -7,7 +7,7 @@ import os
 
 from groq import AsyncGroq
 
-from backend.models.schemas import MedicalReport
+from models.schemas import MedicalReport
 
 # ── Legacy prompt (kept for /process-audio backward compat) ─────────────────
 _LEGACY_SYSTEM_PROMPT = (

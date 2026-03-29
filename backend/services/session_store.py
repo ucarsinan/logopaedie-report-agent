@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import uuid
 
-from backend.models.schemas import ChatMessage, UploadedMaterial
+from models.schemas import ChatMessage, UploadedMaterial
 
 _SESSION_TIMEOUT_SECONDS = 2 * 60 * 60  # 2 hours
 

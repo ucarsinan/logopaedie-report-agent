@@ -1,11 +1,17 @@
 import os
+import sys
 import tempfile
+
+# On Vercel (experimentalServices), backend/ is the function root (/var/task/).
+# Add it to sys.path so "from models.X" and "from services.X" resolve correctly
+# both locally (when running via uvicorn backend.main:app) and on Vercel.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.models.schemas import (
+from models.schemas import (
     ChatRequest,
     ChatResponse,
     PhonologicalAnalysis,
@@ -16,15 +22,15 @@ from backend.models.schemas import (
     TherapyPlan,
     UploadedMaterial,
 )
-from backend.services.anamnesis_engine import AnamnesisEngine
-from backend.services.file_processor import extract_text
-from backend.services.groq_client import GroqService
-from backend.services.phonological_analyzer import PhonologicalAnalyzer
-from backend.services.report_comparator import ReportComparator
-from backend.services.report_generator import ReportGenerator
-from backend.services.session_store import store
-from backend.services.text_suggester import TextSuggester
-from backend.services.therapy_planner import TherapyPlanner
+from services.anamnesis_engine import AnamnesisEngine
+from services.file_processor import extract_text
+from services.groq_client import GroqService
+from services.phonological_analyzer import PhonologicalAnalyzer
+from services.report_comparator import ReportComparator
+from services.report_generator import ReportGenerator
+from services.session_store import store
+from services.text_suggester import TextSuggester
+from services.therapy_planner import TherapyPlanner
 
 load_dotenv()
 

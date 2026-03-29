@@ -6,8 +6,8 @@ phonological processes (Vorverlagerung, Rückverlagerung, etc.).
 
 from __future__ import annotations
 
-from backend.models.schemas import PhonologicalAnalysis
-from backend.services.groq_client import GroqService
+from models.schemas import PhonologicalAnalysis
+from services.groq_client import GroqService
 
 _SYSTEM_PROMPT = """\
 Du bist ein Experte für phonologische Analyse in der deutschen Logopädie.

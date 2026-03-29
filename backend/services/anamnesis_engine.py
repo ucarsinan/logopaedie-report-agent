@@ -6,9 +6,9 @@ information needed for generating a professional report.
 
 from __future__ import annotations
 
-from backend.models.schemas import ChatMessage
-from backend.services.groq_client import GroqService
-from backend.services.session_store import Session
+from models.schemas import ChatMessage
+from services.groq_client import GroqService
+from services.session_store import Session
 
 _ANAMNESIS_SYSTEM_PROMPT = """\
 Du bist ein erfahrener logopädischer Assistent, der Therapeut:innen dabei hilft,
