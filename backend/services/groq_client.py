@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 _CHAT_MODELS = [
     "llama-3.1-8b-instant",
     "gemma2-9b-it",
-    "mixtral-8x7b-32768",
+    "llama3-8b-8192",
 ]
 
 # Report generation: capable models for structured/complex output
 _JSON_MODELS = [
     "llama-3.3-70b-versatile",
-    "mixtral-8x7b-32768",
-    "llama-3.1-8b-instant",
+    "llama-3.1-70b-versatile",
+    "llama3-70b-8192",
 ]
 
 # ── Legacy prompt (kept for /process-audio backward compat) ─────────────────
@@ -43,9 +43,16 @@ _LEGACY_SCHEMA = """Return a JSON object with exactly these fields:
 """
 
 
-def _is_rate_limit(exc: Exception) -> bool:
+def _should_try_next_model(exc: Exception) -> bool:
+    """True for errors where switching to another model makes sense."""
     msg = str(exc)
-    return "429" in msg or "rate_limit" in msg or "Rate limit" in msg
+    return (
+        "429" in msg
+        or "rate_limit" in msg
+        or "Rate limit" in msg
+        or "model_decommissioned" in msg
+        or "decommissioned" in msg
+    )
 
 
 class GroqService:
@@ -113,7 +120,7 @@ class GroqService:
                     logger.info("Model fallback succeeded with: %s", model)
                 return response.choices[0].message.content or ""
             except Exception as e:
-                if _is_rate_limit(e):
+                if _should_try_next_model(e):
                     logger.warning("Rate limit on %s, trying next model.", model)
                     last_exc = e
                     continue
