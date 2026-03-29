@@ -58,12 +58,69 @@ interface ReportData {
 }
 
 type AppPhase = "chat" | "upload" | "generating" | "preview";
+type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+/* ═══════════════════════════ Feature Types ═══════════════════════════════ */
+
+interface PhonologicalProcess {
+  target_word: string;
+  production: string;
+  processes: string[];
+  severity: string;
+}
+
+interface PhonologicalAnalysisData {
+  items: PhonologicalProcess[];
+  summary: string;
+  age_appropriate: boolean;
+  recommended_focus: string[];
+}
+
+interface TherapyGoal {
+  icf_code: string;
+  goal_text: string;
+  methods: string[];
+  milestones: string[];
+  timeframe: string;
+}
+
+interface TherapyPhaseData {
+  phase_name: string;
+  goals: TherapyGoal[];
+  duration: string;
+}
+
+interface TherapyPlanData {
+  patient_pseudonym: string;
+  diagnose_text: string;
+  plan_phases: TherapyPhaseData[];
+  frequency: string;
+  total_sessions: number;
+  elternberatung: string;
+  haeusliche_uebungen: string[];
+}
+
+interface ComparisonItem {
+  category: string;
+  initial_finding: string;
+  current_finding: string;
+  change: string;
+  details: string;
+}
+
+interface ReportComparisonData {
+  items: ComparisonItem[];
+  overall_progress: string;
+  remaining_issues: string[];
+  recommendation: string;
+}
 
 /* ═══════════════════════════════ Main Component ═════════════════════════════ */
 
 export default function Home() {
+  const [activeModule, setActiveModule] = useState<AppModule>("report");
   const [phase, setPhase] = useState<AppPhase>("chat");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -265,41 +322,55 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Header */}
-      <header className="border-b border-zinc-800 px-6 py-4 print:hidden">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold tracking-tight">
-              Logopädie Report Agent
-            </span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-mono">
-              v1.0
-            </span>
+      <header className="border-b border-zinc-800 print:hidden">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-semibold tracking-tight">
+                Logopädie Report Agent
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+                v2.0
+              </span>
+            </div>
+            {/* Phase indicator (only for report module) */}
+            {activeModule === "report" && (
+              <nav className="flex items-center gap-1 text-xs">
+                <PhaseStep label="Anamnese" active={phase === "chat"} done={phase !== "chat"} />
+                <ChevronRight />
+                <PhaseStep label="Materialien" active={phase === "upload"} done={phase === "generating" || phase === "preview"} />
+                <ChevronRight />
+                <PhaseStep label="Bericht" active={phase === "generating" || phase === "preview"} done={phase === "preview"} />
+              </nav>
+            )}
           </div>
-          {/* Phase indicator */}
-          <nav className="flex items-center gap-1 text-xs">
-            <PhaseStep
-              label="Anamnese"
-              active={phase === "chat"}
-              done={phase !== "chat"}
-            />
-            <ChevronRight />
-            <PhaseStep
-              label="Materialien"
-              active={phase === "upload"}
-              done={phase === "generating" || phase === "preview"}
-            />
-            <ChevronRight />
-            <PhaseStep
-              label="Bericht"
-              active={phase === "generating" || phase === "preview"}
-              done={phase === "preview"}
-            />
+          {/* Module tabs */}
+          <nav className="flex gap-1 -mb-px overflow-x-auto">
+            {([
+              ["report", "Berichterstellung"],
+              ["phonology", "Ausspracheanalyse"],
+              ["therapy-plan", "Therapieplan"],
+              ["compare", "Berichtsvergleich"],
+              ["suggest", "Textbausteine"],
+            ] as [AppModule, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setActiveModule(key)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  activeModule === key
+                    ? "border-indigo-500 text-indigo-400"
+                    : "border-transparent text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </nav>
         </div>
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         {/* Error */}
         {error && (
           <div
@@ -311,8 +382,28 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Phase: Chat ────────────────────────────────────────── */}
-        {phase === "chat" && (
+        {/* ── Module: Phonological Analysis ─────────────────────── */}
+        {activeModule === "phonology" && (
+          <PhonologicalAnalysisView api={API} />
+        )}
+
+        {/* ── Module: Therapy Plan ──────────────────────────────── */}
+        {activeModule === "therapy-plan" && (
+          <TherapyPlanView api={API} sessionId={sessionId} />
+        )}
+
+        {/* ── Module: Report Comparison ─────────────────────────── */}
+        {activeModule === "compare" && (
+          <ReportComparisonView api={API} />
+        )}
+
+        {/* ── Module: Text Suggestions ──────────────────────────── */}
+        {activeModule === "suggest" && (
+          <TextSuggestionView api={API} />
+        )}
+
+        {/* ── Module: Report (original phases) ──────────────────── */}
+        {activeModule === "report" && phase === "chat" && (
           <>
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold tracking-tight">
@@ -400,7 +491,7 @@ export default function Home() {
         )}
 
         {/* ── Phase: Upload ──────────────────────────────────────── */}
-        {phase === "upload" && (
+        {activeModule === "report" && phase === "upload" && (
           <>
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold tracking-tight">
@@ -455,7 +546,7 @@ export default function Home() {
         )}
 
         {/* ── Phase: Generating ──────────────────────────────────── */}
-        {phase === "generating" && (
+        {activeModule === "report" && phase === "generating" && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <Spinner />
             <p className="text-sm text-zinc-400">
@@ -465,7 +556,7 @@ export default function Home() {
         )}
 
         {/* ── Phase: Preview ─────────────────────────────────────── */}
-        {phase === "preview" && report && (
+        {activeModule === "report" && phase === "preview" && report && (
           <>
             <div className="flex items-center justify-between print:hidden">
               <h1 className="text-xl font-semibold tracking-tight">
@@ -655,6 +746,543 @@ function ReportSection({
         {children}
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════ Phonological Analysis View ══════════════════════ */
+
+function PhonologicalAnalysisView({ api }: { api: string }) {
+  const [wordPairs, setWordPairs] = useState<{ target: string; production: string }[]>([
+    { target: "", production: "" },
+  ]);
+  const [childAge, setChildAge] = useState("");
+  const [result, setResult] = useState<PhonologicalAnalysisData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function addPair() {
+    setWordPairs((prev) => [...prev, { target: "", production: "" }]);
+  }
+
+  function updatePair(index: number, field: "target" | "production", value: string) {
+    setWordPairs((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+  }
+
+  function removePair(index: number) {
+    if (wordPairs.length > 1) setWordPairs((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function analyze() {
+    const valid = wordPairs.filter((p) => p.target.trim() && p.production.trim());
+    if (!valid.length) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${api}/analysis/phonological-text?${childAge ? `child_age=${encodeURIComponent(childAge)}` : ""}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(valid),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Analyse fehlgeschlagen.");
+      setResult(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const severityColors: Record<string, string> = {
+    leicht: "bg-yellow-900 text-yellow-300",
+    mittel: "bg-orange-900 text-orange-300",
+    schwer: "bg-red-900 text-red-300",
+  };
+
+  return (
+    <>
+      <h1 className="text-xl font-semibold tracking-tight">Phonologische Prozessanalyse</h1>
+      <p className="text-sm text-zinc-400">
+        Geben Sie Zielwörter und die tatsächliche Produktion des Kindes ein. Die KI identifiziert
+        automatisch phonologische Prozesse und bewertet den Schweregrad.
+      </p>
+
+      <div className="flex items-center gap-3">
+        <label className="text-sm text-zinc-400">Alter des Kindes:</label>
+        <input
+          type="text"
+          value={childAge}
+          onChange={(e) => setChildAge(e.target.value)}
+          placeholder="z.B. 4;6 Jahre"
+          className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm w-40 focus:outline-none focus:border-indigo-500"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {wordPairs.map((pair, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={pair.target}
+              onChange={(e) => updatePair(i, "target", e.target.value)}
+              placeholder="Zielwort"
+              className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+            />
+            <span className="text-zinc-600">→</span>
+            <input
+              type="text"
+              value={pair.production}
+              onChange={(e) => updatePair(i, "production", e.target.value)}
+              placeholder="Produktion"
+              className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+            />
+            <button onClick={() => removePair(i)} className="text-zinc-600 hover:text-red-400 text-sm px-2">✕</button>
+          </div>
+        ))}
+        <button onClick={addPair} className="self-start text-sm text-indigo-400 hover:text-indigo-300">+ Weiteres Wortpaar</button>
+      </div>
+
+      <button
+        onClick={analyze}
+        disabled={loading}
+        className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+      >
+        {loading ? "Analysiere…" : "Analyse starten"}
+      </button>
+
+      {error && <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>}
+
+      {result && (
+        <div className="flex flex-col gap-4">
+          {/* Results table */}
+          <div className="rounded-lg border border-zinc-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-900 text-zinc-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left">Zielwort</th>
+                  <th className="px-4 py-3 text-left">Produktion</th>
+                  <th className="px-4 py-3 text-left">Prozesse</th>
+                  <th className="px-4 py-3 text-left">Schwere</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {result.items.map((item, i) => (
+                  <tr key={i} className="bg-zinc-900/60">
+                    <td className="px-4 py-3 font-mono">{item.target_word}</td>
+                    <td className="px-4 py-3 font-mono text-red-300">{item.production}</td>
+                    <td className="px-4 py-3">
+                      <ul className="space-y-1">
+                        {item.processes.map((p, j) => (
+                          <li key={j} className="text-xs text-zinc-300">{p}</li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-1 rounded-full ${severityColors[item.severity] || "bg-zinc-800 text-zinc-400"}`}>
+                        {item.severity}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary */}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-5 py-4">
+            <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2">Zusammenfassung</h3>
+            <p className="text-sm text-zinc-200 whitespace-pre-wrap">{result.summary}</p>
+            <div className="mt-3 flex items-center gap-2">
+              <span className={`text-xs px-2 py-1 rounded-full ${result.age_appropriate ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"}`}>
+                {result.age_appropriate ? "Altersgemäß" : "Nicht altersgemäß"}
+              </span>
+            </div>
+            {result.recommended_focus.length > 0 && (
+              <div className="mt-3">
+                <h4 className="text-xs text-zinc-500 mb-1">Empfohlene Therapieschwerpunkte:</h4>
+                <ul className="space-y-1">
+                  {result.recommended_focus.map((f, i) => (
+                    <li key={i} className="text-sm text-indigo-300 flex items-start gap-2">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════ Therapy Plan View ═══════════════════════════════ */
+
+function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | null }) {
+  const [plan, setPlan] = useState<TherapyPlanData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generatePlan() {
+    if (!sessionId) {
+      setError("Bitte erstellen Sie zuerst einen Bericht im Tab 'Berichterstellung'.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${api}/sessions/${sessionId}/therapy-plan`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Plan-Generierung fehlgeschlagen.");
+      setPlan(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <h1 className="text-xl font-semibold tracking-tight">KI-gestützter Therapieplan</h1>
+      <p className="text-sm text-zinc-400">
+        Generieren Sie einen strukturierten Therapieplan mit ICF-Bezug basierend auf dem
+        erstellten Befundbericht. Führen Sie zuerst eine Anamnese im Tab
+        &quot;Berichterstellung&quot; durch.
+      </p>
+
+      <button
+        onClick={generatePlan}
+        disabled={loading}
+        className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+      >
+        {loading ? "Generiere Therapieplan…" : "Therapieplan generieren"}
+      </button>
+
+      {error && <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>}
+
+      {plan && (
+        <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800 print:border-black print:text-black print:bg-white">
+          <div className="px-6 py-4 bg-zinc-900 print:bg-white">
+            <h2 className="text-lg font-semibold">Therapieplan: {plan.patient_pseudonym}</h2>
+            <p className="text-sm text-zinc-400 mt-1">{plan.diagnose_text}</p>
+            <div className="flex gap-4 mt-2 text-xs text-zinc-500">
+              <span>Frequenz: {plan.frequency}</span>
+              <span>Gesamt: {plan.total_sessions} Sitzungen</span>
+            </div>
+          </div>
+
+          {plan.plan_phases.map((phase, pi) => (
+            <div key={pi} className="px-6 py-4 bg-zinc-900/60">
+              <h3 className="text-sm font-semibold text-indigo-400 mb-3">
+                Phase {pi + 1}: {phase.phase_name}
+                <span className="text-xs text-zinc-500 font-normal ml-2">{phase.duration}</span>
+              </h3>
+              <div className="space-y-4">
+                {phase.goals.map((goal, gi) => (
+                  <div key={gi} className="rounded-lg bg-zinc-800/50 p-4">
+                    <div className="flex items-start gap-2 mb-2">
+                      <span className="text-xs px-2 py-0.5 rounded bg-indigo-900 text-indigo-300 shrink-0 font-mono">
+                        {goal.icf_code}
+                      </span>
+                      <span className="text-sm text-zinc-200">{goal.goal_text}</span>
+                    </div>
+                    <div className="ml-4 space-y-2 text-xs">
+                      <div>
+                        <span className="text-zinc-500">Methoden: </span>
+                        <span className="text-zinc-300">{goal.methods.join(", ")}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Meilensteine: </span>
+                        <span className="text-zinc-300">{goal.milestones.join(" → ")}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Zeitrahmen: </span>
+                        <span className="text-zinc-300">{goal.timeframe}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {plan.elternberatung && (
+            <div className="px-6 py-4 bg-zinc-900/60">
+              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2">Elternberatung</h3>
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{plan.elternberatung}</p>
+            </div>
+          )}
+
+          {plan.haeusliche_uebungen.length > 0 && (
+            <div className="px-6 py-4 bg-zinc-900/60">
+              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2">Häusliche Übungen</h3>
+              <ul className="space-y-1">
+                {plan.haeusliche_uebungen.map((u, i) => (
+                  <li key={i} className="text-sm text-zinc-200 flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                    {u}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="px-6 py-3 bg-zinc-900 flex justify-end print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+            >
+              Drucken / PDF
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════ Report Comparison View ══════════════════════════ */
+
+function ReportComparisonView({ api }: { api: string }) {
+  const [result, setResult] = useState<ReportComparisonData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const initialRef = useRef<HTMLInputElement>(null);
+  const currentRef = useRef<HTMLInputElement>(null);
+
+  async function compare() {
+    const initialFile = initialRef.current?.files?.[0];
+    const currentFile = currentRef.current?.files?.[0];
+    if (!initialFile || !currentFile) {
+      setError("Bitte wählen Sie beide Berichte aus.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append("initial_report", initialFile);
+    formData.append("current_report", currentFile);
+    try {
+      const res = await fetch(`${api}/analysis/compare`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Vergleich fehlgeschlagen.");
+      setResult(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const changeColors: Record<string, string> = {
+    verbessert: "bg-green-900 text-green-300",
+    "unverändert": "bg-zinc-800 text-zinc-400",
+    verschlechtert: "bg-red-900 text-red-300",
+  };
+
+  return (
+    <>
+      <h1 className="text-xl font-semibold tracking-tight">Vergleichende Berichtsanalyse</h1>
+      <p className="text-sm text-zinc-400">
+        Laden Sie zwei Berichte hoch (z.B. Erstbefund und aktueller Befund). Die KI analysiert
+        Veränderungen und erstellt einen strukturierten Fortschrittsbericht.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm text-zinc-400">Erstbefund / Älterer Bericht:</label>
+          <input ref={initialRef} type="file" accept=".pdf,.docx,.txt" className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:text-zinc-300 file:cursor-pointer" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm text-zinc-400">Aktueller Bericht:</label>
+          <input ref={currentRef} type="file" accept=".pdf,.docx,.txt" className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:text-zinc-300 file:cursor-pointer" />
+        </div>
+      </div>
+
+      <button
+        onClick={compare}
+        disabled={loading}
+        className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+      >
+        {loading ? "Vergleiche…" : "Berichte vergleichen"}
+      </button>
+
+      {error && <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>}
+
+      {result && (
+        <div className="flex flex-col gap-4">
+          {/* Comparison table */}
+          <div className="rounded-lg border border-zinc-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-900 text-zinc-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left">Bereich</th>
+                  <th className="px-4 py-3 text-left">Erstbefund</th>
+                  <th className="px-4 py-3 text-left">Aktuell</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {result.items.map((item, i) => (
+                  <tr key={i} className="bg-zinc-900/60">
+                    <td className="px-4 py-3 font-medium text-zinc-300">{item.category}</td>
+                    <td className="px-4 py-3 text-zinc-400 text-xs">{item.initial_finding}</td>
+                    <td className="px-4 py-3 text-zinc-300 text-xs">{item.current_finding}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-1 rounded-full ${changeColors[item.change] || "bg-zinc-800 text-zinc-400"}`}>
+                        {item.change}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary */}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-5 py-4 space-y-3">
+            <div>
+              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-1">Gesamtfortschritt</h3>
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{result.overall_progress}</p>
+            </div>
+            {result.remaining_issues.length > 0 && (
+              <div>
+                <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-1">Verbleibende Probleme</h3>
+                <ul className="space-y-1">{result.remaining_issues.map((r, i) => (
+                  <li key={i} className="text-sm text-orange-300 flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />{r}
+                  </li>
+                ))}</ul>
+              </div>
+            )}
+            <div>
+              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-1">Empfehlung</h3>
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{result.recommendation}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════ Text Suggestion View ════════════════════════════ */
+
+function TextSuggestionView({ api }: { api: string }) {
+  const [text, setText] = useState("");
+  const [reportType, setReportType] = useState("befundbericht");
+  const [disorder, setDisorder] = useState("");
+  const [section, setSection] = useState("befund");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onTextChange(val: string) {
+    setText(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (val.trim().length > 10) {
+      timerRef.current = setTimeout(() => fetchSuggestions(val), 800);
+    } else {
+      setSuggestions([]);
+    }
+  }
+
+  async function fetchSuggestions(input: string) {
+    setLoading(true);
+    try {
+      const res = await fetch(`${api}/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input, report_type: reportType, disorder, section }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setSuggestions(data.suggestions || []);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function applySuggestion(s: string) {
+    setText(text + s);
+    setSuggestions([]);
+  }
+
+  return (
+    <>
+      <h1 className="text-xl font-semibold tracking-tight">Intelligente Textbausteine</h1>
+      <p className="text-sm text-zinc-400">
+        Beginnen Sie einen Satz und die KI schlägt kontextbezogene Vervollständigungen
+        mit logopädischer Fachsprache vor. Klicken Sie auf einen Vorschlag zum Übernehmen.
+      </p>
+
+      {/* Context selectors */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-zinc-500">Berichtstyp</label>
+          <select value={reportType} onChange={(e) => setReportType(e.target.value)}
+            className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            <option value="befundbericht">Befundbericht</option>
+            <option value="therapiebericht_kurz">Therapiebericht (kurz)</option>
+            <option value="therapiebericht_lang">Therapiebericht (lang)</option>
+            <option value="abschlussbericht">Abschlussbericht</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-zinc-500">Abschnitt</label>
+          <select value={section} onChange={(e) => setSection(e.target.value)}
+            className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            <option value="anamnese">Anamnese</option>
+            <option value="befund">Befund</option>
+            <option value="therapieindikation">Therapieindikation</option>
+            <option value="therapieverlauf">Therapieverlauf</option>
+            <option value="empfehlung">Empfehlung</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-zinc-500">Störungsbild</label>
+          <input type="text" value={disorder} onChange={(e) => setDisorder(e.target.value)}
+            placeholder="z.B. SP1, ST2"
+            className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm w-32 focus:outline-none focus:border-indigo-500" />
+        </div>
+      </div>
+
+      {/* Text editor */}
+      <div className="relative">
+        <textarea
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          rows={8}
+          placeholder="Beginnen Sie hier zu schreiben, z.B. 'Die phonologische Bewertung ergab...'"
+          className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-3 text-sm leading-relaxed resize-y focus:outline-none focus:border-indigo-500"
+        />
+        {loading && (
+          <div className="absolute top-3 right-3">
+            <Spinner />
+          </div>
+        )}
+      </div>
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest">
+            Vorschläge (klicken zum Übernehmen)
+          </h3>
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => applySuggestion(s)}
+              className="text-left rounded-lg bg-zinc-900 border border-zinc-800 hover:border-indigo-600 px-4 py-3 text-sm text-zinc-300 transition-colors"
+            >
+              <span className="text-zinc-600">{text}</span>
+              <span className="text-indigo-300">{s}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

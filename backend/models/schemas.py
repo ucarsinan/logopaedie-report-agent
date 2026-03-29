@@ -104,3 +104,71 @@ class UploadedMaterial(BaseModel):
     content_type: str
     extracted_text: str
     material_type: str = "sonstiges"  # alter_bericht | diagnostik | verordnung | sonstiges
+
+
+# ── Feature 1: Phonological Process Analysis ───────────────────────────────
+class PhonologicalProcess(BaseModel):
+    target_word: str
+    production: str
+    processes: list[str] = Field(default_factory=list)
+    severity: str = "leicht"  # leicht | mittel | schwer
+
+
+class PhonologicalAnalysis(BaseModel):
+    items: list[PhonologicalProcess] = Field(default_factory=list)
+    summary: str = ""
+    age_appropriate: bool = True
+    recommended_focus: list[str] = Field(default_factory=list)
+
+
+# ── Feature 2: Therapy Plan Generator ──────────────────────────────────────
+class TherapyGoal(BaseModel):
+    icf_code: str = ""
+    goal_text: str = ""
+    methods: list[str] = Field(default_factory=list)
+    milestones: list[str] = Field(default_factory=list)
+    timeframe: str = ""
+
+
+class TherapyPhase(BaseModel):
+    phase_name: str = ""
+    goals: list[TherapyGoal] = Field(default_factory=list)
+    duration: str = ""
+
+
+class TherapyPlan(BaseModel):
+    patient_pseudonym: str = ""
+    diagnose_text: str = ""
+    plan_phases: list[TherapyPhase] = Field(default_factory=list)
+    frequency: str = ""
+    total_sessions: int = 0
+    elternberatung: str = ""
+    haeusliche_uebungen: list[str] = Field(default_factory=list)
+
+
+# ── Feature 3: Comparative Report Analysis ─────────────────────────────────
+class ComparisonItem(BaseModel):
+    category: str = ""
+    initial_finding: str = ""
+    current_finding: str = ""
+    change: str = "unverändert"  # verbessert | unverändert | verschlechtert
+    details: str = ""
+
+
+class ReportComparison(BaseModel):
+    items: list[ComparisonItem] = Field(default_factory=list)
+    overall_progress: str = ""
+    remaining_issues: list[str] = Field(default_factory=list)
+    recommendation: str = ""
+
+
+# ── Feature 4: Intelligent Text Suggestions ────────────────────────────────
+class SuggestRequest(BaseModel):
+    text: str
+    report_type: str = "befundbericht"
+    disorder: str = ""
+    section: str = ""  # z.B. "anamnese", "befund", "therapieindikation"
+
+
+class TextSuggestion(BaseModel):
+    suggestions: list[str] = Field(default_factory=list)
