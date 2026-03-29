@@ -103,7 +103,12 @@ async def process_audio(audio_file: UploadFile = File(...)):
         report = await groq_service.generate_structured_report(transcript)
         return report
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if "429" in str(e) or "rate_limit" in str(e):
+            raise HTTPException(
+                status_code=429,
+                detail="Das KI-Tageslimit ist leider erreicht. Bitte versuchen Sie es morgen erneut.",
+            )
+        raise HTTPException(status_code=500, detail="KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut.")
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -154,7 +159,12 @@ async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
     try:
         response_text = await anamnesis_engine.process_message(session, req.message)
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if "429" in str(e) or "rate_limit" in str(e):
+            raise HTTPException(
+                status_code=429,
+                detail="Das KI-Tageslimit ist leider erreicht. Bitte versuchen Sie es morgen erneut.",
+            )
+        raise HTTPException(status_code=500, detail="KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut.")
 
     return ChatResponse(
         message=response_text,
@@ -193,7 +203,12 @@ async def chat_audio(session_id: str, audio_file: UploadFile = File(...)) -> Cha
             collected_fields=session.collected_data.get("collected_fields", []),
         )
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if "429" in str(e) or "rate_limit" in str(e):
+            raise HTTPException(
+                status_code=429,
+                detail="Das KI-Tageslimit ist leider erreicht. Bitte versuchen Sie es morgen erneut.",
+            )
+        raise HTTPException(status_code=500, detail="KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut.")
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
