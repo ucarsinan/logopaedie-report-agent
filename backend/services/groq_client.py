@@ -71,11 +71,12 @@ class GroqService:
         messages: list[dict[str, str]],
         system_prompt: str,
         response_format: dict | None = None,
+        model: str = "llama-3.1-8b-instant",
     ) -> str:
         """Send a chat completion request and return the assistant message content."""
         try:
             kwargs: dict = {
-                "model": "llama-3.3-70b-versatile",
+                "model": model,
                 "messages": [{"role": "system", "content": system_prompt}, *messages],
             }
             if response_format:
@@ -90,10 +91,11 @@ class GroqService:
         self,
         messages: list[dict[str, str]],
         system_prompt: str,
+        model: str = "llama-3.3-70b-versatile",
     ) -> dict:
         """Chat completion that returns parsed JSON."""
         raw = await self.chat_completion(
-            messages, system_prompt, response_format={"type": "json_object"}
+            messages, system_prompt, response_format={"type": "json_object"}, model=model
         )
         try:
             return json.loads(raw)
