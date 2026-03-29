@@ -196,6 +196,7 @@ export default function Home() {
         setIsAnamnesisComplete(data.is_anamnesis_complete);
         setCollectedFields(data.collected_fields);
       } catch (err) {
+        setMessages((prev) => prev.slice(0, -1)); // rollback user message
         setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
       } finally {
         setIsSending(false);
@@ -412,8 +413,8 @@ export default function Home() {
 
       {/* Main */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
-        {/* Error */}
-        {error && (
+        {/* Error — hidden on WelcomeScreen (shown inline there instead) */}
+        {error && currentPhase !== "greeting" && (
           <div
             role="alert"
             className="rounded-lg bg-error-surface border border-error-border px-5 py-4 text-sm text-error-text flex items-start gap-3 print:hidden"
@@ -445,7 +446,7 @@ export default function Home() {
 
         {/* ── Module: Report (original phases) ──────────────────── */}
         {activeModule === "report" && phase === "chat" && currentPhase === "greeting" && (
-          <WelcomeScreen onSelect={sendMessage} isSending={isSending} />
+          <WelcomeScreen onSelect={sendMessage} isSending={isSending} error={error} />
         )}
 
         {activeModule === "report" && phase === "chat" && currentPhase !== "greeting" && (
@@ -732,9 +733,11 @@ const accentClasses = {
 function WelcomeScreen({
   onSelect,
   isSending,
+  error,
 }: {
   onSelect: (type: string) => void;
   isSending: boolean;
+  error?: string | null;
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-8 py-8">
@@ -801,6 +804,13 @@ function WelcomeScreen({
       {isSending && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner /> Verbinde…
+        </div>
+      )}
+
+      {error && !isSending && (
+        <div role="alert" className="flex items-start gap-3 rounded-lg bg-error-surface border border-error-border px-5 py-4 text-sm text-error-text w-full max-w-2xl">
+          <AlertIcon />
+          <span>{error}</span>
         </div>
       )}
     </div>
