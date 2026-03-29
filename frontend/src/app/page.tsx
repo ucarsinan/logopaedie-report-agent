@@ -325,29 +325,66 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-border print:hidden">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-3">
-              <span className="text-lg font-semibold tracking-tight">
-                Logopädie Report Agent
+          {/* Top bar: breadcrumb + controls */}
+          <div className="flex items-center justify-between h-12">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-extrabold tracking-tight text-foreground">
+                Logopädie
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-surface-elevated text-muted-foreground font-mono">
-                v2.0
+              <span className="text-border-strong font-light">/</span>
+              <span className="font-semibold" style={{ color: "var(--accent-text)" }}>
+                {({
+                  report: "Berichterstellung",
+                  phonology: "Ausspracheanalyse",
+                  "therapy-plan": "Therapieplan",
+                  compare: "Berichtsvergleich",
+                  suggest: "Textbausteine",
+                } as Record<AppModule, string>)[activeModule]}
               </span>
             </div>
             <div className="flex items-center gap-3">
-              {/* Phase indicator (only for report module) */}
-              {activeModule === "report" && (
-                <nav className="flex items-center gap-1 text-xs">
-                  <PhaseStep label="Anamnese" active={phase === "chat"} done={phase !== "chat"} />
-                  <ChevronRight />
-                  <PhaseStep label="Materialien" active={phase === "upload"} done={phase === "generating" || phase === "preview"} />
-                  <ChevronRight />
-                  <PhaseStep label="Bericht" active={phase === "generating" || phase === "preview"} done={phase === "preview"} />
-                </nav>
-              )}
+              <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border-strong text-[10px] text-muted-foreground font-mono">
+                ⌘K
+              </kbd>
               <ThemeToggle />
             </div>
           </div>
+
+          {/* Phase pills — report module only */}
+          {activeModule === "report" && (
+            <div className="flex items-center gap-2 pb-2 text-xs">
+              {(
+                [
+                  { label: "① Anamnese", active: phase === "chat", done: phase !== "chat" },
+                  { label: "② Material", active: phase === "upload", done: phase === "generating" || phase === "preview" },
+                  { label: "③ Bericht", active: phase === "generating" || phase === "preview", done: false },
+                ] as { label: string; active: boolean; done: boolean }[]
+              ).map((step, i) => (
+                <span key={i} className="flex items-center gap-2">
+                  {i > 0 && <span className="text-muted-foreground">→</span>}
+                  <span
+                    className={`px-3 py-1 rounded-full font-medium transition-colors ${
+                      step.active
+                        ? "text-white"
+                        : step.done
+                        ? "text-accent-text"
+                        : "text-muted-foreground"
+                    }`}
+                    style={
+                      step.active
+                        ? { background: "var(--accent)" }
+                        : step.done
+                        ? { background: "var(--accent-muted)" }
+                        : { background: "var(--surface-elevated)" }
+                    }
+                  >
+                    {step.label}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Module tabs */}
           <nav className="flex gap-1 -mb-px overflow-x-auto">
             {([
@@ -362,8 +399,8 @@ export default function Home() {
                 onClick={() => setActiveModule(key)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeModule === key
-                    ? "border-indigo-500 text-indigo-400"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    ? "border-[var(--accent)] text-[var(--accent-text)]"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border-strong"
                 }`}
               >
                 {label}
@@ -1443,33 +1480,6 @@ function TextSuggestionView({ api }: { api: string }) {
         </div>
       )}
     </>
-  );
-}
-
-/* ═══════════════════════════════ Phase Step ══════════════════════════════════ */
-
-function PhaseStep({
-  label,
-  active,
-  done,
-}: {
-  label: string;
-  active: boolean;
-  done: boolean;
-}) {
-  return (
-    <span
-      className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-        active
-          ? "bg-indigo-600 text-white"
-          : done
-            ? "bg-green-900 text-green-300"
-            : "bg-surface-elevated text-muted-foreground"
-      }`}
-    >
-      {done ? "✓ " : ""}
-      {label}
-    </span>
   );
 }
 
