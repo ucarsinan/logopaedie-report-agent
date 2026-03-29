@@ -462,7 +462,7 @@ export default function Home() {
             </div>
 
             {/* Chat messages */}
-            <div className="flex-1 flex flex-col gap-3 overflow-y-auto max-h-[60vh] rounded-lg border border-border bg-surface/50 p-4">
+            <div className="flex-1 flex flex-col gap-3 overflow-y-auto max-h-[60vh] rounded-lg border border-border bg-surface p-4 card-elevated">
               {messages.map((msg, i) => (
                 <ChatBubble key={i} role={msg.role} content={msg.content} />
               ))}
@@ -511,7 +511,7 @@ export default function Home() {
               <button
                 onClick={() => sendMessage(input)}
                 disabled={isSending || !input.trim()}
-                className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
+                className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40 btn-accent-glow"
               >
                 Senden
               </button>
@@ -526,7 +526,7 @@ export default function Home() {
                 </span>
                 <button
                   onClick={() => setPhase("upload")}
-                  className="shrink-0 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                  className="shrink-0 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors btn-accent-glow"
                 >
                   Weiter
                 </button>
@@ -583,7 +583,7 @@ export default function Home() {
             {/* Generate button */}
             <button
               onClick={generateReport}
-              className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors"
+              className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors btn-accent-glow"
             >
               Bericht generieren
             </button>

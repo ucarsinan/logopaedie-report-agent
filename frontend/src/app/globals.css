@@ -73,3 +73,12 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+/* ── Dark mode card elevation ── */
+.dark .card-elevated {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.dark .btn-accent-glow {
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
