@@ -367,14 +367,14 @@ export default function Home() {
                       step.active
                         ? "text-white"
                         : step.done
-                        ? "text-accent-text"
+                        ? ""
                         : "text-muted-foreground"
                     }`}
                     style={
                       step.active
-                        ? { background: "var(--accent)" }
+                        ? { background: "var(--accent)", color: "white" }
                         : step.done
-                        ? { background: "var(--accent-muted)" }
+                        ? { background: "var(--accent-muted)", color: "var(--accent-text)" }
                         : { background: "var(--surface-elevated)" }
                     }
                   >
