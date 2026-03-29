@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
+/* ── Class-based dark mode (next-themes adds .dark to <html>) ── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Light mode tokens (default) ── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #F8F7F4;
+  --surface: #FFFFFF;
+  --surface-elevated: #EEE9E1;
+  --border: #E0DCD3;
+  --border-strong: #C9C4BA;
+  --foreground: #1C1917;
+  --muted-foreground: #78716C;
+  --muted: #A8A29E;
+  --input-bg: #F0ECE5;
+  --ring: #6366F1;
+  --error-surface: #FEF2F2;
+  --error-border: #FECACA;
+  --error-text: #B91C1C;
 }
 
+/* ── Dark mode tokens ── */
+.dark {
+  --background: #09090B;
+  --surface: #18181B;
+  --surface-elevated: #27272A;
+  --border: #27272A;
+  --border-strong: #3F3F46;
+  --foreground: #FAFAFA;
+  --muted-foreground: #A1A1AA;
+  --muted: #52525B;
+  --input-bg: #18181B;
+  --ring: #818CF8;
+  --error-surface: rgba(69, 10, 10, 0.8);
+  --error-border: #991B1B;
+  --error-text: #FCA5A5;
+}
+
+/* ── Tailwind 4 token bindings ── */
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-input: var(--input-bg);
+  --color-error-surface: var(--error-surface);
+  --color-error-border: var(--error-border);
+  --color-error-text: var(--error-text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
 }

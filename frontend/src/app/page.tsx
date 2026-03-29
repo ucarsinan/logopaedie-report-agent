@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 /* ═══════════════════════════════════ Types ═══════════════════════════════════ */
 
@@ -320,29 +321,32 @@ export default function Home() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
-      <header className="border-b border-zinc-800 print:hidden">
+      <header className="border-b border-border print:hidden">
         <div className="max-w-5xl mx-auto px-6">
           <div className="flex items-center justify-between py-4">
             <div className="flex items-center gap-3">
               <span className="text-lg font-semibold tracking-tight">
                 Logopädie Report Agent
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-surface-elevated text-muted-foreground font-mono">
                 v2.0
               </span>
             </div>
-            {/* Phase indicator (only for report module) */}
-            {activeModule === "report" && (
-              <nav className="flex items-center gap-1 text-xs">
-                <PhaseStep label="Anamnese" active={phase === "chat"} done={phase !== "chat"} />
-                <ChevronRight />
-                <PhaseStep label="Materialien" active={phase === "upload"} done={phase === "generating" || phase === "preview"} />
-                <ChevronRight />
-                <PhaseStep label="Bericht" active={phase === "generating" || phase === "preview"} done={phase === "preview"} />
-              </nav>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Phase indicator (only for report module) */}
+              {activeModule === "report" && (
+                <nav className="flex items-center gap-1 text-xs">
+                  <PhaseStep label="Anamnese" active={phase === "chat"} done={phase !== "chat"} />
+                  <ChevronRight />
+                  <PhaseStep label="Materialien" active={phase === "upload"} done={phase === "generating" || phase === "preview"} />
+                  <ChevronRight />
+                  <PhaseStep label="Bericht" active={phase === "generating" || phase === "preview"} done={phase === "preview"} />
+                </nav>
+              )}
+              <ThemeToggle />
+            </div>
           </div>
           {/* Module tabs */}
           <nav className="flex gap-1 -mb-px overflow-x-auto">
@@ -359,7 +363,7 @@ export default function Home() {
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeModule === key
                     ? "border-indigo-500 text-indigo-400"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                 }`}
               >
                 {label}
@@ -375,7 +379,7 @@ export default function Home() {
         {error && (
           <div
             role="alert"
-            className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300 flex items-start gap-3 print:hidden"
+            className="rounded-lg bg-error-surface border border-error-border px-5 py-4 text-sm text-error-text flex items-start gap-3 print:hidden"
           >
             <AlertIcon />
             <span>{error}</span>
@@ -403,26 +407,30 @@ export default function Home() {
         )}
 
         {/* ── Module: Report (original phases) ──────────────────── */}
-        {activeModule === "report" && phase === "chat" && (
+        {activeModule === "report" && phase === "chat" && currentPhase === "greeting" && (
+          <WelcomeScreen onSelect={sendMessage} isSending={isSending} />
+        )}
+
+        {activeModule === "report" && phase === "chat" && currentPhase !== "greeting" && (
           <>
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold tracking-tight">
                 Anamnese-Gespräch
               </h1>
               {collectedFields.length > 0 && (
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-muted-foreground">
                   {collectedFields.length} Felder erfasst
                 </span>
               )}
             </div>
 
             {/* Chat messages */}
-            <div className="flex-1 flex flex-col gap-3 overflow-y-auto max-h-[60vh] rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+            <div className="flex-1 flex flex-col gap-3 overflow-y-auto max-h-[60vh] rounded-lg border border-border bg-surface/50 p-4">
               {messages.map((msg, i) => (
                 <ChatBubble key={i} role={msg.role} content={msg.content} />
               ))}
               {isSending && (
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Spinner /> Antwort wird generiert…
                 </div>
               )}
@@ -443,13 +451,13 @@ export default function Home() {
                 }}
                 disabled={isSending}
                 placeholder="Ihre Antwort eingeben…"
-                className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-3 text-sm placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                className="flex-1 rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-indigo-500 disabled:opacity-40"
               />
               {!isRecording ? (
                 <button
                   onClick={startRecording}
                   disabled={isSending}
-                  className="px-4 py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors disabled:opacity-40"
+                  className="px-4 py-3 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40"
                   title="Spracheingabe"
                 >
                   <MicIcon />
@@ -499,13 +507,13 @@ export default function Home() {
               </h1>
               <button
                 onClick={() => setPhase("chat")}
-                className="text-sm text-zinc-500 hover:text-zinc-300"
+                className="text-sm text-muted-foreground hover:text-foreground"
               >
                 ← Zurück zum Gespräch
               </button>
             </div>
 
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-muted-foreground">
               Laden Sie vorhandene Berichte, Diagnostik-Ergebnisse oder
               Verordnungen hoch (PDF, DOCX, TXT). Diese werden als Kontext für
               die Berichterstellung verwendet. Dieser Schritt ist optional.
@@ -517,17 +525,17 @@ export default function Home() {
             {/* File list */}
             {uploadedFiles.length > 0 && (
               <div className="flex flex-col gap-2">
-                <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-widest">
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
                   Hochgeladene Dateien
                 </h2>
                 {uploadedFiles.map((f, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-3 rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm"
+                    className="flex items-center gap-3 rounded-lg bg-surface border border-border px-4 py-3 text-sm"
                   >
                     <FileIcon />
-                    <span className="text-zinc-200">{f.filename}</span>
-                    <span className="text-xs text-zinc-600 ml-auto">
+                    <span className="text-foreground">{f.filename}</span>
+                    <span className="text-xs text-muted ml-auto">
                       {f.extracted_text.length} Zeichen extrahiert
                     </span>
                   </div>
@@ -549,7 +557,7 @@ export default function Home() {
         {activeModule === "report" && phase === "generating" && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <Spinner />
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-muted-foreground">
               Bericht wird generiert… Dies kann einen Moment dauern.
             </p>
           </div>
@@ -565,7 +573,7 @@ export default function Home() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setPhase("upload")}
-                  className="text-sm text-zinc-500 hover:text-zinc-300"
+                  className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   ← Zurück
                 </button>
@@ -583,7 +591,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-800 px-6 py-4 text-center text-xs text-zinc-600 print:hidden">
+      <footer className="border-t border-border px-6 py-4 text-center text-xs text-muted print:hidden">
         Logopädie Report Agent · Groq API · FastAPI + Next.js
       </footer>
     </div>
@@ -600,11 +608,163 @@ function ChatBubble({ role, content }: { role: string; content: string }) {
         className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
           isUser
             ? "bg-indigo-600 text-white rounded-br-md"
-            : "bg-zinc-800 text-zinc-200 rounded-bl-md"
+            : "bg-surface-elevated text-foreground rounded-bl-md"
         }`}
       >
         {content}
       </div>
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════ Welcome Screen ═══════════════════════════════ */
+
+const REPORT_TYPES = [
+  {
+    key: 'Befundbericht',
+    label: 'Befundbericht',
+    desc: 'Erstdiagnostik & initiale Befunde',
+    accent: 'indigo',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'Therapiebericht kurz',
+    label: 'Therapiebericht (kurz)',
+    desc: 'Kurze Verlaufsdokumentation',
+    accent: 'emerald',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+        <rect x="3" y="3" width="18" height="18" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    key: 'Therapiebericht lang',
+    label: 'Therapiebericht (lang)',
+    desc: 'Ausführlicher Therapieverlauf',
+    accent: 'violet',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'Abschlussbericht',
+    label: 'Abschlussbericht',
+    desc: 'Therapieabschluss & Ergebnis',
+    accent: 'amber',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+] as const;
+
+const accentClasses = {
+  indigo: {
+    icon: 'bg-indigo-500/15 text-indigo-400',
+    ring: 'hover:ring-indigo-500/40 hover:border-indigo-500/50',
+    badge: 'bg-indigo-500/10 text-indigo-400',
+  },
+  emerald: {
+    icon: 'bg-emerald-500/15 text-emerald-400',
+    ring: 'hover:ring-emerald-500/40 hover:border-emerald-500/50',
+    badge: 'bg-emerald-500/10 text-emerald-400',
+  },
+  violet: {
+    icon: 'bg-violet-500/15 text-violet-400',
+    ring: 'hover:ring-violet-500/40 hover:border-violet-500/50',
+    badge: 'bg-violet-500/10 text-violet-400',
+  },
+  amber: {
+    icon: 'bg-amber-500/15 text-amber-400',
+    ring: 'hover:ring-amber-500/40 hover:border-amber-500/50',
+    badge: 'bg-amber-500/10 text-amber-400',
+  },
+};
+
+function WelcomeScreen({
+  onSelect,
+  isSending,
+}: {
+  onSelect: (type: string) => void;
+  isSending: boolean;
+}) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-8 py-8">
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <p className="text-xs font-semibold tracking-widest text-indigo-400 uppercase">
+          Logopädie Report Agent
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Welchen Bericht möchten Sie erstellen?
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Wählen Sie einen Berichtstyp, um das Gespräch zu starten.
+        </p>
+      </div>
+
+      {/* Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
+        {REPORT_TYPES.map((rt) => {
+          const cls = accentClasses[rt.accent];
+          return (
+            <button
+              key={rt.key}
+              onClick={() => onSelect(rt.key)}
+              disabled={isSending}
+              className={[
+                'group relative flex items-start gap-4 rounded-xl border border-border bg-surface/60 p-5 text-left',
+                'ring-1 ring-transparent transition-all duration-150',
+                'hover:bg-surface hover:scale-[1.02]',
+                cls.ring,
+                'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100',
+              ].join(' ')}
+            >
+              {/* Icon */}
+              <span className={['rounded-lg p-2.5 shrink-0', cls.icon].join(' ')}>
+                {rt.icon}
+              </span>
+
+              {/* Text */}
+              <div className="flex flex-col gap-0.5">
+                <span className="font-semibold text-sm text-foreground leading-snug">
+                  {rt.label}
+                </span>
+                <span className="text-xs text-muted-foreground leading-relaxed">{rt.desc}</span>
+              </div>
+
+              {/* Arrow */}
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4 text-muted group-hover:text-muted-foreground transition-colors ml-auto shrink-0 mt-0.5"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          );
+        })}
+      </div>
+
+      {isSending && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner /> Verbinde…
+        </div>
+      )}
     </div>
   );
 }
@@ -630,15 +790,15 @@ function DropZone({ onFiles }: { onFiles: (files: FileList) => void }) {
       onClick={() => inputRef.current?.click()}
       className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-8 py-12 cursor-pointer transition-colors ${
         isDragOver
-          ? "border-indigo-500 bg-indigo-950/30"
-          : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-600"
+          ? "border-indigo-500 bg-indigo-500/10"
+          : "border-border-strong bg-surface/50 hover:bg-surface"
       }`}
     >
       <UploadIcon />
-      <p className="text-sm text-zinc-400">
-        Dateien hierher ziehen oder <span className="text-indigo-400">durchsuchen</span>
+      <p className="text-sm text-muted-foreground">
+        Dateien hierher ziehen oder <span className="text-indigo-500">durchsuchen</span>
       </p>
-      <p className="text-xs text-zinc-600">PDF, DOCX oder TXT · Max. 10 MB</p>
+      <p className="text-xs text-muted">PDF, DOCX oder TXT · Max. 10 MB</p>
       <input
         ref={inputRef}
         type="file"
@@ -664,9 +824,9 @@ function ReportPreview({ report }: { report: ReportData }) {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800 print:border-black print:divide-black print:text-black print:bg-white">
+    <div className="rounded-lg border border-border overflow-hidden divide-y divide-border print:border-black print:divide-black print:text-black print:bg-white">
       {/* Header */}
-      <div className="px-6 py-4 bg-zinc-900 print:bg-white">
+      <div className="px-6 py-4 bg-surface print:bg-white">
         <h2 className="text-lg font-semibold print:text-black">
           {typeLabels[report.report_type] || report.report_type}
         </h2>
@@ -738,11 +898,11 @@ function ReportSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="px-6 py-4 bg-zinc-900/60 print:bg-white">
-      <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2 print:text-black print:font-bold print:text-sm print:normal-case">
+    <div className="px-6 py-4 bg-surface/60 print:bg-white">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 print:text-black print:font-bold print:text-sm print:normal-case">
         {title}
       </h3>
-      <div className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap print:text-black">
+      <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap print:text-black">
         {children}
       </div>
     </div>
@@ -801,19 +961,19 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
   return (
     <>
       <h1 className="text-xl font-semibold tracking-tight">Phonologische Prozessanalyse</h1>
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-muted-foreground">
         Geben Sie Zielwörter und die tatsächliche Produktion des Kindes ein. Die KI identifiziert
         automatisch phonologische Prozesse und bewertet den Schweregrad.
       </p>
 
       <div className="flex items-center gap-3">
-        <label className="text-sm text-zinc-400">Alter des Kindes:</label>
+        <label className="text-sm text-muted-foreground">Alter des Kindes:</label>
         <input
           type="text"
           value={childAge}
           onChange={(e) => setChildAge(e.target.value)}
           placeholder="z.B. 4;6 Jahre"
-          className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm w-40 focus:outline-none focus:border-indigo-500"
+          className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm w-40 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
@@ -825,17 +985,17 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
               value={pair.target}
               onChange={(e) => updatePair(i, "target", e.target.value)}
               placeholder="Zielwort"
-              className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
             />
-            <span className="text-zinc-600">→</span>
+            <span className="text-muted">→</span>
             <input
               type="text"
               value={pair.production}
               onChange={(e) => updatePair(i, "production", e.target.value)}
               placeholder="Produktion"
-              className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
             />
-            <button onClick={() => removePair(i)} className="text-zinc-600 hover:text-red-400 text-sm px-2">✕</button>
+            <button onClick={() => removePair(i)} className="text-muted hover:text-red-400 text-sm px-2">✕</button>
           </div>
         ))}
         <button onClick={addPair} className="self-start text-sm text-indigo-400 hover:text-indigo-300">+ Weiteres Wortpaar</button>
@@ -854,30 +1014,30 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
       {result && (
         <div className="flex flex-col gap-4">
           {/* Results table */}
-          <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-zinc-900 text-zinc-400 text-xs uppercase tracking-wider">
+                <tr className="bg-surface text-muted-foreground text-xs uppercase tracking-wider">
                   <th className="px-4 py-3 text-left">Zielwort</th>
                   <th className="px-4 py-3 text-left">Produktion</th>
                   <th className="px-4 py-3 text-left">Prozesse</th>
                   <th className="px-4 py-3 text-left">Schwere</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {result.items.map((item, i) => (
-                  <tr key={i} className="bg-zinc-900/60">
+                  <tr key={i} className="bg-surface/60">
                     <td className="px-4 py-3 font-mono">{item.target_word}</td>
                     <td className="px-4 py-3 font-mono text-red-300">{item.production}</td>
                     <td className="px-4 py-3">
                       <ul className="space-y-1">
                         {item.processes.map((p, j) => (
-                          <li key={j} className="text-xs text-zinc-300">{p}</li>
+                          <li key={j} className="text-xs text-foreground/80">{p}</li>
                         ))}
                       </ul>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full ${severityColors[item.severity] || "bg-zinc-800 text-zinc-400"}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full ${severityColors[item.severity] || "bg-surface-elevated text-muted-foreground"}`}>
                         {item.severity}
                       </span>
                     </td>
@@ -888,9 +1048,9 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
           </div>
 
           {/* Summary */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-5 py-4">
-            <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2">Zusammenfassung</h3>
-            <p className="text-sm text-zinc-200 whitespace-pre-wrap">{result.summary}</p>
+          <div className="rounded-lg border border-border bg-surface/60 px-5 py-4">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Zusammenfassung</h3>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{result.summary}</p>
             <div className="mt-3 flex items-center gap-2">
               <span className={`text-xs px-2 py-1 rounded-full ${result.age_appropriate ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"}`}>
                 {result.age_appropriate ? "Altersgemäß" : "Nicht altersgemäß"}
@@ -898,7 +1058,7 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
             </div>
             {result.recommended_focus.length > 0 && (
               <div className="mt-3">
-                <h4 className="text-xs text-zinc-500 mb-1">Empfohlene Therapieschwerpunkte:</h4>
+                <h4 className="text-xs text-muted-foreground mb-1">Empfohlene Therapieschwerpunkte:</h4>
                 <ul className="space-y-1">
                   {result.recommended_focus.map((f, i) => (
                     <li key={i} className="text-sm text-indigo-300 flex items-start gap-2">
@@ -944,7 +1104,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
   return (
     <>
       <h1 className="text-xl font-semibold tracking-tight">KI-gestützter Therapieplan</h1>
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-muted-foreground">
         Generieren Sie einen strukturierten Therapieplan mit ICF-Bezug basierend auf dem
         erstellten Befundbericht. Führen Sie zuerst eine Anamnese im Tab
         &quot;Berichterstellung&quot; durch.
@@ -961,43 +1121,43 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
       {error && <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>}
 
       {plan && (
-        <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800 print:border-black print:text-black print:bg-white">
-          <div className="px-6 py-4 bg-zinc-900 print:bg-white">
+        <div className="rounded-lg border border-border overflow-hidden divide-y divide-border print:border-black print:text-black print:bg-white">
+          <div className="px-6 py-4 bg-surface print:bg-white">
             <h2 className="text-lg font-semibold">Therapieplan: {plan.patient_pseudonym}</h2>
-            <p className="text-sm text-zinc-400 mt-1">{plan.diagnose_text}</p>
-            <div className="flex gap-4 mt-2 text-xs text-zinc-500">
+            <p className="text-sm text-muted-foreground mt-1">{plan.diagnose_text}</p>
+            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
               <span>Frequenz: {plan.frequency}</span>
               <span>Gesamt: {plan.total_sessions} Sitzungen</span>
             </div>
           </div>
 
           {plan.plan_phases.map((phase, pi) => (
-            <div key={pi} className="px-6 py-4 bg-zinc-900/60">
+            <div key={pi} className="px-6 py-4 bg-surface/60">
               <h3 className="text-sm font-semibold text-indigo-400 mb-3">
                 Phase {pi + 1}: {phase.phase_name}
-                <span className="text-xs text-zinc-500 font-normal ml-2">{phase.duration}</span>
+                <span className="text-xs text-muted-foreground font-normal ml-2">{phase.duration}</span>
               </h3>
               <div className="space-y-4">
                 {phase.goals.map((goal, gi) => (
-                  <div key={gi} className="rounded-lg bg-zinc-800/50 p-4">
+                  <div key={gi} className="rounded-lg bg-surface-elevated/50 p-4">
                     <div className="flex items-start gap-2 mb-2">
                       <span className="text-xs px-2 py-0.5 rounded bg-indigo-900 text-indigo-300 shrink-0 font-mono">
                         {goal.icf_code}
                       </span>
-                      <span className="text-sm text-zinc-200">{goal.goal_text}</span>
+                      <span className="text-sm text-foreground">{goal.goal_text}</span>
                     </div>
                     <div className="ml-4 space-y-2 text-xs">
                       <div>
-                        <span className="text-zinc-500">Methoden: </span>
-                        <span className="text-zinc-300">{goal.methods.join(", ")}</span>
+                        <span className="text-muted-foreground">Methoden: </span>
+                        <span className="text-foreground/80">{goal.methods.join(", ")}</span>
                       </div>
                       <div>
-                        <span className="text-zinc-500">Meilensteine: </span>
-                        <span className="text-zinc-300">{goal.milestones.join(" → ")}</span>
+                        <span className="text-muted-foreground">Meilensteine: </span>
+                        <span className="text-foreground/80">{goal.milestones.join(" → ")}</span>
                       </div>
                       <div>
-                        <span className="text-zinc-500">Zeitrahmen: </span>
-                        <span className="text-zinc-300">{goal.timeframe}</span>
+                        <span className="text-muted-foreground">Zeitrahmen: </span>
+                        <span className="text-foreground/80">{goal.timeframe}</span>
                       </div>
                     </div>
                   </div>
@@ -1007,18 +1167,18 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
           ))}
 
           {plan.elternberatung && (
-            <div className="px-6 py-4 bg-zinc-900/60">
-              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2">Elternberatung</h3>
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{plan.elternberatung}</p>
+            <div className="px-6 py-4 bg-surface/60">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Elternberatung</h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{plan.elternberatung}</p>
             </div>
           )}
 
           {plan.haeusliche_uebungen.length > 0 && (
-            <div className="px-6 py-4 bg-zinc-900/60">
-              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-2">Häusliche Übungen</h3>
+            <div className="px-6 py-4 bg-surface/60">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Häusliche Übungen</h3>
               <ul className="space-y-1">
                 {plan.haeusliche_uebungen.map((u, i) => (
-                  <li key={i} className="text-sm text-zinc-200 flex items-start gap-2">
+                  <li key={i} className="text-sm text-foreground flex items-start gap-2">
                     <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
                     {u}
                   </li>
@@ -1027,7 +1187,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
             </div>
           )}
 
-          <div className="px-6 py-3 bg-zinc-900 flex justify-end print:hidden">
+          <div className="px-6 py-3 bg-surface flex justify-end print:hidden">
             <button
               onClick={() => window.print()}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
@@ -1075,26 +1235,26 @@ function ReportComparisonView({ api }: { api: string }) {
 
   const changeColors: Record<string, string> = {
     verbessert: "bg-green-900 text-green-300",
-    "unverändert": "bg-zinc-800 text-zinc-400",
+    "unverändert": "bg-surface-elevated text-muted-foreground",
     verschlechtert: "bg-red-900 text-red-300",
   };
 
   return (
     <>
       <h1 className="text-xl font-semibold tracking-tight">Vergleichende Berichtsanalyse</h1>
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-muted-foreground">
         Laden Sie zwei Berichte hoch (z.B. Erstbefund und aktueller Befund). Die KI analysiert
         Veränderungen und erstellt einen strukturierten Fortschrittsbericht.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-2">
-          <label className="text-sm text-zinc-400">Erstbefund / Älterer Bericht:</label>
-          <input ref={initialRef} type="file" accept=".pdf,.docx,.txt" className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:text-zinc-300 file:cursor-pointer" />
+          <label className="text-sm text-muted-foreground">Erstbefund / Älterer Bericht:</label>
+          <input ref={initialRef} type="file" accept=".pdf,.docx,.txt" className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-surface-elevated file:px-4 file:py-2 file:text-sm file:text-foreground/80 file:cursor-pointer" />
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-sm text-zinc-400">Aktueller Bericht:</label>
-          <input ref={currentRef} type="file" accept=".pdf,.docx,.txt" className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:text-zinc-300 file:cursor-pointer" />
+          <label className="text-sm text-muted-foreground">Aktueller Bericht:</label>
+          <input ref={currentRef} type="file" accept=".pdf,.docx,.txt" className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-surface-elevated file:px-4 file:py-2 file:text-sm file:text-foreground/80 file:cursor-pointer" />
         </div>
       </div>
 
@@ -1111,24 +1271,24 @@ function ReportComparisonView({ api }: { api: string }) {
       {result && (
         <div className="flex flex-col gap-4">
           {/* Comparison table */}
-          <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-zinc-900 text-zinc-400 text-xs uppercase tracking-wider">
+                <tr className="bg-surface text-muted-foreground text-xs uppercase tracking-wider">
                   <th className="px-4 py-3 text-left">Bereich</th>
                   <th className="px-4 py-3 text-left">Erstbefund</th>
                   <th className="px-4 py-3 text-left">Aktuell</th>
                   <th className="px-4 py-3 text-left">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {result.items.map((item, i) => (
-                  <tr key={i} className="bg-zinc-900/60">
-                    <td className="px-4 py-3 font-medium text-zinc-300">{item.category}</td>
-                    <td className="px-4 py-3 text-zinc-400 text-xs">{item.initial_finding}</td>
-                    <td className="px-4 py-3 text-zinc-300 text-xs">{item.current_finding}</td>
+                  <tr key={i} className="bg-surface/60">
+                    <td className="px-4 py-3 font-medium text-foreground/80">{item.category}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">{item.initial_finding}</td>
+                    <td className="px-4 py-3 text-foreground/80 text-xs">{item.current_finding}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full ${changeColors[item.change] || "bg-zinc-800 text-zinc-400"}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full ${changeColors[item.change] || "bg-surface-elevated text-muted-foreground"}`}>
                         {item.change}
                       </span>
                     </td>
@@ -1139,14 +1299,14 @@ function ReportComparisonView({ api }: { api: string }) {
           </div>
 
           {/* Summary */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-5 py-4 space-y-3">
+          <div className="rounded-lg border border-border bg-surface/60 px-5 py-4 space-y-3">
             <div>
-              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-1">Gesamtfortschritt</h3>
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{result.overall_progress}</p>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">Gesamtfortschritt</h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{result.overall_progress}</p>
             </div>
             {result.remaining_issues.length > 0 && (
               <div>
-                <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-1">Verbleibende Probleme</h3>
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">Verbleibende Probleme</h3>
                 <ul className="space-y-1">{result.remaining_issues.map((r, i) => (
                   <li key={i} className="text-sm text-orange-300 flex items-start gap-2">
                     <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />{r}
@@ -1155,8 +1315,8 @@ function ReportComparisonView({ api }: { api: string }) {
               </div>
             )}
             <div>
-              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-1">Empfehlung</h3>
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{result.recommendation}</p>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">Empfehlung</h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{result.recommendation}</p>
             </div>
           </div>
         </div>
@@ -1212,7 +1372,7 @@ function TextSuggestionView({ api }: { api: string }) {
   return (
     <>
       <h1 className="text-xl font-semibold tracking-tight">Intelligente Textbausteine</h1>
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-muted-foreground">
         Beginnen Sie einen Satz und die KI schlägt kontextbezogene Vervollständigungen
         mit logopädischer Fachsprache vor. Klicken Sie auf einen Vorschlag zum Übernehmen.
       </p>
@@ -1220,9 +1380,9 @@ function TextSuggestionView({ api }: { api: string }) {
       {/* Context selectors */}
       <div className="flex flex-wrap gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-500">Berichtstyp</label>
+          <label className="text-xs text-muted-foreground">Berichtstyp</label>
           <select value={reportType} onChange={(e) => setReportType(e.target.value)}
-            className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
             <option value="befundbericht">Befundbericht</option>
             <option value="therapiebericht_kurz">Therapiebericht (kurz)</option>
             <option value="therapiebericht_lang">Therapiebericht (lang)</option>
@@ -1230,9 +1390,9 @@ function TextSuggestionView({ api }: { api: string }) {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-500">Abschnitt</label>
+          <label className="text-xs text-muted-foreground">Abschnitt</label>
           <select value={section} onChange={(e) => setSection(e.target.value)}
-            className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
             <option value="anamnese">Anamnese</option>
             <option value="befund">Befund</option>
             <option value="therapieindikation">Therapieindikation</option>
@@ -1241,10 +1401,10 @@ function TextSuggestionView({ api }: { api: string }) {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-500">Störungsbild</label>
+          <label className="text-xs text-muted-foreground">Störungsbild</label>
           <input type="text" value={disorder} onChange={(e) => setDisorder(e.target.value)}
             placeholder="z.B. SP1, ST2"
-            className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm w-32 focus:outline-none focus:border-indigo-500" />
+            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm w-32 focus:outline-none focus:border-indigo-500" />
         </div>
       </div>
 
@@ -1255,7 +1415,7 @@ function TextSuggestionView({ api }: { api: string }) {
           onChange={(e) => onTextChange(e.target.value)}
           rows={8}
           placeholder="Beginnen Sie hier zu schreiben, z.B. 'Die phonologische Bewertung ergab...'"
-          className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-3 text-sm leading-relaxed resize-y focus:outline-none focus:border-indigo-500"
+          className="w-full rounded-lg bg-surface border border-border-strong px-4 py-3 text-sm leading-relaxed resize-y focus:outline-none focus:border-indigo-500"
         />
         {loading && (
           <div className="absolute top-3 right-3">
@@ -1267,16 +1427,16 @@ function TextSuggestionView({ api }: { api: string }) {
       {/* Suggestions */}
       {suggestions.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-widest">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
             Vorschläge (klicken zum Übernehmen)
           </h3>
           {suggestions.map((s, i) => (
             <button
               key={i}
               onClick={() => applySuggestion(s)}
-              className="text-left rounded-lg bg-zinc-900 border border-zinc-800 hover:border-indigo-600 px-4 py-3 text-sm text-zinc-300 transition-colors"
+              className="text-left rounded-lg bg-surface border border-border hover:border-indigo-600 px-4 py-3 text-sm text-foreground/80 transition-colors"
             >
-              <span className="text-zinc-600">{text}</span>
+              <span className="text-muted">{text}</span>
               <span className="text-indigo-300">{s}</span>
             </button>
           ))}
@@ -1304,7 +1464,7 @@ function PhaseStep({
           ? "bg-indigo-600 text-white"
           : done
             ? "bg-green-900 text-green-300"
-            : "bg-zinc-800 text-zinc-500"
+            : "bg-surface-elevated text-muted-foreground"
       }`}
     >
       {done ? "✓ " : ""}
@@ -1317,7 +1477,7 @@ function PhaseStep({
 
 function ChevronRight() {
   return (
-    <svg className="w-3 h-3 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="w-3 h-3 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   );
@@ -1350,7 +1510,7 @@ function AlertIcon() {
 
 function UploadIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-zinc-500">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
     </svg>
   );
@@ -1358,7 +1518,7 @@ function UploadIcon() {
 
 function FileIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-zinc-500">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-muted-foreground">
       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
     </svg>
   );
