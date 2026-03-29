@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import tempfile
@@ -8,8 +9,9 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from models.schemas import (
     ChatRequest,
@@ -45,6 +47,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    origin = request.headers.get("origin", "")
+    headers: dict[str, str] = {}
+    if origin in _allowed_origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Interner Serverfehler. Bitte versuchen Sie es erneut."},
+        headers=headers,
+    )
+
 
 groq_service = GroqService()
 anamnesis_engine = AnamnesisEngine(groq_service)
@@ -93,8 +113,13 @@ async def process_audio(audio_file: UploadFile = File(...)):
 @app.post("/sessions")
 async def create_session() -> SessionInfo:
     session = store.create()
-    # Generate initial greeting
-    greeting = await anamnesis_engine.get_initial_greeting(session)
+    try:
+        greeting = await anamnesis_engine.get_initial_greeting(session)
+    except Exception:
+        greeting = (
+            "Willkommen! Ich bin bereit, Ihnen bei der Dokumentation zu helfen. "
+            "Bitte beschreiben Sie den Patienten und den Therapiebereich."
+        )
     return SessionInfo(
         session_id=session.session_id,
         status=session.status,
