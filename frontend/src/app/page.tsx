@@ -488,7 +488,7 @@ export default function Home() {
                 }}
                 disabled={isSending}
                 placeholder="Ihre Antwort eingeben…"
-                className="flex-1 rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                className="flex-1 rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-ring disabled:opacity-40"
               />
               {!isRecording ? (
                 <button
@@ -511,7 +511,7 @@ export default function Home() {
               <button
                 onClick={() => sendMessage(input)}
                 disabled={isSending || !input.trim()}
-                className="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+                className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
               >
                 Senden
               </button>
@@ -519,14 +519,14 @@ export default function Home() {
 
             {/* Transition to upload */}
             {isAnamnesisComplete && (
-              <div className="flex items-center gap-3 rounded-lg bg-indigo-950/50 border border-indigo-800 px-5 py-4">
-                <span className="text-sm text-indigo-300">
+              <div className="flex items-center gap-3 rounded-lg border border-accent px-5 py-4 bg-accent-muted">
+                <span className="text-sm text-accent-text">
                   Anamnese abgeschlossen! Sie können jetzt Materialien
                   hochladen oder direkt den Bericht generieren.
                 </span>
                 <button
                   onClick={() => setPhase("upload")}
-                  className="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                  className="shrink-0 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
                 >
                   Weiter
                 </button>
@@ -583,7 +583,7 @@ export default function Home() {
             {/* Generate button */}
             <button
               onClick={generateReport}
-              className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors"
+              className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors"
             >
               Bericht generieren
             </button>
@@ -616,7 +616,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
                 >
                   Drucken / PDF
                 </button>
@@ -644,9 +644,10 @@ function ChatBubble({ role, content }: { role: string; content: string }) {
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
           isUser
-            ? "bg-indigo-600 text-white rounded-br-md"
+            ? "text-white rounded-br-md"
             : "bg-surface-elevated text-foreground rounded-bl-md"
         }`}
+        style={isUser ? { background: "var(--accent)" } : undefined}
       >
         {content}
       </div>
@@ -707,24 +708,24 @@ const REPORT_TYPES = [
 
 const accentClasses = {
   indigo: {
-    icon: 'bg-indigo-500/15 text-indigo-400',
-    ring: 'hover:ring-indigo-500/40 hover:border-indigo-500/50',
-    badge: 'bg-indigo-500/10 text-indigo-400',
+    icon: 'bg-accent-muted text-accent-text',
+    ring: 'hover:ring-accent/40 hover:border-accent/50',
+    badge: 'bg-accent-muted text-accent-text',
   },
   emerald: {
-    icon: 'bg-emerald-500/15 text-emerald-400',
-    ring: 'hover:ring-emerald-500/40 hover:border-emerald-500/50',
-    badge: 'bg-emerald-500/10 text-emerald-400',
+    icon: 'bg-accent-muted text-accent-text',
+    ring: 'hover:ring-accent/40 hover:border-accent/50',
+    badge: 'bg-accent-muted text-accent-text',
   },
   violet: {
-    icon: 'bg-violet-500/15 text-violet-400',
-    ring: 'hover:ring-violet-500/40 hover:border-violet-500/50',
-    badge: 'bg-violet-500/10 text-violet-400',
+    icon: 'bg-accent-muted text-accent-text',
+    ring: 'hover:ring-accent/40 hover:border-accent/50',
+    badge: 'bg-accent-muted text-accent-text',
   },
   amber: {
-    icon: 'bg-amber-500/15 text-amber-400',
-    ring: 'hover:ring-amber-500/40 hover:border-amber-500/50',
-    badge: 'bg-amber-500/10 text-amber-400',
+    icon: 'bg-accent-muted text-accent-text',
+    ring: 'hover:ring-accent/40 hover:border-accent/50',
+    badge: 'bg-accent-muted text-accent-text',
   },
 };
 
@@ -739,7 +740,7 @@ function WelcomeScreen({
     <div className="flex-1 flex flex-col items-center justify-center gap-8 py-8">
       {/* Header */}
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-widest text-indigo-400 uppercase">
+        <p className="text-xs font-semibold tracking-widest uppercase text-accent-text">
           Logopädie Report Agent
         </p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -827,13 +828,13 @@ function DropZone({ onFiles }: { onFiles: (files: FileList) => void }) {
       onClick={() => inputRef.current?.click()}
       className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-8 py-12 cursor-pointer transition-colors ${
         isDragOver
-          ? "border-indigo-500 bg-indigo-500/10"
+          ? "border-accent bg-accent-muted"
           : "border-border-strong bg-surface/50 hover:bg-surface"
       }`}
     >
       <UploadIcon />
       <p className="text-sm text-muted-foreground">
-        Dateien hierher ziehen oder <span className="text-indigo-500">durchsuchen</span>
+        Dateien hierher ziehen oder <span className="text-accent-text">durchsuchen</span>
       </p>
       <p className="text-xs text-muted">PDF, DOCX oder TXT · Max. 10 MB</p>
       <input
@@ -1010,7 +1011,7 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
           value={childAge}
           onChange={(e) => setChildAge(e.target.value)}
           placeholder="z.B. 4;6 Jahre"
-          className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm w-40 focus:outline-none focus:border-indigo-500"
+          className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm w-40 focus:outline-none focus:border-ring"
         />
       </div>
 
@@ -1022,7 +1023,7 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
               value={pair.target}
               onChange={(e) => updatePair(i, "target", e.target.value)}
               placeholder="Zielwort"
-              className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-ring"
             />
             <span className="text-muted">→</span>
             <input
@@ -1030,18 +1031,18 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
               value={pair.production}
               onChange={(e) => updatePair(i, "production", e.target.value)}
               placeholder="Produktion"
-              className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-ring"
             />
             <button onClick={() => removePair(i)} className="text-muted hover:text-red-400 text-sm px-2">✕</button>
           </div>
         ))}
-        <button onClick={addPair} className="self-start text-sm text-indigo-400 hover:text-indigo-300">+ Weiteres Wortpaar</button>
+        <button onClick={addPair} className="self-start text-sm text-accent-text hover:text-accent-text">+ Weiteres Wortpaar</button>
       </div>
 
       <button
         onClick={analyze}
         disabled={loading}
-        className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+        className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
       >
         {loading ? "Analysiere…" : "Analyse starten"}
       </button>
@@ -1098,8 +1099,8 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
                 <h4 className="text-xs text-muted-foreground mb-1">Empfohlene Therapieschwerpunkte:</h4>
                 <ul className="space-y-1">
                   {result.recommended_focus.map((f, i) => (
-                    <li key={i} className="text-sm text-indigo-300 flex items-start gap-2">
-                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                    <li key={i} className="text-sm text-accent-text flex items-start gap-2">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
                       {f}
                     </li>
                   ))}
@@ -1150,7 +1151,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
       <button
         onClick={generatePlan}
         disabled={loading}
-        className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+        className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
       >
         {loading ? "Generiere Therapieplan…" : "Therapieplan generieren"}
       </button>
@@ -1170,7 +1171,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
 
           {plan.plan_phases.map((phase, pi) => (
             <div key={pi} className="px-6 py-4 bg-surface/60">
-              <h3 className="text-sm font-semibold text-indigo-400 mb-3">
+              <h3 className="text-sm font-semibold text-accent-text mb-3">
                 Phase {pi + 1}: {phase.phase_name}
                 <span className="text-xs text-muted-foreground font-normal ml-2">{phase.duration}</span>
               </h3>
@@ -1178,7 +1179,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
                 {phase.goals.map((goal, gi) => (
                   <div key={gi} className="rounded-lg bg-surface-elevated/50 p-4">
                     <div className="flex items-start gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 rounded bg-indigo-900 text-indigo-300 shrink-0 font-mono">
+                      <span className="text-xs px-2 py-0.5 rounded bg-accent-muted text-accent-text shrink-0 font-mono">
                         {goal.icf_code}
                       </span>
                       <span className="text-sm text-foreground">{goal.goal_text}</span>
@@ -1216,7 +1217,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
               <ul className="space-y-1">
                 {plan.haeusliche_uebungen.map((u, i) => (
                   <li key={i} className="text-sm text-foreground flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
                     {u}
                   </li>
                 ))}
@@ -1227,7 +1228,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
           <div className="px-6 py-3 bg-surface flex justify-end print:hidden">
             <button
               onClick={() => window.print()}
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
             >
               Drucken / PDF
             </button>
@@ -1298,7 +1299,7 @@ function ReportComparisonView({ api }: { api: string }) {
       <button
         onClick={compare}
         disabled={loading}
-        className="self-start px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-40"
+        className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
       >
         {loading ? "Vergleiche…" : "Berichte vergleichen"}
       </button>
@@ -1419,7 +1420,7 @@ function TextSuggestionView({ api }: { api: string }) {
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground">Berichtstyp</label>
           <select value={reportType} onChange={(e) => setReportType(e.target.value)}
-            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-ring">
             <option value="befundbericht">Befundbericht</option>
             <option value="therapiebericht_kurz">Therapiebericht (kurz)</option>
             <option value="therapiebericht_lang">Therapiebericht (lang)</option>
@@ -1429,7 +1430,7 @@ function TextSuggestionView({ api }: { api: string }) {
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground">Abschnitt</label>
           <select value={section} onChange={(e) => setSection(e.target.value)}
-            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-ring">
             <option value="anamnese">Anamnese</option>
             <option value="befund">Befund</option>
             <option value="therapieindikation">Therapieindikation</option>
@@ -1441,7 +1442,7 @@ function TextSuggestionView({ api }: { api: string }) {
           <label className="text-xs text-muted-foreground">Störungsbild</label>
           <input type="text" value={disorder} onChange={(e) => setDisorder(e.target.value)}
             placeholder="z.B. SP1, ST2"
-            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm w-32 focus:outline-none focus:border-indigo-500" />
+            className="rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm w-32 focus:outline-none focus:border-ring" />
         </div>
       </div>
 
@@ -1452,7 +1453,7 @@ function TextSuggestionView({ api }: { api: string }) {
           onChange={(e) => onTextChange(e.target.value)}
           rows={8}
           placeholder="Beginnen Sie hier zu schreiben, z.B. 'Die phonologische Bewertung ergab...'"
-          className="w-full rounded-lg bg-surface border border-border-strong px-4 py-3 text-sm leading-relaxed resize-y focus:outline-none focus:border-indigo-500"
+          className="w-full rounded-lg bg-surface border border-border-strong px-4 py-3 text-sm leading-relaxed resize-y focus:outline-none focus:border-ring"
         />
         {loading && (
           <div className="absolute top-3 right-3">
@@ -1471,10 +1472,10 @@ function TextSuggestionView({ api }: { api: string }) {
             <button
               key={i}
               onClick={() => applySuggestion(s)}
-              className="text-left rounded-lg bg-surface border border-border hover:border-indigo-600 px-4 py-3 text-sm text-foreground/80 transition-colors"
+              className="text-left rounded-lg bg-surface border border-border hover:border-accent px-4 py-3 text-sm text-foreground/80 transition-colors"
             >
               <span className="text-muted">{text}</span>
-              <span className="text-indigo-300">{s}</span>
+              <span className="text-accent-text">{s}</span>
             </button>
           ))}
         </div>
@@ -1536,7 +1537,7 @@ function FileIcon() {
 
 function Spinner() {
   return (
-    <svg className="w-4 h-4 motion-safe:animate-spin text-indigo-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="w-4 h-4 motion-safe:animate-spin text-accent-text shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
     </svg>
