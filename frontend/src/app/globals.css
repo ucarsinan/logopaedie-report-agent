@@ -5,54 +5,65 @@
 
 /* ── Light mode tokens (default) ── */
 :root {
-  --background: #F8F7F4;
-  --surface: #FFFFFF;
-  --surface-elevated: #EEE9E1;
-  --border: #E0DCD3;
-  --border-strong: #C9C4BA;
-  --foreground: #1C1917;
-  --muted-foreground: #78716C;
-  --muted: #A8A29E;
-  --input-bg: #F0ECE5;
-  --ring: #6366F1;
-  --error-surface: #FEF2F2;
-  --error-border: #FECACA;
-  --error-text: #B91C1C;
+  --background:        #f9fafb;
+  --surface:           #ffffff;
+  --surface-elevated:  #f3f4f6;
+  --border:            #e5e7eb;
+  --border-strong:     #d1d5db;
+  --foreground:        #111827;
+  --muted-foreground:  #6b7280;
+  --muted:             #9ca3af;
+  --input-bg:          #f9fafb;
+  --ring:              #0d9488;
+  --accent:            #0d9488;
+  --accent-hover:      #0f766e;
+  --accent-muted:      #ccfbf1;
+  --accent-text:       #0f766e;
+  --error-surface:     #fef2f2;
+  --error-border:      #fecaca;
+  --error-text:        #b91c1c;
 }
 
 /* ── Dark mode tokens ── */
 .dark {
-  --background: #09090B;
-  --surface: #18181B;
-  --surface-elevated: #27272A;
-  --border: #27272A;
-  --border-strong: #3F3F46;
-  --foreground: #FAFAFA;
-  --muted-foreground: #A1A1AA;
-  --muted: #52525B;
-  --input-bg: #18181B;
-  --ring: #818CF8;
-  --error-surface: rgba(69, 10, 10, 0.8);
-  --error-border: #991B1B;
-  --error-text: #FCA5A5;
+  --background:        #0f172a;
+  --surface:           #1e293b;
+  --surface-elevated:  #0f172a;
+  --border:            rgba(255, 255, 255, 0.04);
+  --border-strong:     #334155;
+  --foreground:        #f1f5f9;
+  --muted-foreground:  #64748b;
+  --muted:             #475569;
+  --input-bg:          #0f172a;
+  --ring:              #2dd4bf;
+  --accent:            #0d9488;
+  --accent-hover:      #14b8a6;
+  --accent-muted:      rgba(13, 148, 136, 0.15);
+  --accent-text:       #2dd4bf;
+  --error-surface:     rgba(69, 10, 10, 0.8);
+  --error-border:      #991b1b;
+  --error-text:        #fca5a5;
 }
 
 /* ── Tailwind 4 token bindings ── */
 @theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
+  --color-background:      var(--background);
+  --color-surface:         var(--surface);
   --color-surface-elevated: var(--surface-elevated);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
-  --color-foreground: var(--foreground);
+  --color-border:          var(--border);
+  --color-border-strong:   var(--border-strong);
+  --color-foreground:      var(--foreground);
   --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-input: var(--input-bg);
-  --color-error-surface: var(--error-surface);
-  --color-error-border: var(--error-border);
-  --color-error-text: var(--error-text);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted:           var(--muted);
+  --color-input:           var(--input-bg);
+  --color-accent:          var(--accent);
+  --color-accent-muted:    var(--accent-muted);
+  --color-accent-text:     var(--accent-text);
+  --color-error-surface:   var(--error-surface);
+  --color-error-border:    var(--error-border);
+  --color-error-text:      var(--error-text);
+  --font-sans:             var(--font-geist-sans);
+  --font-mono:             var(--font-geist-mono);
 }
 
 body {
