@@ -1,3 +1,7 @@
+"""Groq API client for transcription, chat, and report generation."""
+
+from __future__ import annotations
+
 import json
 import os
 
@@ -5,14 +9,15 @@ from groq import AsyncGroq
 
 from backend.models.schemas import MedicalReport
 
-_SYSTEM_PROMPT = (
+# ── Legacy prompt (kept for /process-audio backward compat) ─────────────────
+_LEGACY_SYSTEM_PROMPT = (
     "You are an expert speech therapy (Logopädie) assistant. "
     "Extract the patient details from the transcript and format them as a JSON object "
     "matching the requested schema. If information is missing, infer a professional "
     "placeholder or state 'Nicht angegeben'."
 )
 
-_SCHEMA_DESCRIPTION = """Return a JSON object with exactly these fields:
+_LEGACY_SCHEMA = """Return a JSON object with exactly these fields:
 - patient_pseudonym (string): A pseudonym for the patient
 - symptoms (array of strings): List of observed symptoms or complaints
 - therapy_progress (string): Description of the therapy progress
@@ -24,6 +29,7 @@ class GroqService:
     def __init__(self) -> None:
         self.client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
+    # ── Audio transcription (unchanged) ─────────────────────────────────
     async def transcribe_audio(self, file_path: str) -> str:
         try:
             with open(file_path, "rb") as f:
@@ -35,18 +41,17 @@ class GroqService:
         except Exception as e:
             raise RuntimeError(f"Transkription fehlgeschlagen: {e}") from e
 
+    # ── Legacy report generation (for /process-audio) ───────────────────
     async def generate_structured_report(self, transcript: str) -> MedicalReport:
         try:
             response = await self.client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 response_format={"type": "json_object"},
                 messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": _LEGACY_SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": (
-                            f"{_SCHEMA_DESCRIPTION}\n\nTranscript:\n{transcript}"
-                        ),
+                        "content": f"{_LEGACY_SCHEMA}\n\nTranscript:\n{transcript}",
                     },
                 ],
             )
@@ -59,3 +64,38 @@ class GroqService:
             raise RuntimeError(f"Bericht-Validierung fehlgeschlagen: {e}") from e
         except Exception as e:
             raise RuntimeError(f"Berichtgenerierung fehlgeschlagen: {e}") from e
+
+    # ── Chat completion (for anamnesis conversation) ────────────────────
+    async def chat_completion(
+        self,
+        messages: list[dict[str, str]],
+        system_prompt: str,
+        response_format: dict | None = None,
+    ) -> str:
+        """Send a chat completion request and return the assistant message content."""
+        try:
+            kwargs: dict = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "system", "content": system_prompt}, *messages],
+            }
+            if response_format:
+                kwargs["response_format"] = response_format
+            response = await self.client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            raise RuntimeError(f"Chat-Anfrage fehlgeschlagen: {e}") from e
+
+    # ── JSON chat completion (for structured extraction) ────────────────
+    async def json_completion(
+        self,
+        messages: list[dict[str, str]],
+        system_prompt: str,
+    ) -> dict:
+        """Chat completion that returns parsed JSON."""
+        raw = await self.chat_completion(
+            messages, system_prompt, response_format={"type": "json_object"}
+        )
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"LLM hat kein gültiges JSON zurückgegeben: {e}") from e

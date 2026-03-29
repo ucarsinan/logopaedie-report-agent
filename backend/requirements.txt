@@ -4,3 +4,5 @@ pydantic>=2.0
 groq
 python-dotenv
 python-multipart
+PyPDF2>=3.0
+python-docx>=1.0
