@@ -416,7 +416,7 @@ export default function Home() {
       {/* Main */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         {/* Error — hidden on WelcomeScreen (shown inline there instead) */}
-        {error && currentPhase !== "greeting" && (
+        {error && (
           <div
             role="alert"
             className="rounded-lg bg-error-surface border border-error-border px-5 py-4 text-sm text-error-text flex items-start gap-3 print:hidden"
@@ -447,28 +447,29 @@ export default function Home() {
         )}
 
         {/* ── Module: Report (original phases) ──────────────────── */}
-        {activeModule === "report" && phase === "chat" && currentPhase === "greeting" && (
-          <WelcomeScreen onSelect={sendMessage} isSending={isSending} error={error} />
-        )}
-
-        {activeModule === "report" && phase === "chat" && currentPhase !== "greeting" && (
+        {activeModule === "report" && phase === "chat" && (
           <>
-            <div className="flex items-center justify-between">
-              <h1 className="text-xl font-semibold tracking-tight">
-                Anamnese-Gespräch
-              </h1>
-              {collectedFields.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {collectedFields.length} Felder erfasst
-                </span>
-              )}
-            </div>
+            {currentPhase !== "greeting" && (
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-semibold tracking-tight">
+                  Anamnese-Gespräch
+                </h1>
+                {collectedFields.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {collectedFields.length} Felder erfasst
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Chat messages */}
             <div className="flex-1 flex flex-col gap-3 overflow-y-auto max-h-[60vh] rounded-lg border border-border bg-surface p-4 card-elevated">
               {messages.map((msg, i) => (
                 <ChatBubble key={i} role={msg.role} content={msg.content} />
               ))}
+              {currentPhase === "greeting" && (
+                <QuickReplyBubbles onSelect={sendMessage} disabled={isSending} />
+              )}
               {isSending && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Spinner /> Antwort wird generiert…
@@ -477,48 +478,50 @@ export default function Home() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input area */}
-            <div className="flex gap-2 print:hidden">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage(input);
-                  }
-                }}
-                disabled={isSending}
-                placeholder="Ihre Antwort eingeben…"
-                className="flex-1 rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-ring disabled:opacity-40"
-              />
-              {!isRecording ? (
-                <button
-                  onClick={startRecording}
+            {/* Input area — hidden during greeting phase */}
+            {currentPhase !== "greeting" && (
+              <div className="flex gap-2 print:hidden">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage(input);
+                    }
+                  }}
                   disabled={isSending}
-                  className="px-4 py-3 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40"
-                  title="Spracheingabe"
-                >
-                  <MicIcon />
-                </button>
-              ) : (
+                  placeholder="Ihre Antwort eingeben…"
+                  className="flex-1 rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-ring disabled:opacity-40"
+                />
+                {!isRecording ? (
+                  <button
+                    onClick={startRecording}
+                    disabled={isSending}
+                    className="px-4 py-3 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40"
+                    title="Spracheingabe"
+                  >
+                    <MicIcon />
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopRecording}
+                    className="px-4 py-3 rounded-lg bg-red-600 text-white motion-safe:animate-pulse"
+                    title="Aufnahme stoppen"
+                  >
+                    <StopIcon />
+                  </button>
+                )}
                 <button
-                  onClick={stopRecording}
-                  className="px-4 py-3 rounded-lg bg-red-600 text-white motion-safe:animate-pulse"
-                  title="Aufnahme stoppen"
+                  onClick={() => sendMessage(input)}
+                  disabled={isSending || !input.trim()}
+                  className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40 btn-accent-glow"
                 >
-                  <StopIcon />
+                  Senden
                 </button>
-              )}
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={isSending || !input.trim()}
-                className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40 btn-accent-glow"
-              >
-                Senden
-              </button>
-            </div>
+              </div>
+            )}
 
             {/* Transition to upload */}
             {isAnamnesisComplete && (
