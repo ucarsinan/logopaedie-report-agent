@@ -21,5 +21,9 @@ frontend/out/
 frontend/CLAUDE.md
 frontend/AGENTS.md
 
+# Internal planning docs (not for GitHub)
+docs/superpowers/
+
 # OS
 .DS_Store
+.vercel
