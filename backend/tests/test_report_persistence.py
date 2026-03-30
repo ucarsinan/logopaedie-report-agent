@@ -104,3 +104,94 @@ def test_generate_endpoint_saves_report_to_db(mock_groq):
     assert records[0].report_type == "befundbericht"
 
     app.dependency_overrides.clear()
+
+
+def test_list_reports_returns_saved_records():
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from sqlmodel import Session
+    from backend.models.report_record import ReportRecord
+
+    database_mod = sys.modules.get("database") or sys.modules["backend.database"]
+    get_db = database_mod.get_db
+
+    def override_get_db():
+        with Session(test_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with Session(test_engine) as db:
+        db.add(ReportRecord(pseudonym="A", report_type="befundbericht", content_json="{}"))
+        db.add(ReportRecord(pseudonym="B", report_type="abschlussbericht", content_json="{}"))
+        db.commit()
+
+    client = TestClient(app)
+    res = client.get("/reports")
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) == 2
+    assert {r["pseudonym"] for r in data} == {"A", "B"}
+    assert "id" in data[0]
+    assert "created_at" in data[0]
+
+    app.dependency_overrides.clear()
+
+
+def test_get_single_report_returns_full_content():
+    import json
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from sqlmodel import Session
+    from backend.models.report_record import ReportRecord
+
+    database_mod = sys.modules.get("database") or sys.modules["backend.database"]
+    get_db = database_mod.get_db
+
+    def override_get_db():
+        with Session(test_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    content = {"report_type": "befundbericht", "patient": {"pseudonym": "X"}}
+    with Session(test_engine) as db:
+        record = ReportRecord(pseudonym="X", report_type="befundbericht", content_json=json.dumps(content))
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        record_id = record.id
+
+    client = TestClient(app)
+    res = client.get(f"/reports/{record_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["report_type"] == "befundbericht"
+    assert data["_db_id"] == record_id
+    assert "created_at" in data
+
+    app.dependency_overrides.clear()
+
+
+def test_get_nonexistent_report_returns_404():
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from sqlmodel import Session
+
+    database_mod = sys.modules.get("database") or sys.modules["backend.database"]
+    get_db = database_mod.get_db
+
+    def override_get_db():
+        with Session(test_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    client = TestClient(app)
+    res = client.get("/reports/99999")
+    assert res.status_code == 404
+
+    app.dependency_overrides.clear()
