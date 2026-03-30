@@ -4,7 +4,7 @@ import os
 
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./reports.db")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL", "sqlite:///./reports.db")
 
 # Neon uses postgres:// — SQLAlchemy requires postgresql://
 if DATABASE_URL.startswith("postgres://"):
