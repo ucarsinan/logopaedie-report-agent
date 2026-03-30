@@ -125,6 +125,7 @@ async def create_session() -> SessionInfo:
             "Willkommen! Ich bin bereit, Ihnen bei der Dokumentation zu helfen. "
             "Bitte beschreiben Sie den Patienten und den Therapiebereich."
         )
+    store.save(session)
     return SessionInfo(
         session_id=session.session_id,
         status=session.status,
@@ -166,6 +167,7 @@ async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
             )
         raise HTTPException(status_code=500, detail="KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut.")
 
+    store.save(session)
     return ChatResponse(
         message=response_text,
         phase=session.collected_data.get("current_phase", "greeting"),
@@ -196,6 +198,7 @@ async def chat_audio(session_id: str, audio_file: UploadFile = File(...)) -> Cha
         transcript = await groq_service.transcribe_audio(tmp_path)
         response_text = await anamnesis_engine.process_message(session, transcript)
 
+        store.save(session)
         return ChatResponse(
             message=response_text,
             phase=session.collected_data.get("current_phase", "greeting"),
@@ -247,6 +250,7 @@ async def upload_material(
         material_type=material_type,
     )
     session.materials.append(material)
+    store.save(session)
     return material
 
 
@@ -258,14 +262,17 @@ async def generate_report(session_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
 
     session.status = "generating"
+    store.save(session)
 
     try:
         report = await report_generator.generate(session)
         session.generated_report = report.model_dump()
         session.status = "complete"
+        store.save(session)
         return session.generated_report
     except RuntimeError as e:
         session.status = "materials"  # Allow retry
+        store.save(session)
         raise HTTPException(status_code=500, detail=str(e))
 
 
