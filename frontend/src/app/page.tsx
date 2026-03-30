@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
 
 /* ═══════════════════════════════════ Types ═══════════════════════════════════ */
 
@@ -134,6 +135,7 @@ export default function Home() {
   const [currentPhase, setCurrentPhase] = useState("greeting");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [savedReportId, setSavedReportId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Audio recording
@@ -315,6 +317,9 @@ export default function Home() {
       }
       const data = await res.json();
       setReport(data);
+      if ((data as { _db_id?: number })._db_id) {
+        setSavedReportId((data as { _db_id: number })._db_id);
+      }
       setPhase("preview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
@@ -609,23 +614,41 @@ export default function Home() {
         {/* ── Phase: Preview ─────────────────────────────────────── */}
         {activeModule === "report" && phase === "preview" && report && (
           <>
-            <div className="flex items-center justify-between print:hidden">
-              <h1 className="text-xl font-semibold tracking-tight">
-                Generierter Bericht
-              </h1>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPhase("upload")}
-                  className="text-sm text-muted-foreground hover:text-foreground"
+            <div className="flex flex-col gap-2 print:hidden">
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-semibold tracking-tight">
+                  Generierter Bericht
+                </h1>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPhase("upload")}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    ← Zurück
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                  >
+                    Drucken / PDF
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                {savedReportId && (
+                  <Link
+                    href={`/berichte/${savedReportId}`}
+                    className="text-sm text-muted-foreground hover:underline"
+                  >
+                    Bericht dauerhaft ansehen →
+                  </Link>
+                )}
+                <Link
+                  href="/berichte"
+                  className="text-sm text-muted-foreground hover:underline"
                 >
-                  ← Zurück
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
-                >
-                  Drucken / PDF
-                </button>
+                  Alle Berichte
+                </Link>
               </div>
             </div>
             <ReportPreview report={report} />
