@@ -16,8 +16,12 @@ _KEY_PREFIX = "session:"
 
 
 def _get_redis() -> Redis:
-    url = os.environ["UPSTASH_REDIS_REST_URL"]
-    token = os.environ["UPSTASH_REDIS_REST_TOKEN"]
+    url = os.environ.get("UPSTASH_REDIS_REST_URL")
+    token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    if not url or not token:
+        raise RuntimeError(
+            "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set."
+        )
     return Redis(url=url, token=token)
 
 
