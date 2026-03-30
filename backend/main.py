@@ -38,7 +38,10 @@ load_dotenv()
 
 app = FastAPI(title="Logopädie Report Agent API")
 
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+_allowed_origins = list({
+    *os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    "http://localhost:3000",
+})
 
 app.add_middleware(
     CORSMiddleware,
