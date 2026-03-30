@@ -1,7 +1,9 @@
+import json
 import logging
 import os
 import sys
 import tempfile
+from contextlib import asynccontextmanager
 
 # On Vercel (experimentalServices), backend/ is the function root (/var/task/).
 # Add it to sys.path so "from models.X" and "from services.X" resolve correctly
@@ -9,9 +11,10 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlmodel import Session
 
 from models.schemas import (
     ChatRequest,
@@ -33,10 +36,19 @@ from services.report_generator import ReportGenerator
 from services.session_store import store
 from services.text_suggester import TextSuggester
 from services.therapy_planner import TherapyPlanner
+from database import create_db_and_tables, get_db
+from models.report_record import ReportRecord
 
 load_dotenv()
 
-app = FastAPI(title="Logopädie Report Agent API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+
+app = FastAPI(title="Logopädie Report Agent API", lifespan=lifespan)
 
 _allowed_origins = list({
     *os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
@@ -259,7 +271,7 @@ async def upload_material(
 
 # ── Report generation ───────────────────────────────────────────────────────
 @app.post("/sessions/{session_id}/generate")
-async def generate_report(session_id: str) -> dict:
+async def generate_report(session_id: str, db: Session = Depends(get_db)) -> dict:
     session = store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
@@ -272,6 +284,17 @@ async def generate_report(session_id: str) -> dict:
         session.generated_report = report.model_dump()
         session.status = "complete"
         store.save(session)
+
+        record = ReportRecord(
+            pseudonym=session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
+            report_type=session.generated_report.get("report_type", "unbekannt"),
+            content_json=json.dumps(session.generated_report, ensure_ascii=False),
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        session.generated_report["_db_id"] = record.id
+
         return session.generated_report
     except RuntimeError as e:
         session.status = "materials"  # Allow retry
