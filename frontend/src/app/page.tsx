@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ResetConfirmDialog } from "@/components/ResetConfirmDialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -18,6 +19,8 @@ interface ChatResponse {
   phase: string;
   is_anamnesis_complete: boolean;
   collected_fields: string[];
+  missing_fields: string[];
+  transcript?: string;
 }
 
 interface UploadedFile {
@@ -65,6 +68,7 @@ type AppPhase = "chat" | "upload" | "generating" | "preview";
 type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const SESSION_STORAGE_KEY = "logopaedie_session_id";
 
 /* ═══════════════════════════ Feature Types ═══════════════════════════════ */
 
@@ -132,11 +136,13 @@ export default function Home() {
   const [isSending, setIsSending] = useState(false);
   const [isAnamnesisComplete, setIsAnamnesisComplete] = useState(false);
   const [collectedFields, setCollectedFields] = useState<string[]>([]);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState("greeting");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [report, setReport] = useState<ReportData | null>(null);
   const [savedReportId, setSavedReportId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
 
   // Audio recording
   const [isRecording, setIsRecording] = useState(false);
@@ -151,8 +157,6 @@ export default function Home() {
   }, [messages]);
 
   // ── Create or restore session on mount ────────────────────────────
-  const SESSION_STORAGE_KEY = "logopaedie_session_id";
-
   useEffect(() => {
     async function init() {
       try {
@@ -226,6 +230,7 @@ export default function Home() {
         setCurrentPhase(data.phase);
         setIsAnamnesisComplete(data.is_anamnesis_complete);
         setCollectedFields(data.collected_fields);
+        setMissingFields(data.missing_fields ?? []);
       } catch (err) {
         setMessages((prev) => prev.slice(0, -1)); // rollback user message
         setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
@@ -286,15 +291,15 @@ export default function Home() {
         throw new Error(detail?.detail ?? "Audio-Verarbeitung fehlgeschlagen.");
       }
       const data: ChatResponse = await res.json();
-      // Replace placeholder with transcript indication
       setMessages((prev) => [
         ...prev.slice(0, -1),
-        { role: "user", content: prev[prev.length - 1].content.replace("🎤 Sprachnachricht wird verarbeitet…", "🎤 (Sprachnachricht)") },
+        { role: "user", content: data.transcript ?? "🎤 (Sprachnachricht)" },
         { role: "assistant", content: data.message },
       ]);
       setCurrentPhase(data.phase);
       setIsAnamnesisComplete(data.is_anamnesis_complete);
       setCollectedFields(data.collected_fields);
+      setMissingFields(data.missing_fields ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
     } finally {
@@ -354,6 +359,74 @@ export default function Home() {
     }
   }
 
+  // ── Reset handlers ─────────────────────────────────────────────────────────────────────────────────────────────────
+  const handleSoftReset = useCallback(async () => {
+    if (!sessionId) return;
+    setIsSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/sessions/${sessionId}/new-conversation`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail ?? "Zurücksetzen fehlgeschlagen.");
+      }
+      const data = await res.json();
+      setMessages(
+        data.collected_data?.greeting
+          ? [{ role: "assistant", content: data.collected_data.greeting }]
+          : []
+      );
+      setPhase("chat");
+      setIsAnamnesisComplete(false);
+      setCollectedFields([]);
+      setMissingFields([]);
+      setCurrentPhase("greeting");
+      setUploadedFiles([]);
+      setReport(null);
+      setSavedReportId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
+    } finally {
+      setIsSending(false);
+      setIsResetDialogOpen(false);
+    }
+  }, [sessionId]);
+
+  const handleFullReset = useCallback(async () => {
+    setIsSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/sessions`, { method: "POST" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail ?? "Neue Session konnte nicht erstellt werden.");
+      }
+      const data = await res.json();
+      setSessionId(data.session_id);
+      localStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
+      setMessages(
+        data.collected_data?.greeting
+          ? [{ role: "assistant", content: data.collected_data.greeting }]
+          : []
+      );
+      setPhase("chat");
+      setIsAnamnesisComplete(false);
+      setCollectedFields([]);
+      setMissingFields([]);
+      setCurrentPhase("greeting");
+      setUploadedFiles([]);
+      setReport(null);
+      setSavedReportId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
+    } finally {
+      setIsSending(false);
+      setIsResetDialogOpen(false);
+    }
+  }, []);
+
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -381,44 +454,17 @@ export default function Home() {
               <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border-strong text-[10px] text-muted-foreground font-mono">
                 ⌘K
               </kbd>
+              {messages.length > 0 && activeModule === "report" && (
+                <button
+                  onClick={() => setIsResetDialogOpen(true)}
+                  className="text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded transition-colors"
+                >
+                  Neue Sitzung
+                </button>
+              )}
               <ThemeToggle />
             </div>
           </div>
-
-          {/* Phase pills — report module only */}
-          {activeModule === "report" && (
-            <div className="flex items-center gap-2 pb-2 text-xs">
-              {(
-                [
-                  { label: "① Anamnese", active: phase === "chat", done: phase !== "chat" },
-                  { label: "② Material", active: phase === "upload", done: phase === "generating" || phase === "preview" },
-                  { label: "③ Bericht", active: phase === "generating" || phase === "preview", done: false },
-                ] as { label: string; active: boolean; done: boolean }[]
-              ).map((step, i) => (
-                <span key={i} className="flex items-center gap-2">
-                  {i > 0 && <span className="text-muted-foreground">→</span>}
-                  <span
-                    className={`px-3 py-1 rounded-full font-medium transition-colors ${
-                      step.active
-                        ? "text-white"
-                        : step.done
-                        ? ""
-                        : "text-muted-foreground"
-                    }`}
-                    style={
-                      step.active
-                        ? { background: "var(--accent)", color: "white" }
-                        : step.done
-                        ? { background: "var(--accent-muted)", color: "var(--accent-text)" }
-                        : { background: "var(--surface-elevated)" }
-                    }
-                  >
-                    {step.label}
-                  </span>
-                </span>
-              ))}
-            </div>
-          )}
 
           {/* Module tabs */}
           <nav className="flex gap-1 -mb-px overflow-x-auto">
@@ -442,6 +488,7 @@ export default function Home() {
               </button>
             ))}
           </nav>
+
         </div>
       </header>
 
@@ -482,15 +529,22 @@ export default function Home() {
         {activeModule === "report" && phase === "chat" && (
           <>
             {currentPhase !== "greeting" && (
-              <div className="flex items-center justify-between">
-                <h1 className="text-xl font-semibold tracking-tight">
-                  Anamnese-Gespräch
-                </h1>
-                {collectedFields.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {collectedFields.length} Felder erfasst
-                  </span>
-                )}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-semibold tracking-tight">
+                    Anamnese-Gespräch
+                  </h1>
+                  {missingFields.length > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {missingFields.length} Pflichtfelder offen
+                    </span>
+                  ) : collectedFields.length > 0 ? (
+                    <span className="text-xs" style={{ color: "var(--accent-text)" }}>
+                      Alle Pflichtfelder erfasst
+                    </span>
+                  ) : null}
+                </div>
+                <AnamnesisProgress currentPhase={currentPhase} />
               </div>
             )}
 
@@ -687,6 +741,14 @@ export default function Home() {
       <footer className="border-t border-border px-6 py-4 text-center text-xs text-muted print:hidden">
         Logopädie Report Agent · Groq API · FastAPI + Next.js
       </footer>
+
+      <ResetConfirmDialog
+        isOpen={isResetDialogOpen}
+        onClose={() => setIsResetDialogOpen(false)}
+        onSoftReset={handleSoftReset}
+        onFullReset={handleFullReset}
+        isSending={isSending}
+      />
     </div>
   );
 }
@@ -750,6 +812,59 @@ function ChatBubble({ role, content }: { role: string; content: string }) {
           </ReactMarkdown>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════ Anamnesis Progress ══════════════════════════════ */
+
+const ANAMNESIS_PHASES = [
+  { key: "report_type", label: "Berichtstyp" },
+  { key: "patient_info", label: "Patient" },
+  { key: "disorder", label: "Störungsbild" },
+  { key: "anamnesis", label: "Anamnese" },
+  { key: "goals", label: "Verlauf" },
+  { key: "summary", label: "Abschluss" },
+] as const;
+
+type AnamnesisPhaseKey = typeof ANAMNESIS_PHASES[number]["key"];
+
+const PHASE_ORDER: AnamnesisPhaseKey[] = ANAMNESIS_PHASES.map((p) => p.key);
+
+function AnamnesisProgress({ currentPhase }: { currentPhase: string }) {
+  const currentIndex = PHASE_ORDER.indexOf(currentPhase as AnamnesisPhaseKey);
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {ANAMNESIS_PHASES.map((phase, i) => {
+        const isDone = currentIndex > i;
+        const isActive = currentIndex === i;
+        return (
+          <div key={phase.key} className="flex items-center gap-1">
+            {i > 0 && (
+              <span className="text-muted text-xs">›</span>
+            )}
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
+                isDone
+                  ? "line-through opacity-50"
+                  : isActive
+                  ? "text-white"
+                  : "text-muted-foreground"
+              }`}
+              style={
+                isDone
+                  ? { background: "var(--accent-muted)", color: "var(--accent-text)" }
+                  : isActive
+                  ? { background: "var(--accent)" }
+                  : { background: "var(--surface-elevated)" }
+              }
+            >
+              {isDone ? `✓ ${phase.label}` : phase.label}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

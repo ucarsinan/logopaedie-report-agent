@@ -35,6 +35,8 @@ class ChatResponse(BaseModel):
     phase: str  # greeting | report_type | patient_info | disorder | anamnesis | goals | summary
     is_anamnesis_complete: bool = False
     collected_fields: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    transcript: str | None = None
 
 
 # ── Patient & Diagnose ──────────────────────────────────────────────────────

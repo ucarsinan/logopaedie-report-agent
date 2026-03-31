@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
 
 from models.schemas import (
+    ChatMessage,
     ChatRequest,
     ChatResponse,
     PhonologicalAnalysis,
@@ -163,6 +164,38 @@ async def get_session(session_id: str) -> SessionInfo:
     )
 
 
+@app.post("/sessions/{session_id}/new-conversation")
+async def new_conversation(session_id: str) -> SessionInfo:
+    session = store.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+
+    patient_name = session.collected_data.get("patient_pseudonym") or session.collected_data.get("patient_name")
+
+    session.chat_history = []
+    session.collected_data = {"patient_pseudonym": patient_name} if patient_name else {}
+    session.status = "anamnesis"
+    session.report_type = None
+    session.generated_report = None
+    session.materials = []
+
+    try:
+        greeting = await anamnesis_engine.get_contextual_greeting(session)
+    except Exception:
+        greeting = (
+            "Willkommen zurück! Bitte beschreiben Sie den Berichtstyp für diese Sitzung."
+        )
+        session.chat_history.append(ChatMessage(role="assistant", content=greeting))
+
+    store.save(session)
+    return SessionInfo(
+        session_id=session.session_id,
+        status=session.status,
+        report_type=session.report_type,
+        collected_data={"greeting": greeting},
+    )
+
+
 # ── Chat (text) ────────────────────────────────────────────────────────────
 @app.post("/sessions/{session_id}/chat")
 async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
@@ -189,6 +222,7 @@ async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
         phase=session.collected_data.get("current_phase", "greeting"),
         is_anamnesis_complete=session.status != "anamnesis",
         collected_fields=session.collected_data.get("collected_fields", []),
+        missing_fields=anamnesis_engine._compute_missing_fields(session),
     )
 
 
@@ -220,6 +254,8 @@ async def chat_audio(session_id: str, audio_file: UploadFile = File(...)) -> Cha
             phase=session.collected_data.get("current_phase", "greeting"),
             is_anamnesis_complete=session.status != "anamnesis",
             collected_fields=session.collected_data.get("collected_fields", []),
+            missing_fields=anamnesis_engine._compute_missing_fields(session),
+            transcript=transcript,
         )
     except RuntimeError as e:
         if "429" in str(e) or "rate_limit" in str(e):

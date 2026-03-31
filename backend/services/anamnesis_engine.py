@@ -11,14 +11,20 @@ from services.groq_client import GroqService
 from services.session_store import Session
 
 _ANAMNESIS_SYSTEM_PROMPT = """\
-Du bist ein erfahrener logopädischer Assistent, der Therapeut:innen dabei hilft,
-strukturierte Berichte zu erstellen. Du führst ein professionelles Anamnesegespräch
-auf Deutsch und sammelst systematisch alle notwendigen Informationen.
+Du bist ein logopädischer Dokumentationsassistent. Du führst strukturierte
+Anamnesegespräche auf Deutsch und sammelst die nötigen Informationen für Berichte.
+
+## Kommunikationsstil
+- Sachlich, direkt, respektvoll. Keine Floskeln, keine Einleitungssätze.
+- Bestätige kurz was du verstanden hast (1 Satz), dann stelle genau eine Frage.
+- Bei unklaren Antworten: konkret nachfragen, nicht interpretieren.
+- Keine Füllwörter ("Natürlich!", "Sehr gerne!", "Das ist wichtig!").
+- Maximal 3 Sätze pro Antwort: Bestätigung + 1 Frage.
+- Genau eine Frage pro Antwort, ohne Ausnahme.
 
 ## Deine Aufgabe
-Führe ein Gespräch mit dem/der Therapeut:in und sammle die nötigen Informationen
-für den gewünschten Berichtstyp. Stelle jeweils 1-2 Fragen pro Nachricht.
-Sei freundlich, professionell und effizient.
+Sammle die nötigen Informationen für den gewünschten Berichtstyp.
+Orientiere dich an den fehlenden Pflichtfeldern (siehe Aktueller Stand).
 
 ## Gesprächsphasen
 
@@ -102,12 +108,11 @@ oder Korrekturen. Frage, ob noch etwas ergänzt werden soll.
 
 ## Wichtige Regeln
 - Sprich den/die Therapeut:in immer mit "Sie" an
-- **Kommunikationsstil:** Sachlich, direkt und respektvoll. Keine Füllwörter,
-  keine Floskeln, keine unnötig langen Sätze. Komm direkt zum Punkt.
 - Überspringe Phasen, die für den gewählten Berichtstyp nicht relevant sind
   (z.B. Phase 5 bei Befundbericht)
 - Wenn der/die Therapeut:in Informationen aus mehreren Phasen gleichzeitig gibt,
   erkenne das und überspringe bereits beantwortete Fragen
+- Frage nie nach Feldern, die bereits erfasst sind
 - Gib am Ende jeder Nachricht KEINE JSON-Ausgabe – antworte rein im Gesprächston
 
 ## Aktueller Stand
@@ -115,6 +120,7 @@ Berichtstyp: {report_type}
 Altersgruppe: {age_group}
 Störungsbild: {disorder}
 Bereits erfasste Felder: {collected_fields}
+Fehlende Pflichtfelder für diesen Berichtstyp: {missing_fields}
 """
 
 _EXTRACTION_PROMPT = """\
@@ -164,9 +170,36 @@ Erfinde KEINE Informationen – extrahiere nur was tatsächlich gesagt wurde.
 """
 
 
+_REQUIRED_FIELDS: dict[str, list[str]] = {
+    "befundbericht": [
+        "patient_pseudonym", "age_group", "indikationsschluessel",
+        "anamnese_persoenlich", "diagnose_text",
+    ],
+    "therapiebericht_kurz": [
+        "patient_pseudonym", "age_group", "indikationsschluessel", "therapieziele",
+    ],
+    "therapiebericht_lang": [
+        "patient_pseudonym", "age_group", "indikationsschluessel",
+        "anamnese_persoenlich", "diagnose_text", "therapieinhalte", "fortschritte",
+    ],
+    "abschlussbericht": [
+        "patient_pseudonym", "age_group", "indikationsschluessel",
+        "therapieinhalte", "anzahl_sitzungen", "fortschritte", "kooperation",
+    ],
+}
+
+
 class AnamnesisEngine:
     def __init__(self, groq: GroqService) -> None:
         self._groq = groq
+
+    def _compute_missing_fields(self, session: Session) -> list[str]:
+        """Return required fields not yet collected for the current report type."""
+        report_type = session.collected_data.get("report_type")
+        if not report_type:
+            return []
+        required = _REQUIRED_FIELDS.get(report_type, [])
+        return [f for f in required if not session.collected_data.get(f)]
 
     async def process_message(self, session: Session, user_message: str) -> str:
         """Process a user message and return the assistant's response."""
@@ -178,12 +211,14 @@ class AnamnesisEngine:
         age_group = session.collected_data.get("age_group", "Noch nicht festgelegt")
         disorder = session.collected_data.get("indikationsschluessel", "Noch nicht festgelegt")
         collected = list(session.collected_data.get("collected_fields", []))
+        missing = self._compute_missing_fields(session)
 
         system = _ANAMNESIS_SYSTEM_PROMPT.format(
             report_type=report_type,
             age_group=age_group,
             disorder=disorder,
             collected_fields=", ".join(collected) if collected else "Keine",
+            missing_fields=", ".join(missing) if missing else "Alle Pflichtfelder erfasst",
         )
 
         # Get conversational response
@@ -205,12 +240,42 @@ class AnamnesisEngine:
             age_group="Noch nicht festgelegt",
             disorder="Noch nicht festgelegt",
             collected_fields="Keine",
+            missing_fields="Berichtstyp zuerst klären",
         )
 
         messages = [
             {
                 "role": "user",
                 "content": "Bitte begrüße mich und frage, welchen Berichtstyp ich erstellen möchte.",
+            }
+        ]
+        response_text = await self._groq.chat_completion(messages, system)
+
+        session.chat_history.append(ChatMessage(role="assistant", content=response_text))
+        return response_text
+
+    async def get_contextual_greeting(self, session: Session) -> str:
+        """Generate a contextual greeting for a returning patient in a new session."""
+        # Check for patient name (pseudonym first, then fallback to patient_name)
+        patient_name = session.collected_data.get("patient_pseudonym") or session.collected_data.get("patient_name")
+
+        # If no patient name found, fall back to initial greeting
+        if not patient_name:
+            return await self.get_initial_greeting(session)
+
+        # Generate contextual greeting for returning patient
+        system = _ANAMNESIS_SYSTEM_PROMPT.format(
+            report_type="Noch nicht festgelegt",
+            age_group="Noch nicht festgelegt",
+            disorder="Noch nicht festgelegt",
+            collected_fields="Keine",
+            missing_fields="Berichtstyp zuerst klären",
+        )
+
+        messages = [
+            {
+                "role": "user",
+                "content": f"Bitte begrüße mich für eine neue Sitzung mit {patient_name} und frage, welchen Berichtstyp ich diesmal erstellen möchte.",
             }
         ]
         response_text = await self._groq.chat_completion(messages, system)
