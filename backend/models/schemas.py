@@ -18,6 +18,7 @@ class SessionInfo(BaseModel):
     report_type: str | None = None
     collected_data: dict = Field(default_factory=dict)
     chat_history: list["ChatMessage"] = Field(default_factory=list)
+    materials_consent: bool = False
 
 
 # ── Chat ────────────────────────────────────────────────────────────────────

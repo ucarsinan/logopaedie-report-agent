@@ -115,6 +115,9 @@ oder Korrekturen. Frage, ob noch etwas ergänzt werden soll.
 - Frage nie nach Feldern, die bereits erfasst sind
 - Gib am Ende jeder Nachricht KEINE JSON-Ausgabe – antworte rein im Gesprächston
 
+## Vorhandene Unterlagen
+{materials_context}
+
 ## Aktueller Stand
 Berichtstyp: {report_type}
 Altersgruppe: {age_group}
@@ -193,6 +196,16 @@ class AnamnesisEngine:
     def __init__(self, groq: GroqService) -> None:
         self._groq = groq
 
+    def _format_materials_context(self, session: Session) -> str:
+        """Return a formatted string of uploaded material texts for the system prompt."""
+        if not session.materials_consent or not session.materials:
+            return "Keine Unterlagen vorhanden."
+        parts = []
+        for mat in session.materials:
+            snippet = mat.extracted_text[:1500].strip()
+            parts.append(f"**{mat.filename}** ({mat.material_type}):\n{snippet}")
+        return "\n\n".join(parts)
+
     def _compute_missing_fields(self, session: Session) -> list[str]:
         """Return required fields not yet collected for the current report type."""
         report_type = session.collected_data.get("report_type")
@@ -219,6 +232,7 @@ class AnamnesisEngine:
             disorder=disorder,
             collected_fields=", ".join(collected) if collected else "Keine",
             missing_fields=", ".join(missing) if missing else "Alle Pflichtfelder erfasst",
+            materials_context=self._format_materials_context(session),
         )
 
         # Get conversational response
@@ -241,6 +255,7 @@ class AnamnesisEngine:
             disorder="Noch nicht festgelegt",
             collected_fields="Keine",
             missing_fields="Berichtstyp zuerst klären",
+            materials_context=self._format_materials_context(session),
         )
 
         messages = [
@@ -270,6 +285,7 @@ class AnamnesisEngine:
             disorder="Noch nicht festgelegt",
             collected_fields="Keine",
             missing_fields="Berichtstyp zuerst klären",
+            materials_context=self._format_materials_context(session),
         )
 
         messages = [

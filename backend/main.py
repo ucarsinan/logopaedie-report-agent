@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
@@ -178,6 +179,7 @@ async def new_conversation(session_id: str) -> SessionInfo:
     session.report_type = None
     session.generated_report = None
     session.materials = []
+    session.materials_consent = False
 
     try:
         greeting = await anamnesis_engine.get_contextual_greeting(session)
@@ -304,6 +306,27 @@ async def upload_material(
     session.materials.append(material)
     store.save(session)
     return material
+
+
+# ── Materials consent ────────────────────────────────────────────────────────
+class ConsentRequest(BaseModel):
+    consent: bool
+
+
+@app.post("/sessions/{session_id}/materials-consent")
+async def set_materials_consent(session_id: str, req: ConsentRequest) -> SessionInfo:
+    session = store.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+    session.materials_consent = req.consent
+    store.save(session)
+    return SessionInfo(
+        session_id=session.session_id,
+        status=session.status,
+        report_type=session.report_type,
+        collected_data=session.collected_data,
+        materials_consent=session.materials_consent,
+    )
 
 
 # ── Report generation ───────────────────────────────────────────────────────

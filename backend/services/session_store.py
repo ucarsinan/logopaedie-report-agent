@@ -33,6 +33,7 @@ class Session:
         self.chat_history: list[ChatMessage] = []
         self.collected_data: dict = {}
         self.materials: list[UploadedMaterial] = []
+        self.materials_consent: bool = False
         self.generated_report: dict | None = None
         self.created_at: float = time.time()
 
@@ -48,6 +49,7 @@ class Session:
             "chat_history": [m.model_dump() for m in self.chat_history],
             "collected_data": self.collected_data,
             "materials": [m.model_dump() for m in self.materials],
+            "materials_consent": self.materials_consent,
             "generated_report": self.generated_report,
             "created_at": self.created_at,
         }
@@ -61,6 +63,7 @@ class Session:
         s.chat_history = [ChatMessage(**m) for m in data.get("chat_history", [])]
         s.collected_data = data.get("collected_data", {})
         s.materials = [UploadedMaterial(**m) for m in data.get("materials", [])]
+        s.materials_consent = data.get("materials_consent", False)
         s.generated_report = data.get("generated_report")
         s.created_at = data.get("created_at", time.time())
         return s
