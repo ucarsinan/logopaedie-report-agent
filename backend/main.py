@@ -223,7 +223,7 @@ async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=400, detail="Nachricht darf nicht leer sein.")
 
     try:
-        response_text = await anamnesis_engine.process_message(session, req.message)
+        response_text = await anamnesis_engine.process_message(session, req.message, req.mode)
     except RuntimeError as e:
         if "429" in str(e) or "rate_limit" in str(e):
             raise HTTPException(
