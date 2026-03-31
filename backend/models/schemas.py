@@ -30,6 +30,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str | None = None
+    mode: str = "guided"  # "guided" | "quick_input"
 
 
 class ChatResponse(BaseModel):
