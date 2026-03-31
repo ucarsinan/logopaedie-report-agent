@@ -9,6 +9,7 @@ import type { StepConfig } from "@/components/WorkflowStepper";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
+import { ReportSummary, ReportDetail, REPORT_TYPE_LABELS, api as reportsApi } from "@/lib/api";
 
 /* ═══════════════════════════════════ Types ═══════════════════════════════════ */
 
@@ -68,7 +69,7 @@ interface ReportData {
 }
 
 type AppPhase = "pre-upload" | "chat" | "generating" | "preview";
-type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest";
+type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest" | "history";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const SESSION_STORAGE_KEY = "logopaedie_session_id";
@@ -174,6 +175,21 @@ interface ReportComparisonData {
 
 export default function Home() {
   const [activeModule, setActiveModule] = useState<AppModule>("report");
+
+  useEffect(() => {
+    const m = new URLSearchParams(window.location.search).get("module");
+    const valid: AppModule[] = ["report", "phonology", "therapy-plan", "compare", "suggest"];
+    if (valid.includes(m as AppModule)) {
+      setActiveModule(m as AppModule);
+    }
+  }, []);
+
+  const handleModuleChange = (module: AppModule) => {
+    setActiveModule(module);
+    const url = new URL(window.location.href);
+    url.searchParams.set("module", module);
+    window.history.replaceState({}, "", url.toString());
+  };
   const [phase, setPhase] = useState<AppPhase>("pre-upload");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -198,11 +214,24 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ⌘K / Ctrl+K → focus chat input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        chatInputRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // ── Create or restore session on mount ────────────────────────────
   useEffect(() => {
@@ -451,7 +480,7 @@ export default function Home() {
           ? [{ role: "assistant", content: data.collected_data.greeting }]
           : []
       );
-      setPhase("chat");
+      setPhase("pre-upload");
       setIsAnamnesisComplete(false);
       setCollectedFields([]);
       setMissingFields([]);
@@ -533,14 +562,12 @@ export default function Home() {
                   "therapy-plan": "Therapieplan",
                   compare: "Berichtsvergleich",
                   suggest: "Textbausteine",
+                  history: "Bericht-Verlauf",
                 } as Record<AppModule, string>)[activeModule]}
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border-strong text-[10px] text-muted-foreground font-mono">
-                ⌘K
-              </kbd>
-              {messages.length > 0 && activeModule === "report" && (
+{messages.length > 0 && activeModule === "report" && (
                 <button
                   onClick={() => setIsResetDialogOpen(true)}
                   className="text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded transition-colors"
@@ -548,6 +575,13 @@ export default function Home() {
                   Neue Sitzung
                 </button>
               )}
+              <Link
+                href="/berichte"
+                className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"
+                title="Gespeicherte Berichte anzeigen"
+              >
+                Verlauf
+              </Link>
               <button
                 onClick={handleOpenOnboarding}
                 className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"
@@ -567,10 +601,11 @@ export default function Home() {
               ["therapy-plan", "Therapieplan", "ICF-basierten Therapieplan automatisch generieren"],
               ["compare", "Berichtsvergleich", "Zwei Berichte gegenüberstellen und Fortschritt messen"],
               ["suggest", "Textbausteine", "KI-Formulierungsvorschläge während des Schreibens"],
+              ["history", "Bericht-Verlauf", "Alle gespeicherten Berichte anzeigen und durchsuchen"],
             ] as [AppModule, string, string][]).map(([key, label, tooltip]) => (
               <button
                 key={key}
-                onClick={() => setActiveModule(key)}
+                onClick={() => handleModuleChange(key)}
                 title={tooltip}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeModule === key
@@ -617,6 +652,11 @@ export default function Home() {
         {/* ── Module: Text Suggestions ──────────────────────────── */}
         {activeModule === "suggest" && (
           <TextSuggestionView api={API} />
+        )}
+
+        {/* ── Module: Report History ────────────────────────────── */}
+        {activeModule === "history" && (
+          <HistoryView />
         )}
 
         {/* ── Berichterstellung: Workflow-Stepper ────────────────── */}
@@ -671,6 +711,7 @@ export default function Home() {
             {currentPhase !== "greeting" && (
               <div className="flex gap-2 print:hidden">
                 <input
+                  ref={chatInputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -1364,145 +1405,624 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
 
 /* ═══════════════════════════ Therapy Plan View ═══════════════════════════════ */
 
-function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | null }) {
+type TpMode = "select" | "chat" | "from-report" | "generating" | "plan";
+
+interface SavedReportSummary {
+  id: number;
+  pseudonym: string;
+  report_type: string;
+  created_at: string;
+}
+
+interface SavedPlanSummary {
+  id: number;
+  created_at: string;
+  patient_pseudonym: string;
+  report_id: number | null;
+}
+
+const THERAPY_PLAN_STEPS: StepConfig[] = [
+  {
+    label: "Eingabe",
+    infoTitle: "Patienten auswählen oder Daten eingeben",
+    infoText:
+      "Starten Sie einen Mini-Chat für einen neuen Patienten oder wählen Sie einen gespeicherten Bericht als Grundlage.",
+  },
+  {
+    label: "Generieren",
+    infoTitle: "Therapieplan wird generiert",
+    infoText: "Der KI-Assistent erstellt jetzt einen ICF-basierten Therapieplan. Dies dauert wenige Sekunden.",
+  },
+  {
+    label: "Plan",
+    infoTitle: "Therapieplan fertig",
+    infoText:
+      "Prüfen und bearbeiten Sie den Therapieplan. Klicken Sie auf ✓ Eingabe um neu zu starten.",
+    infoVariant: "success",
+  },
+];
+
+function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionId: string | null }) {
+  const [tpMode, setTpMode] = useState<TpMode>("select");
+  const [tpSessionId, setTpSessionId] = useState<string | null>(null);
+  const [tpReportId, setTpReportId] = useState<number | null>(null);
+  const [tpMessages, setTpMessages] = useState<ChatMsg[]>([]);
+  const [tpInput, setTpInput] = useState("");
+  const [tpIsSending, setTpIsSending] = useState(false);
+  const [tpIsComplete, setTpIsComplete] = useState(false);
   const [plan, setPlan] = useState<TherapyPlanData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [tpSavedId, setTpSavedId] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<TherapyPlanData | null>(null);
+  const [savedPlans, setSavedPlans] = useState<SavedPlanSummary[]>([]);
+  const [savedReports, setSavedReports] = useState<SavedReportSummary[]>([]);
+  const [selectedReportId, setSelectedReportId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const tpChatEndRef = useRef<HTMLDivElement>(null);
 
-  const THERAPY_PLAN_STEPS: StepConfig[] = [
-    {
-      label: "Generieren",
-      infoTitle: "Therapieplan generieren",
-      infoText:
-        "Erstellen Sie einen strukturierten ICF-basierten Therapieplan auf Basis der aktuellen Anamnesedaten. Führen Sie zuerst eine Anamnese im Tab Berichterstellung durch.",
-    },
-    {
-      label: "Plan",
-      infoTitle: "Therapieplan fertig",
-      infoText:
-        "Prüfen Sie den generierten Therapieplan mit Zielen, Methoden und Meilensteinen. Klicken Sie auf ✓ Generieren für einen neuen Plan.",
-      infoVariant: "success",
-    },
-  ];
+  const stepIndex = tpMode === "select" || tpMode === "chat" || tpMode === "from-report" ? 0
+    : tpMode === "generating" ? 1
+    : 2;
 
-  async function generatePlan() {
-    if (!sessionId) {
-      setError("Bitte erstellen Sie zuerst einen Bericht im Tab 'Berichterstellung'.");
-      return;
-    }
-    setLoading(true);
+  // Load saved plans and reports on mount
+  useEffect(() => {
+    fetch(`${api}/therapy-plans`)
+      .then((r) => r.ok ? r.json() : [])
+      .then(setSavedPlans)
+      .catch(() => {});
+    fetch(`${api}/reports`)
+      .then((r) => r.ok ? r.json() : [])
+      .then(setSavedReports)
+      .catch(() => {});
+  }, [api]);
+
+  // Auto-scroll mini-chat
+  useEffect(() => {
+    tpChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [tpMessages]);
+
+  async function startMiniChat() {
     setError(null);
     try {
-      const res = await fetch(`${api}/sessions/${sessionId}/therapy-plan`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Plan-Generierung fehlgeschlagen.");
-      setPlan(await res.json());
-      setStep(1); // Schritt: Plan fertig
+      const res = await fetch(`${api}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "therapy_plan" }),
+      });
+      if (!res.ok) throw new Error("Session konnte nicht erstellt werden.");
+      const data = await res.json();
+      setTpSessionId(data.session_id);
+      const greeting = data.collected_data?.greeting ?? "Guten Tag! Für welchen Patienten möchten Sie einen Therapieplan erstellen?";
+      setTpMessages([{ role: "assistant", content: greeting }]);
+      setTpMode("chat");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    }
+  }
+
+  async function sendTpMessage() {
+    if (!tpInput.trim() || !tpSessionId || tpIsSending) return;
+    const msg = tpInput.trim();
+    setTpInput("");
+    setTpMessages((prev) => [...prev, { role: "user", content: msg }]);
+    setTpIsSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${api}/sessions/${tpSessionId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Fehler.");
+      const data: ChatResponse = await res.json();
+      setTpMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
+      if (data.is_anamnesis_complete) setTpIsComplete(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
     } finally {
-      setLoading(false);
+      setTpIsSending(false);
     }
   }
+
+  async function generateFromSession(sid: string, rid?: number) {
+    setTpMode("generating");
+    setError(null);
+    try {
+      const res = await fetch(`${api}/sessions/${sid}/therapy-plan`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Plan-Generierung fehlgeschlagen.");
+      const p = await res.json();
+      setPlan(p);
+      if (rid) setTpReportId(rid);
+      setTpMode("plan");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+      setTpMode(tpSessionId ? "chat" : "from-report");
+    }
+  }
+
+  async function generateFromReport() {
+    const rid = parseInt(selectedReportId);
+    if (!rid) return;
+    // Create a temporary session for plan generation using report context
+    setError(null);
+    try {
+      const sessionRes = await fetch(`${api}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "anamnesis" }),
+      });
+      if (!sessionRes.ok) throw new Error("Session konnte nicht erstellt werden.");
+      const sessionData = await sessionRes.json();
+      const sid = sessionData.session_id;
+      setTpSessionId(sid);
+      await generateFromSession(sid, rid);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    }
+  }
+
+  async function savePlan() {
+    if (!plan || !tpSessionId) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${api}/therapy-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: tpSessionId,
+          plan_data: plan,
+          report_id: tpReportId ?? null,
+        }),
+      });
+      if (!res.ok) throw new Error("Fehler beim Speichern.");
+      const saved: SavedPlanSummary = await res.json();
+      setTpSavedId(saved.id);
+      setSavedPlans((prev) => [saved, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function saveEditedPlan() {
+    if (!editData || !tpSavedId) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${api}/therapy-plans/${tpSavedId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editData),
+      });
+      if (!res.ok) throw new Error("Fehler beim Speichern.");
+      setPlan(editData);
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function loadSavedPlan(id: number) {
+    setError(null);
+    try {
+      const res = await fetch(`${api}/therapy-plans/${id}`);
+      if (!res.ok) throw new Error("Plan nicht gefunden.");
+      const data = await res.json();
+      setPlan(data as TherapyPlanData);
+      setTpSavedId(data._db_id ?? id);
+      setTpMode("plan");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler.");
+    }
+  }
+
+  function resetToSelect() {
+    setTpMode("select");
+    setTpSessionId(null);
+    setTpReportId(null);
+    setTpMessages([]);
+    setTpIsComplete(false);
+    setPlan(null);
+    setTpSavedId(null);
+    setIsEditing(false);
+    setEditData(null);
+    setError(null);
+    setSelectedReportId("");
+  }
+
+  const REPORT_TYPE_LABELS: Record<string, string> = {
+    befundbericht: "Befundbericht",
+    therapiebericht_kurz: "Therapiebericht (kurz)",
+    therapiebericht_lang: "Therapiebericht (lang)",
+    abschlussbericht: "Abschlussbericht",
+  };
 
   return (
     <>
       <WorkflowStepper
         steps={THERAPY_PLAN_STEPS}
-        currentStep={step}
-        onStepClick={step > 0 ? (i) => { setStep(i); if (i === 0) setPlan(null); } : undefined}
+        currentStep={stepIndex}
+        onStepClick={stepIndex > 0 ? (i) => { if (i === 0) resetToSelect(); } : undefined}
       />
+
       <h1 className="text-xl font-semibold tracking-tight">KI-gestützter Therapieplan</h1>
-      <p className="text-sm text-muted-foreground">
-        Generieren Sie einen strukturierten Therapieplan mit ICF-Bezug basierend auf dem
-        erstellten Befundbericht. Führen Sie zuerst eine Anamnese im Tab
-        &quot;Berichterstellung&quot; durch.
-      </p>
 
-      <button
-        onClick={generatePlan}
-        disabled={loading}
-        className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
-      >
-        {loading ? "Generiere Therapieplan…" : "Therapieplan generieren"}
-      </button>
+      {error && (
+        <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>
+      )}
 
-      {error && <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>}
-
-      {plan && (
-        <div className="rounded-lg border border-border overflow-hidden divide-y divide-border print:border-black print:text-black print:bg-white">
-          <div className="px-6 py-4 bg-surface print:bg-white">
-            <h2 className="text-lg font-semibold">Therapieplan: {plan.patient_pseudonym}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{plan.diagnose_text}</p>
-            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-              <span>Frequenz: {plan.frequency}</span>
-              <span>Gesamt: {plan.total_sessions} Sitzungen</span>
-            </div>
+      {/* ── Select mode ── */}
+      {tpMode === "select" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              onClick={startMiniChat}
+              className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-5 py-4 text-left hover:border-accent transition-colors"
+            >
+              <span className="text-sm font-semibold text-foreground">Neu (Mini-Chat)</span>
+              <span className="text-xs text-muted-foreground">
+                Kurzes Gespräch (4 Fragen) für einen neuen Patienten — ohne vorherige Anamnese.
+              </span>
+            </button>
+            <button
+              onClick={() => setTpMode("from-report")}
+              className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-5 py-4 text-left hover:border-accent transition-colors"
+            >
+              <span className="text-sm font-semibold text-foreground">Aus Bericht</span>
+              <span className="text-xs text-muted-foreground">
+                Therapieplan auf Basis eines bereits gespeicherten Berichts erstellen.
+              </span>
+            </button>
           </div>
 
-          {plan.plan_phases.map((phase, pi) => (
-            <div key={pi} className="px-6 py-4 bg-surface/60">
-              <h3 className="text-sm font-semibold text-accent-text mb-3">
-                Phase {pi + 1}: {phase.phase_name}
-                <span className="text-xs text-muted-foreground font-normal ml-2">{phase.duration}</span>
-              </h3>
-              <div className="space-y-4">
-                {phase.goals.map((goal, gi) => (
-                  <div key={gi} className="rounded-lg bg-surface-elevated/50 p-4">
-                    <div className="flex items-start gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 rounded bg-accent-muted text-accent-text shrink-0 font-mono">
-                        {goal.icf_code}
-                      </span>
-                      <span className="text-sm text-foreground">{goal.goal_text}</span>
+          {savedPlans.length > 0 && (
+            <div>
+              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">
+                Gespeicherte Therapiepläne
+              </h2>
+              <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
+                {savedPlans.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => loadSavedPlan(p.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-elevated text-left transition-colors"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{p.patient_pseudonym}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(p.created_at).toLocaleDateString("de-DE")}
+                        {p.report_id ? ` · Bericht #${p.report_id}` : ""}
+                      </p>
                     </div>
-                    <div className="ml-4 space-y-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Methoden: </span>
-                        <span className="text-foreground/80">{goal.methods.join(", ")}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Meilensteine: </span>
-                        <span className="text-foreground/80">{goal.milestones.join(" → ")}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Zeitrahmen: </span>
-                        <span className="text-foreground/80">{goal.timeframe}</span>
-                      </div>
-                    </div>
-                  </div>
+                    <span className="text-xs text-accent">Laden →</span>
+                  </button>
                 ))}
               </div>
             </div>
-          ))}
-
-          {plan.elternberatung && (
-            <div className="px-6 py-4 bg-surface/60">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Elternberatung</h3>
-              <p className="text-sm text-foreground whitespace-pre-wrap">{plan.elternberatung}</p>
-            </div>
           )}
+        </div>
+      )}
 
-          {plan.haeusliche_uebungen.length > 0 && (
-            <div className="px-6 py-4 bg-surface/60">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Häusliche Übungen</h3>
-              <ul className="space-y-1">
-                {plan.haeusliche_uebungen.map((u, i) => (
-                  <li key={i} className="text-sm text-foreground flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                    {u}
-                  </li>
-                ))}
-              </ul>
+      {/* ── Mini-chat mode ── */}
+      {tpMode === "chat" && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-surface min-h-[200px] max-h-[380px] overflow-y-auto p-4 space-y-3">
+            {tpMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`rounded-lg px-4 py-2 text-sm max-w-[80%] whitespace-pre-wrap ${
+                    m.role === "user"
+                      ? "bg-accent text-white"
+                      : "bg-surface-elevated text-foreground"
+                  }`}
+                >
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {tpIsSending && (
+              <div className="flex justify-start">
+                <div className="rounded-lg px-4 py-2 text-sm bg-surface-elevated text-muted-foreground">…</div>
+              </div>
+            )}
+            <div ref={tpChatEndRef} />
+          </div>
+
+          {!tpIsComplete ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tpInput}
+                onChange={(e) => setTpInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendTpMessage()}
+                placeholder="Ihre Antwort…"
+                disabled={tpIsSending}
+                className="flex-1 rounded-lg border border-border bg-surface px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+              />
+              <button
+                onClick={sendTpMessage}
+                disabled={tpIsSending || !tpInput.trim()}
+                className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+              >
+                Senden
+              </button>
             </div>
-          )}
-
-          <div className="px-6 py-3 bg-surface flex justify-end print:hidden">
+          ) : (
             <button
-              onClick={() => window.print()}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+              onClick={() => tpSessionId && generateFromSession(tpSessionId)}
+              className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors"
             >
-              Drucken / PDF
+              Therapieplan generieren
             </button>
+          )}
+        </div>
+      )}
+
+      {/* ── From-report mode ── */}
+      {tpMode === "from-report" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Wählen Sie einen gespeicherten Bericht als Grundlage für den Therapieplan.
+          </p>
+          {savedReports.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">Keine gespeicherten Berichte gefunden.</p>
+          ) : (
+            <div className="flex gap-3 items-center">
+              <select
+                value={selectedReportId}
+                onChange={(e) => setSelectedReportId(e.target.value)}
+                className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="">— Bericht auswählen —</option>
+                {savedReports.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.pseudonym} · {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type} ·{" "}
+                    {new Date(r.created_at).toLocaleDateString("de-DE")}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={generateFromReport}
+                disabled={!selectedReportId}
+                className="px-5 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+              >
+                Generieren
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setTpMode("select")}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Zurück
+          </button>
+        </div>
+      )}
+
+      {/* ── Generating mode ── */}
+      {tpMode === "generating" && (
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="w-4 h-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+          Therapieplan wird generiert…
+        </div>
+      )}
+
+      {/* ── Plan mode ── */}
+      {tpMode === "plan" && plan && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border overflow-hidden divide-y divide-border print:border-black print:text-black print:bg-white">
+            {/* Header */}
+            <div className="px-6 py-4 bg-surface print:bg-white">
+              {isEditing ? (
+                <div className="space-y-2">
+                  <input
+                    value={editData?.patient_pseudonym ?? ""}
+                    onChange={(e) => setEditData((d) => d ? { ...d, patient_pseudonym: e.target.value } : d)}
+                    className="w-full rounded border border-border bg-surface-elevated px-3 py-1.5 text-sm font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder="Patient (Pseudonym)"
+                  />
+                  <textarea
+                    value={editData?.diagnose_text ?? ""}
+                    onChange={(e) => setEditData((d) => d ? { ...d, diagnose_text: e.target.value } : d)}
+                    rows={2}
+                    className="w-full rounded border border-border bg-surface-elevated px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                    placeholder="Diagnose"
+                  />
+                  <div className="flex gap-3">
+                    <input
+                      value={editData?.frequency ?? ""}
+                      onChange={(e) => setEditData((d) => d ? { ...d, frequency: e.target.value } : d)}
+                      className="flex-1 rounded border border-border bg-surface-elevated px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                      placeholder="Frequenz"
+                    />
+                    <input
+                      type="number"
+                      value={editData?.total_sessions ?? 0}
+                      onChange={(e) => setEditData((d) => d ? { ...d, total_sessions: parseInt(e.target.value) || 0 } : d)}
+                      className="w-28 rounded border border-border bg-surface-elevated px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                      placeholder="Sitzungen"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-lg font-semibold">Therapieplan: {plan.patient_pseudonym}</h2>
+                  <p className="text-sm text-muted-foreground mt-1">{plan.diagnose_text}</p>
+                  <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                    <span>Frequenz: {plan.frequency}</span>
+                    <span>Gesamt: {plan.total_sessions} Sitzungen</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Phases */}
+            {(isEditing ? editData?.plan_phases : plan.plan_phases)?.map((phase, pi) => (
+              <div key={pi} className="px-6 py-4 bg-surface/60">
+                <h3 className="text-sm font-semibold text-accent-text mb-3">
+                  {isEditing ? (
+                    <input
+                      value={phase.phase_name}
+                      onChange={(e) => setEditData((d) => {
+                        if (!d) return d;
+                        const phases = [...d.plan_phases];
+                        phases[pi] = { ...phases[pi], phase_name: e.target.value };
+                        return { ...d, plan_phases: phases };
+                      })}
+                      className="rounded border border-border bg-surface-elevated px-2 py-0.5 text-sm font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  ) : (
+                    <>Phase {pi + 1}: {phase.phase_name}</>
+                  )}
+                  <span className="text-xs text-muted-foreground font-normal ml-2">{phase.duration}</span>
+                </h3>
+                <div className="space-y-4">
+                  {phase.goals.map((goal, gi) => (
+                    <div key={gi} className="rounded-lg bg-surface-elevated/50 p-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="text-xs px-2 py-0.5 rounded bg-accent-muted text-accent-text shrink-0 font-mono">
+                          {goal.icf_code}
+                        </span>
+                        {isEditing ? (
+                          <textarea
+                            value={goal.goal_text}
+                            onChange={(e) => setEditData((d) => {
+                              if (!d) return d;
+                              const phases = [...d.plan_phases];
+                              const goals = [...phases[pi].goals];
+                              goals[gi] = { ...goals[gi], goal_text: e.target.value };
+                              phases[pi] = { ...phases[pi], goals };
+                              return { ...d, plan_phases: phases };
+                            })}
+                            rows={2}
+                            className="flex-1 rounded border border-border bg-surface-elevated px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                          />
+                        ) : (
+                          <span className="text-sm text-foreground">{goal.goal_text}</span>
+                        )}
+                      </div>
+                      <div className="ml-4 space-y-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Methoden: </span>
+                          {isEditing ? (
+                            <input
+                              value={goal.methods.join(", ")}
+                              onChange={(e) => setEditData((d) => {
+                                if (!d) return d;
+                                const phases = [...d.plan_phases];
+                                const goals = [...phases[pi].goals];
+                                goals[gi] = { ...goals[gi], methods: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) };
+                                phases[pi] = { ...phases[pi], goals };
+                                return { ...d, plan_phases: phases };
+                              })}
+                              className="rounded border border-border bg-surface-elevated px-2 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent w-full mt-0.5"
+                              placeholder="Methode 1, Methode 2, …"
+                            />
+                          ) : (
+                            <span className="text-foreground/80">{goal.methods.join(", ")}</span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Meilensteine: </span>
+                          <span className="text-foreground/80">{goal.milestones.join(" → ")}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Zeitrahmen: </span>
+                          <span className="text-foreground/80">{goal.timeframe}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Elternberatung */}
+            {(isEditing ? editData?.elternberatung : plan.elternberatung) && (
+              <div className="px-6 py-4 bg-surface/60">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Elternberatung</h3>
+                {isEditing ? (
+                  <textarea
+                    value={editData?.elternberatung ?? ""}
+                    onChange={(e) => setEditData((d) => d ? { ...d, elternberatung: e.target.value } : d)}
+                    rows={3}
+                    className="w-full rounded border border-border bg-surface-elevated px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                  />
+                ) : (
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{plan.elternberatung}</p>
+                )}
+              </div>
+            )}
+
+            {/* Häusliche Übungen */}
+            {plan.haeusliche_uebungen.length > 0 && (
+              <div className="px-6 py-4 bg-surface/60">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Häusliche Übungen</h3>
+                <ul className="space-y-1">
+                  {plan.haeusliche_uebungen.map((u, i) => (
+                    <li key={i} className="text-sm text-foreground flex items-start gap-2">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                      {u}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Action bar */}
+            <div className="px-6 py-3 bg-surface flex items-center justify-between gap-3 print:hidden flex-wrap">
+              <div className="flex gap-2">
+                {isEditing ? (
+                  <>
+                    <button
+                      onClick={saveEditedPlan}
+                      disabled={isSaving || !tpSavedId}
+                      className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+                    >
+                      {isSaving ? "Speichert…" : "Speichern"}
+                    </button>
+                    <button
+                      onClick={() => { setIsEditing(false); setEditData(null); }}
+                      className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Abbrechen
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setIsEditing(true); setEditData(JSON.parse(JSON.stringify(plan))); }}
+                    className="px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:border-accent transition-colors"
+                  >
+                    Editieren
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {!tpSavedId && (
+                  <button
+                    onClick={savePlan}
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-lg border border-accent text-accent text-sm font-medium hover:bg-accent hover:text-white transition-colors disabled:opacity-40"
+                  >
+                    {isSaving ? "Speichert…" : "In Datenbank speichern"}
+                  </button>
+                )}
+                {tpSavedId && (
+                  <span className="text-xs text-muted-foreground self-center">✓ Gespeichert</span>
+                )}
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                >
+                  Drucken / PDF
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1844,6 +2364,182 @@ function UploadIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-muted-foreground">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
     </svg>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HistoryView — Bericht-Verlauf als integriertes Modul
+══════════════════════════════════════════════════════════════════════════ */
+
+const HISTORY_SECTION_LABELS: Record<string, string> = {
+  anamnese: "Anamnese",
+  befund: "Befund",
+  therapieindikation: "Therapieindikation",
+  therapieziele: "Therapieziele",
+  empfehlung: "Empfehlung",
+  empfehlungen: "Empfehlungen",
+  therapeutische_diagnostik: "Therapeutische Diagnostik",
+  aktueller_krankheitsstatus: "Aktueller Krankheitsstatus",
+  aktueller_therapiestand: "Aktueller Therapiestand",
+  weiteres_vorgehen: "Weiteres Vorgehen",
+  therapieverlauf_zusammenfassung: "Therapieverlauf",
+  ergebnis: "Ergebnis",
+};
+
+const HISTORY_SKIP_KEYS = new Set([
+  "report_type", "patient", "diagnose", "_db_id", "created_at", "id", "pseudonym",
+]);
+
+function HistoryView() {
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<ReportDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    reportsApi.reports
+      .list()
+      .then(setReports)
+      .catch((e: Error) => setFetchError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (selectedId === null) { setDetail(null); return; }
+    setDetailLoading(true);
+    reportsApi.reports
+      .get(selectedId)
+      .then(setDetail)
+      .catch(() => setDetail(null))
+      .finally(() => setDetailLoading(false));
+  }, [selectedId]);
+
+  /* ── Detail-Ansicht ── */
+  if (selectedId !== null) {
+    return (
+      <div className="flex flex-col gap-4">
+        <button
+          onClick={() => setSelectedId(null)}
+          className="self-start text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Zurück zur Übersicht
+        </button>
+
+        {detailLoading && <p className="text-muted-foreground text-sm">Lade Bericht…</p>}
+
+        {!detailLoading && detail && (
+          <>
+            <div>
+              <h2 className="text-xl font-semibold">
+                {REPORT_TYPE_LABELS[detail.report_type] ?? detail.report_type}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                {detail.patient?.pseudonym ?? "Unbekannt"} ·{" "}
+                {new Date(detail.created_at).toLocaleDateString("de-DE", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                })}
+              </p>
+            </div>
+
+            {detail.patient && (
+              <section className="p-4 rounded-lg border border-border bg-card">
+                <h3 className="font-medium mb-2">Patient</h3>
+                <p className="text-sm">Pseudonym: {detail.patient.pseudonym}</p>
+                <p className="text-sm">Altersgruppe: {detail.patient.age_group}</p>
+                {detail.patient.gender && <p className="text-sm">Geschlecht: {detail.patient.gender}</p>}
+              </section>
+            )}
+
+            {detail.diagnose && (detail.diagnose.diagnose_text || detail.diagnose.icd_10_codes?.length > 0) && (
+              <section className="p-4 rounded-lg border border-border bg-card">
+                <h3 className="font-medium mb-2">Diagnose</h3>
+                {detail.diagnose.diagnose_text && <p className="text-sm">{detail.diagnose.diagnose_text}</p>}
+                {detail.diagnose.indikationsschluessel && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Indikationsschlüssel: {detail.diagnose.indikationsschluessel}
+                  </p>
+                )}
+                {detail.diagnose.icd_10_codes?.length > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ICD-10: {detail.diagnose.icd_10_codes.join(", ")}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {Object.entries(detail)
+              .filter(([key, value]) => !HISTORY_SKIP_KEYS.has(key) && value)
+              .map(([key, value]) => {
+                const label = HISTORY_SECTION_LABELS[key] ?? key;
+                if (Array.isArray(value)) {
+                  return (
+                    <section key={key} className="p-4 rounded-lg border border-border bg-card">
+                      <h3 className="font-medium mb-2">{label}</h3>
+                      <ul className="list-disc pl-4 space-y-1">
+                        {(value as string[]).map((item, i) => (
+                          <li key={i} className="text-sm">{item}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  );
+                }
+                return (
+                  <section key={key} className="p-4 rounded-lg border border-border bg-card">
+                    <h3 className="font-medium mb-2">{label}</h3>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{String(value)}</ReactMarkdown>
+                    </div>
+                  </section>
+                );
+              })}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /* ── Listen-Ansicht ── */
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-xl font-semibold tracking-tight">Gespeicherte Berichte</h2>
+
+      {loading && <p className="text-muted-foreground text-sm">Lade Berichte…</p>}
+
+      {fetchError && <p className="text-destructive text-sm">Fehler: {fetchError}</p>}
+
+      {!loading && !fetchError && reports.length === 0 && (
+        <p className="text-muted-foreground text-sm">
+          Noch keine Berichte gespeichert. Erstelle deinen ersten Bericht im Tab &quot;Berichterstellung&quot;.
+        </p>
+      )}
+
+      {!loading && !fetchError && reports.length > 0 && (
+        <ul className="space-y-2">
+          {reports.map((r) => (
+            <li key={r.id}>
+              <button
+                onClick={() => setSelectedId(r.id)}
+                className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
+              >
+                <div>
+                  <span className="font-medium">{r.pseudonym}</span>
+                  <span className="ml-3 text-sm text-muted-foreground">
+                    {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
+                  </span>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {new Date(r.created_at).toLocaleDateString("de-DE", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                  })}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -19,6 +19,7 @@ class SessionInfo(BaseModel):
     collected_data: dict = Field(default_factory=dict)
     chat_history: list["ChatMessage"] = Field(default_factory=list)
     materials_consent: bool = False
+    therapy_plan_mode: bool = False
 
 
 # ── Chat ────────────────────────────────────────────────────────────────────
@@ -100,6 +101,20 @@ REPORT_TYPE_MAP: dict[str, type[ReportUnion]] = {
     "therapiebericht_lang": TherapieberichtLang,
     "abschlussbericht": Abschlussbericht,
 }
+
+
+# ── Therapy Plan persistence ────────────────────────────────────────────────
+class TherapyPlanSummary(BaseModel):
+    id: int
+    created_at: str
+    patient_pseudonym: str
+    report_id: int | None = None
+
+
+class TherapyPlanSaveRequest(BaseModel):
+    session_id: str
+    report_id: int | None = None
+    plan_data: dict | None = None  # if provided, skip re-generation
 
 
 # ── File upload ─────────────────────────────────────────────────────────────

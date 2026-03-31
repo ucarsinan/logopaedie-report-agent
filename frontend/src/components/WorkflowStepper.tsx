@@ -1,7 +1,7 @@
 // frontend/src/components/WorkflowStepper.tsx
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 export interface StepConfig {
   label: string;
@@ -17,6 +17,13 @@ interface WorkflowStepperProps {
 }
 
 export function WorkflowStepper({ steps, currentStep, onStepClick }: WorkflowStepperProps) {
+  const [infoDismissed, setInfoDismissed] = useState(false);
+
+  // Re-show info box whenever the step changes
+  useEffect(() => {
+    setInfoDismissed(false);
+  }, [currentStep]);
+
   return (
     <div style={{ marginBottom: "16px" }}>
       {/* Step-Reihe */}
@@ -87,23 +94,48 @@ export function WorkflowStepper({ steps, currentStep, onStepClick }: WorkflowSte
       </div>
 
       {/* Info-Box */}
-      <div
-        style={{
-          borderLeft: `3px solid ${steps[currentStep]?.infoVariant === "success" ? "#4ade80" : "var(--accent)"}`,
-          border: "1px solid var(--border)",
-          borderLeftWidth: "3px",
-          borderRadius: "0 6px 6px 0",
-          padding: "8px 12px",
-          background: "var(--surface)",
-        }}
-      >
-        <p style={{ fontSize: "13px", fontWeight: "600", margin: "0 0 2px 0", color: "var(--foreground)" }}>
-          {steps[currentStep]?.infoTitle}
-        </p>
-        <p style={{ fontSize: "11px", color: "var(--muted-foreground)", margin: 0, lineHeight: "1.5" }}>
-          {steps[currentStep]?.infoText}
-        </p>
-      </div>
+      {!infoDismissed && (
+        <div
+          style={{
+            borderLeft: `3px solid ${steps[currentStep]?.infoVariant === "success" ? "#4ade80" : "var(--accent)"}`,
+            border: "1px solid var(--border)",
+            borderLeftWidth: "3px",
+            borderRadius: "0 6px 6px 0",
+            padding: "8px 12px",
+            background: "var(--surface)",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "8px",
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: "13px", fontWeight: "600", margin: "0 0 2px 0", color: "var(--foreground)" }}>
+              {steps[currentStep]?.infoTitle}
+            </p>
+            <p style={{ fontSize: "11px", color: "var(--muted-foreground)", margin: 0, lineHeight: "1.5" }}>
+              {steps[currentStep]?.infoText}
+            </p>
+          </div>
+          <button
+            onClick={() => setInfoDismissed(true)}
+            style={{
+              flexShrink: 0,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--muted-foreground)",
+              fontSize: "14px",
+              lineHeight: 1,
+              padding: "0 2px",
+              marginTop: "1px",
+            }}
+            title="Hinweis ausblenden"
+            aria-label="Hinweis ausblenden"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

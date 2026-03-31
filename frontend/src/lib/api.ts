@@ -1,5 +1,12 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export interface TherapyPlanSummary {
+  id: number;
+  created_at: string;
+  patient_pseudonym: string;
+  report_id: number | null;
+}
+
 export interface ReportSummary {
   id: number;
   pseudonym: string;
@@ -44,6 +51,35 @@ export const api = {
       const res = await fetch(`${API}/reports/${id}`);
       if (!res.ok) throw new Error("Bericht nicht gefunden");
       return res.json();
+    },
+  },
+  therapyPlans: {
+    list: async (): Promise<TherapyPlanSummary[]> => {
+      const res = await fetch(`${API}/therapy-plans`);
+      if (!res.ok) throw new Error("Fehler beim Laden der Therapiepläne");
+      return res.json();
+    },
+    get: async (id: number): Promise<Record<string, unknown>> => {
+      const res = await fetch(`${API}/therapy-plans/${id}`);
+      if (!res.ok) throw new Error("Therapieplan nicht gefunden");
+      return res.json();
+    },
+    save: async (sessionId: string, planData: Record<string, unknown>, reportId?: number): Promise<TherapyPlanSummary> => {
+      const res = await fetch(`${API}/therapy-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, plan_data: planData, report_id: reportId ?? null }),
+      });
+      if (!res.ok) throw new Error("Fehler beim Speichern des Therapieplans");
+      return res.json();
+    },
+    update: async (id: number, plan: Record<string, unknown>): Promise<void> => {
+      const res = await fetch(`${API}/therapy-plans/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(plan),
+      });
+      if (!res.ok) throw new Error("Fehler beim Aktualisieren des Therapieplans");
     },
   },
 };

@@ -27,6 +27,8 @@ from models.schemas import (
     SuggestRequest,
     TextSuggestion,
     TherapyPlan,
+    TherapyPlanSaveRequest,
+    TherapyPlanSummary,
     UploadedMaterial,
 )
 from services.anamnesis_engine import AnamnesisEngine
@@ -40,6 +42,7 @@ from services.text_suggester import TextSuggester
 from services.therapy_planner import TherapyPlanner
 from database import create_db_and_tables, get_db
 from models.report_record import ReportRecord
+from models.therapy_plan_record import TherapyPlanRecord
 
 load_dotenv()
 
@@ -131,14 +134,24 @@ async def process_audio(audio_file: UploadFile = File(...)):
             os.unlink(tmp_path)
 
 
+class CreateSessionRequest(BaseModel):
+    mode: str = "anamnesis"  # "anamnesis" | "therapy_plan"
+
+
 # ── Session management ──────────────────────────────────────────────────────
 @app.post("/sessions")
-async def create_session() -> SessionInfo:
+async def create_session(req: CreateSessionRequest | None = None) -> SessionInfo:
     session = store.create()
+    if req and req.mode == "therapy_plan":
+        session.therapy_plan_mode = True
     try:
         greeting = await anamnesis_engine.get_initial_greeting(session)
     except Exception:
         greeting = (
+            "Willkommen! Ich bin bereit, Ihnen bei der Erstellung des Therapieplans zu helfen. "
+            "Bitte nennen Sie das Pseudonym des Patienten."
+            if (req and req.mode == "therapy_plan")
+            else
             "Willkommen! Ich bin bereit, Ihnen bei der Dokumentation zu helfen. "
             "Bitte beschreiben Sie den Patienten und den Therapiebereich."
         )
@@ -148,6 +161,7 @@ async def create_session() -> SessionInfo:
         status=session.status,
         report_type=session.report_type,
         collected_data={"greeting": greeting},
+        therapy_plan_mode=session.therapy_plan_mode,
     )
 
 
@@ -459,6 +473,92 @@ async def generate_therapy_plan(session_id: str) -> TherapyPlan:
         return await therapy_planner.generate_plan(session)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Therapy Plan persistence ────────────────────────────────────────────────
+@app.post("/therapy-plans", status_code=201)
+async def save_therapy_plan(
+    req: TherapyPlanSaveRequest, db: Session = Depends(get_db)
+) -> TherapyPlanSummary:
+    session = store.get(req.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+
+    if req.plan_data:
+        plan_json = json.dumps(req.plan_data, ensure_ascii=False)
+        patient_pseudonym = (
+            req.plan_data.get("patient_pseudonym")
+            or session.collected_data.get("patient_pseudonym", "Unbekannt")
+        )
+    else:
+        try:
+            plan = await therapy_planner.generate_plan(session)
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        plan_json = json.dumps(plan.model_dump(), ensure_ascii=False)
+        patient_pseudonym = plan.patient_pseudonym or session.collected_data.get("patient_pseudonym", "Unbekannt")
+
+    record = TherapyPlanRecord(
+        patient_pseudonym=patient_pseudonym,
+        report_id=req.report_id,
+        plan_data=plan_json,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    return TherapyPlanSummary(
+        id=record.id,
+        created_at=record.created_at.isoformat(),
+        patient_pseudonym=record.patient_pseudonym,
+        report_id=record.report_id,
+    )
+
+
+@app.get("/therapy-plans")
+async def list_therapy_plans(db: Session = Depends(get_db)) -> list[TherapyPlanSummary]:
+    records = db.exec(
+        select(TherapyPlanRecord).order_by(TherapyPlanRecord.created_at.desc())
+    ).all()
+    return [
+        TherapyPlanSummary(
+            id=r.id,
+            created_at=r.created_at.isoformat(),
+            patient_pseudonym=r.patient_pseudonym,
+            report_id=r.report_id,
+        )
+        for r in records
+    ]
+
+
+@app.get("/therapy-plans/{plan_id}")
+async def get_therapy_plan(plan_id: int, db: Session = Depends(get_db)) -> dict:
+    record = db.get(TherapyPlanRecord, plan_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Therapieplan nicht gefunden.")
+    plan = json.loads(record.plan_data)
+    plan["_db_id"] = record.id
+    plan["created_at"] = record.created_at.isoformat()
+    return plan
+
+
+@app.put("/therapy-plans/{plan_id}")
+async def update_therapy_plan(
+    plan_id: int, plan: dict, db: Session = Depends(get_db)
+) -> TherapyPlanSummary:
+    record = db.get(TherapyPlanRecord, plan_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Therapieplan nicht gefunden.")
+    record.plan_data = json.dumps(plan, ensure_ascii=False)
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return TherapyPlanSummary(
+        id=record.id,
+        created_at=record.created_at.isoformat(),
+        patient_pseudonym=record.patient_pseudonym,
+        report_id=record.report_id,
+    )
 
 
 # ── Feature 3: Comparative Report Analysis ─────────────────────────────────

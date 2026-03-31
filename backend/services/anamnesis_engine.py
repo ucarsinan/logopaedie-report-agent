@@ -173,6 +173,53 @@ Erfinde KEINE Informationen – extrahiere nur was tatsächlich gesagt wurde.
 """
 
 
+_THERAPY_PLAN_SYSTEM_PROMPT = """\
+Du bist ein logopädischer Dokumentationsassistent. Du sammelst kurz die nötigen
+Informationen für einen ICF-basierten Therapieplan.
+
+## Kommunikationsstil
+- Sachlich, direkt, respektvoll. Keine Floskeln.
+- Bestätige kurz was du verstanden hast (1 Satz), dann stelle genau eine Frage.
+- Maximal 2 Sätze pro Antwort. Genau eine Frage, ohne Ausnahme.
+
+## Deine Aufgabe
+Sammle diese 4 Informationen (in dieser Reihenfolge, falls noch nicht vorhanden):
+1. **Pseudonym/Initialen** des Patienten
+2. **Altersgruppe**: Kind (bis 12), Jugendliche/r (13-17) oder Erwachsene/r
+3. **Diagnose/Störungsbild** (z.B. Aphasie, Sprachentwicklungsstörung, Stottern)
+4. **Hauptproblematik/aktuelle Situation** (kurze Beschreibung des aktuellen Standes)
+
+Sobald alle 4 Felder gesammelt sind, fasse kurz zusammen und erkläre,
+dass der Therapieplan jetzt generiert werden kann.
+
+## Aktueller Stand
+Bereits erfasst: {collected_fields}
+Noch fehlend: {missing_fields}
+"""
+
+_THERAPY_PLAN_EXTRACTION_PROMPT = """\
+Analysiere das folgende Gespräch und extrahiere die Informationen für den Therapieplan.
+
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt:
+{{
+  "is_complete": <true wenn alle 4 Felder vorhanden, sonst false>,
+  "collected_fields": ["<liste der erfassten felder>"],
+  "data": {{
+    "patient_pseudonym": "<string oder null>",
+    "age_group": "<kind|jugendlich|erwachsen|null>",
+    "diagnose_text": "<Diagnose/Störungsbild oder null>",
+    "hauptproblematik": "<aktuelle Situation/Hauptproblematik oder null>"
+  }}
+}}
+
+Setze Felder auf null wenn nicht im Gespräch erwähnt.
+Erfinde KEINE Informationen.
+"""
+
+_REQUIRED_FIELDS_THERAPY_PLAN = [
+    "patient_pseudonym", "age_group", "diagnose_text", "hauptproblematik"
+]
+
 _REQUIRED_FIELDS: dict[str, list[str]] = {
     "befundbericht": [
         "patient_pseudonym", "age_group", "indikationsschluessel",
@@ -208,6 +255,8 @@ class AnamnesisEngine:
 
     def _compute_missing_fields(self, session: Session) -> list[str]:
         """Return required fields not yet collected for the current report type."""
+        if session.therapy_plan_mode:
+            return [f for f in _REQUIRED_FIELDS_THERAPY_PLAN if not session.collected_data.get(f)]
         report_type = session.collected_data.get("report_type")
         if not report_type:
             return []
@@ -219,21 +268,26 @@ class AnamnesisEngine:
         # Add user message to history
         session.chat_history.append(ChatMessage(role="user", content=user_message))
 
-        # Build context for the conversation prompt
-        report_type = session.collected_data.get("report_type", "Noch nicht festgelegt")
-        age_group = session.collected_data.get("age_group", "Noch nicht festgelegt")
-        disorder = session.collected_data.get("indikationsschluessel", "Noch nicht festgelegt")
         collected = list(session.collected_data.get("collected_fields", []))
         missing = self._compute_missing_fields(session)
 
-        system = _ANAMNESIS_SYSTEM_PROMPT.format(
-            report_type=report_type,
-            age_group=age_group,
-            disorder=disorder,
-            collected_fields=", ".join(collected) if collected else "Keine",
-            missing_fields=", ".join(missing) if missing else "Alle Pflichtfelder erfasst",
-            materials_context=self._format_materials_context(session),
-        )
+        if session.therapy_plan_mode:
+            system = _THERAPY_PLAN_SYSTEM_PROMPT.format(
+                collected_fields=", ".join(collected) if collected else "Keine",
+                missing_fields=", ".join(missing) if missing else "Alle Felder erfasst",
+            )
+        else:
+            report_type = session.collected_data.get("report_type", "Noch nicht festgelegt")
+            age_group = session.collected_data.get("age_group", "Noch nicht festgelegt")
+            disorder = session.collected_data.get("indikationsschluessel", "Noch nicht festgelegt")
+            system = _ANAMNESIS_SYSTEM_PROMPT.format(
+                report_type=report_type,
+                age_group=age_group,
+                disorder=disorder,
+                collected_fields=", ".join(collected) if collected else "Keine",
+                missing_fields=", ".join(missing) if missing else "Alle Pflichtfelder erfasst",
+                materials_context=self._format_materials_context(session),
+            )
 
         # Get conversational response
         messages = [{"role": m.role, "content": m.content} for m in session.chat_history]
@@ -249,21 +303,24 @@ class AnamnesisEngine:
 
     async def get_initial_greeting(self, session: Session) -> str:
         """Generate the initial greeting message to start the anamnesis."""
-        system = _ANAMNESIS_SYSTEM_PROMPT.format(
-            report_type="Noch nicht festgelegt",
-            age_group="Noch nicht festgelegt",
-            disorder="Noch nicht festgelegt",
-            collected_fields="Keine",
-            missing_fields="Berichtstyp zuerst klären",
-            materials_context=self._format_materials_context(session),
-        )
+        if session.therapy_plan_mode:
+            system = _THERAPY_PLAN_SYSTEM_PROMPT.format(
+                collected_fields="Keine",
+                missing_fields=", ".join(_REQUIRED_FIELDS_THERAPY_PLAN),
+            )
+            prompt = "Bitte begrüße mich und frage nach dem ersten fehlenden Feld (Pseudonym des Patienten)."
+        else:
+            system = _ANAMNESIS_SYSTEM_PROMPT.format(
+                report_type="Noch nicht festgelegt",
+                age_group="Noch nicht festgelegt",
+                disorder="Noch nicht festgelegt",
+                collected_fields="Keine",
+                missing_fields="Berichtstyp zuerst klären",
+                materials_context=self._format_materials_context(session),
+            )
+            prompt = "Bitte begrüße mich und frage, welchen Berichtstyp ich erstellen möchte."
 
-        messages = [
-            {
-                "role": "user",
-                "content": "Bitte begrüße mich und frage, welchen Berichtstyp ich erstellen möchte.",
-            }
-        ]
+        messages = [{"role": "user", "content": prompt}]
         response_text = await self._groq.chat_completion(messages, system)
 
         session.chat_history.append(ChatMessage(role="assistant", content=response_text))
@@ -311,27 +368,38 @@ class AnamnesisEngine:
         ]
 
         try:
-            data = await self._groq.json_completion(extraction_messages, _EXTRACTION_PROMPT)
+            if session.therapy_plan_mode:
+                data = await self._groq.json_completion(
+                    extraction_messages, _THERAPY_PLAN_EXTRACTION_PROMPT
+                )
+                if data.get("collected_fields"):
+                    session.collected_data["collected_fields"] = data["collected_fields"]
+                if data.get("is_complete"):
+                    session.status = "materials"
+                if data.get("data"):
+                    for key, value in data["data"].items():
+                        if value is not None and value != [] and value != "":
+                            session.collected_data[key] = value
+            else:
+                data = await self._groq.json_completion(extraction_messages, _EXTRACTION_PROMPT)
 
-            # Update session with extracted data
-            if data.get("report_type"):
-                session.report_type = data["report_type"]
-                session.collected_data["report_type"] = data["report_type"]
+                if data.get("report_type"):
+                    session.report_type = data["report_type"]
+                    session.collected_data["report_type"] = data["report_type"]
 
-            if data.get("phase"):
-                session.collected_data["current_phase"] = data["phase"]
+                if data.get("phase"):
+                    session.collected_data["current_phase"] = data["phase"]
 
-            if data.get("collected_fields"):
-                session.collected_data["collected_fields"] = data["collected_fields"]
+                if data.get("collected_fields"):
+                    session.collected_data["collected_fields"] = data["collected_fields"]
 
-            if data.get("is_complete"):
-                session.status = "materials"
+                if data.get("is_complete"):
+                    session.status = "materials"
 
-            if data.get("data"):
-                # Merge non-null values into collected_data
-                for key, value in data["data"].items():
-                    if value is not None and value != [] and value != "":
-                        session.collected_data[key] = value
+                if data.get("data"):
+                    for key, value in data["data"].items():
+                        if value is not None and value != [] and value != "":
+                            session.collected_data[key] = value
 
         except RuntimeError:
             # Extraction failed – not critical, conversation continues

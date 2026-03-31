@@ -35,6 +35,7 @@ class Session:
         self.materials: list[UploadedMaterial] = []
         self.materials_consent: bool = False
         self.generated_report: dict | None = None
+        self.therapy_plan_mode: bool = False
         self.created_at: float = time.time()
 
     @property
@@ -51,6 +52,7 @@ class Session:
             "materials": [m.model_dump() for m in self.materials],
             "materials_consent": self.materials_consent,
             "generated_report": self.generated_report,
+            "therapy_plan_mode": self.therapy_plan_mode,
             "created_at": self.created_at,
         }
 
@@ -65,6 +67,7 @@ class Session:
         s.materials = [UploadedMaterial(**m) for m in data.get("materials", [])]
         s.materials_consent = data.get("materials_consent", False)
         s.generated_report = data.get("generated_report")
+        s.therapy_plan_mode = data.get("therapy_plan_mode", False)
         s.created_at = data.get("created_at", time.time())
         return s
 
