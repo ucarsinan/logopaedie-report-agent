@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ResetConfirmDialog } from "@/components/ResetConfirmDialog";
+import { WorkflowStepper } from "@/components/WorkflowStepper";
+import { OnboardingOverlay } from "@/components/OnboardingOverlay";
+import type { StepConfig } from "@/components/WorkflowStepper";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -64,11 +67,53 @@ interface ReportData {
   ergebnis?: string;
 }
 
-type AppPhase = "chat" | "upload" | "generating" | "preview";
+type AppPhase = "pre-upload" | "chat" | "generating" | "preview";
 type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const SESSION_STORAGE_KEY = "logopaedie_session_id";
+
+const REPORT_STEPS: StepConfig[] = [
+  {
+    label: "Unterlagen",
+    infoTitle: "Vorhandene Unterlagen hochladen",
+    infoText:
+      "Laden Sie frühere Berichte, Diagnostik oder Verordnungen hoch. Die KI berücksichtigt diese und stellt gezieltere Fragen — das spart Zeit im Gespräch.",
+  },
+  {
+    label: "Gespräch",
+    infoTitle: "Anamnesegespräch",
+    infoText:
+      "Beantworten Sie die Fragen des Assistenten. Je vollständiger Ihre Angaben, desto präziser der generierte Bericht.",
+  },
+  {
+    label: "Generierung",
+    infoTitle: "Bericht wird generiert",
+    infoText:
+      "Der KI-Assistent erstellt jetzt Ihren Bericht auf Basis des Gesprächs. Dies dauert wenige Sekunden.",
+  },
+  {
+    label: "Vorschau",
+    infoTitle: "Bericht fertig",
+    infoText:
+      "Prüfen Sie den generierten Bericht. Klicken Sie auf abgeschlossene Schritte (✓) um zurückzunavigieren — Ihre Daten bleiben erhalten.",
+    infoVariant: "success",
+  },
+];
+
+const PHASE_TO_STEP: Record<string, number> = {
+  "pre-upload": 0,
+  chat: 1,
+  generating: 2,
+  preview: 3,
+};
+
+const STEP_TO_PHASE: Record<number, AppPhase> = {
+  0: "pre-upload",
+  1: "chat",
+  2: "generating",
+  3: "preview",
+};
 
 /* ═══════════════════════════ Feature Types ═══════════════════════════════ */
 
@@ -129,7 +174,7 @@ interface ReportComparisonData {
 
 export default function Home() {
   const [activeModule, setActiveModule] = useState<AppModule>("report");
-  const [phase, setPhase] = useState<AppPhase>("chat");
+  const [phase, setPhase] = useState<AppPhase>("pre-upload");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
@@ -143,6 +188,9 @@ export default function Home() {
   const [savedReportId, setSavedReportId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [materialsConsent, setMaterialsConsent] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Audio recording
   const [isRecording, setIsRecording] = useState(false);
@@ -181,6 +229,11 @@ export default function Home() {
             if (data.collected_data?.collected_fields) {
               setCollectedFields(data.collected_data.collected_fields);
             }
+            if (data.materials_consent) {
+              setMaterialsConsent(true);
+              setConsentChecked(true);
+            }
+            setPhase("chat");
             return;
           }
           // Session abgelaufen oder nicht gefunden
@@ -201,6 +254,10 @@ export default function Home() {
       }
     }
     init();
+    // Onboarding nur beim ersten Besuch
+    if (typeof window !== "undefined" && !localStorage.getItem("logopaedie_onboarding_done")) {
+      setShowOnboarding(true);
+    }
   }, []);
 
   // ── Send text message ──────────────────────────────────────────────
@@ -333,6 +390,22 @@ export default function Home() {
     }
   }
 
+  // ── Consent and proceed to chat ────────────────────────────────────
+  async function handleConsentAndProceed() {
+    if (!sessionId) return;
+    try {
+      await fetch(`${API}/sessions/${sessionId}/materials-consent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: true }),
+      });
+      setMaterialsConsent(true);
+    } catch {
+      // Proceed even if consent request fails — fallback to no-material mode
+    }
+    setPhase("chat");
+  }
+
   // ── Generate report ────────────────────────────────────────────────
   async function generateReport() {
     if (!sessionId) return;
@@ -355,7 +428,7 @@ export default function Home() {
       setPhase("preview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
-      setPhase("upload");
+      setPhase("chat");
     }
   }
 
@@ -384,6 +457,8 @@ export default function Home() {
       setMissingFields([]);
       setCurrentPhase("greeting");
       setUploadedFiles([]);
+      setConsentChecked(false);
+      setMaterialsConsent(false);
       setReport(null);
       setSavedReportId(null);
     } catch (err) {
@@ -411,12 +486,14 @@ export default function Home() {
           ? [{ role: "assistant", content: data.collected_data.greeting }]
           : []
       );
-      setPhase("chat");
+      setPhase("pre-upload");
       setIsAnamnesisComplete(false);
       setCollectedFields([]);
       setMissingFields([]);
       setCurrentPhase("greeting");
       setUploadedFiles([]);
+      setConsentChecked(false);
+      setMaterialsConsent(false);
       setReport(null);
       setSavedReportId(null);
     } catch (err) {
@@ -425,6 +502,15 @@ export default function Home() {
       setIsSending(false);
       setIsResetDialogOpen(false);
     }
+  }, []);
+
+  const handleOnboardingComplete = useCallback(() => {
+    localStorage.setItem("logopaedie_onboarding_done", "true");
+    setShowOnboarding(false);
+  }, []);
+
+  const handleOpenOnboarding = useCallback(() => {
+    setShowOnboarding(true);
   }, []);
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -462,6 +548,13 @@ export default function Home() {
                   Neue Sitzung
                 </button>
               )}
+              <button
+                onClick={handleOpenOnboarding}
+                className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"
+                title="Einführung anzeigen"
+              >
+                ? Hilfe
+              </button>
               <ThemeToggle />
             </div>
           </div>
@@ -469,15 +562,16 @@ export default function Home() {
           {/* Module tabs */}
           <nav className="flex gap-1 -mb-px overflow-x-auto">
             {([
-              ["report", "Berichterstellung"],
-              ["phonology", "Ausspracheanalyse"],
-              ["therapy-plan", "Therapieplan"],
-              ["compare", "Berichtsvergleich"],
-              ["suggest", "Textbausteine"],
-            ] as [AppModule, string][]).map(([key, label]) => (
+              ["report", "Berichterstellung", "KI-geführtes Anamnesegespräch → professioneller Bericht"],
+              ["phonology", "Ausspracheanalyse", "Phonologische Prozesse aus Wortpaaren automatisch erkennen"],
+              ["therapy-plan", "Therapieplan", "ICF-basierten Therapieplan automatisch generieren"],
+              ["compare", "Berichtsvergleich", "Zwei Berichte gegenüberstellen und Fortschritt messen"],
+              ["suggest", "Textbausteine", "KI-Formulierungsvorschläge während des Schreibens"],
+            ] as [AppModule, string, string][]).map(([key, label, tooltip]) => (
               <button
                 key={key}
                 onClick={() => setActiveModule(key)}
+                title={tooltip}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeModule === key
                     ? "border-[var(--accent)] text-[var(--accent-text)]"
@@ -523,6 +617,15 @@ export default function Home() {
         {/* ── Module: Text Suggestions ──────────────────────────── */}
         {activeModule === "suggest" && (
           <TextSuggestionView api={API} />
+        )}
+
+        {/* ── Berichterstellung: Workflow-Stepper ────────────────── */}
+        {activeModule === "report" && (
+          <WorkflowStepper
+            steps={REPORT_STEPS}
+            currentStep={PHASE_TO_STEP[phase] ?? 0}
+            onStepClick={phase !== "generating" ? (i) => setPhase(STEP_TO_PHASE[i]) : undefined}
+          />
         )}
 
         {/* ── Module: Report (original phases) ──────────────────── */}
@@ -609,45 +712,26 @@ export default function Home() {
               </div>
             )}
 
-            {/* Transition to upload */}
+            {/* Transition to generating */}
             {isAnamnesisComplete && (
               <div className="flex items-center gap-3 rounded-lg border border-accent px-5 py-4 bg-accent-muted">
                 <span className="text-sm text-accent-text">
-                  Anamnese abgeschlossen! Sie können jetzt Materialien
-                  hochladen oder direkt den Bericht generieren.
+                  Anamnese abgeschlossen! Sie können den Bericht jetzt generieren.
                 </span>
                 <button
-                  onClick={() => setPhase("upload")}
+                  onClick={generateReport}
                   className="shrink-0 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors btn-accent-glow"
                 >
-                  Weiter
+                  Bericht generieren
                 </button>
               </div>
             )}
           </>
         )}
 
-        {/* ── Phase: Upload ──────────────────────────────────────── */}
-        {activeModule === "report" && phase === "upload" && (
+        {/* ── Phase: Pre-Upload ──────────────────────────────────── */}
+        {activeModule === "report" && phase === "pre-upload" && (
           <>
-            <div className="flex items-center justify-between">
-              <h1 className="text-xl font-semibold tracking-tight">
-                Materialien hochladen
-              </h1>
-              <button
-                onClick={() => setPhase("chat")}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                ← Zurück zum Gespräch
-              </button>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Laden Sie vorhandene Berichte, Diagnostik-Ergebnisse oder
-              Verordnungen hoch (PDF, DOCX, TXT). Diese werden als Kontext für
-              die Berichterstellung verwendet. Dieser Schritt ist optional.
-            </p>
-
             {/* Drop zone */}
             <DropZone onFiles={handleFileUpload} />
 
@@ -672,13 +756,40 @@ export default function Home() {
               </div>
             )}
 
-            {/* Generate button */}
-            <button
-              onClick={generateReport}
-              className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors btn-accent-glow"
-            >
-              Bericht generieren
-            </button>
+            {/* Consent checkbox — only shown when files are uploaded */}
+            {uploadedFiles.length > 0 && (
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-border px-4 py-3 bg-surface hover:border-accent transition-colors">
+                <input
+                  type="checkbox"
+                  checked={consentChecked}
+                  onChange={(e) => setConsentChecked(e.target.checked)}
+                  className="mt-0.5 accent-accent h-4 w-4 shrink-0"
+                />
+                <span className="text-sm text-muted-foreground">
+                  Ich erteile die Einwilligung, dass die hochgeladenen Unterlagen
+                  für die Gesprächsführung und Berichterstellung verwendet werden.
+                </span>
+              </label>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPhase("chat")}
+                className="px-5 py-2.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
+              >
+                Ohne Unterlagen starten
+              </button>
+              {uploadedFiles.length > 0 && (
+                <button
+                  onClick={handleConsentAndProceed}
+                  disabled={!consentChecked}
+                  className="px-5 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors btn-accent-glow disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Mit Einwilligung fortfahren →
+                </button>
+              )}
+            </div>
           </>
         )}
 
@@ -702,7 +813,7 @@ export default function Home() {
                 </h1>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setPhase("upload")}
+                    onClick={() => setPhase("chat")}
                     className="text-sm text-muted-foreground hover:text-foreground"
                   >
                     ← Zurück
@@ -749,6 +860,10 @@ export default function Home() {
         onFullReset={handleFullReset}
         isSending={isSending}
       />
+
+      {showOnboarding && (
+        <OnboardingOverlay onComplete={handleOnboardingComplete} />
+      )}
     </div>
   );
 }
@@ -1062,6 +1177,26 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
   const [result, setResult] = useState<PhonologicalAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+
+  const PHONOLOGY_STEPS: StepConfig[] = [
+    {
+      label: "Eingabe",
+      infoTitle: "Wortpaare eingeben",
+      infoText: "Geben Sie das Zielwort und die tatsächliche Produktion des Kindes ein. Fügen Sie beliebig viele Paare hinzu.",
+    },
+    {
+      label: "Analyse",
+      infoTitle: "Analyse läuft",
+      infoText: "Die KI analysiert die phonologischen Prozesse und bewertet den Schweregrad je Wortpaar.",
+    },
+    {
+      label: "Ergebnis",
+      infoTitle: "Analyseergebnis",
+      infoText: "Prüfen Sie die erkannten Prozesse und Empfehlungen. Klicken Sie auf ✓ Eingabe um neue Wortpaare zu analysieren.",
+      infoVariant: "success",
+    },
+  ];
 
   function addPair() {
     setWordPairs((prev) => [...prev, { target: "", production: "" }]);
@@ -1079,6 +1214,7 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
     const valid = wordPairs.filter((p) => p.target.trim() && p.production.trim());
     if (!valid.length) return;
     setLoading(true);
+    setStep(1); // Schritt: Analyse läuft
     setError(null);
     try {
       const res = await fetch(`${api}/analysis/phonological-text?${childAge ? `child_age=${encodeURIComponent(childAge)}` : ""}`, {
@@ -1088,8 +1224,10 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Analyse fehlgeschlagen.");
       setResult(await res.json());
+      setStep(2); // Schritt: Ergebnis
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
+      setStep(0); // Bei Fehler zurück zu Eingabe
     } finally {
       setLoading(false);
     }
@@ -1103,6 +1241,11 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
 
   return (
     <>
+      <WorkflowStepper
+        steps={PHONOLOGY_STEPS}
+        currentStep={step}
+        onStepClick={step > 0 ? (i) => { setStep(i); if (i === 0) setResult(null); } : undefined}
+      />
       <h1 className="text-xl font-semibold tracking-tight">Phonologische Prozessanalyse</h1>
       <p className="text-sm text-muted-foreground">
         Geben Sie Zielwörter und die tatsächliche Produktion des Kindes ein. Die KI identifiziert
@@ -1225,6 +1368,23 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
   const [plan, setPlan] = useState<TherapyPlanData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+
+  const THERAPY_PLAN_STEPS: StepConfig[] = [
+    {
+      label: "Generieren",
+      infoTitle: "Therapieplan generieren",
+      infoText:
+        "Erstellen Sie einen strukturierten ICF-basierten Therapieplan auf Basis der aktuellen Anamnesedaten. Führen Sie zuerst eine Anamnese im Tab Berichterstellung durch.",
+    },
+    {
+      label: "Plan",
+      infoTitle: "Therapieplan fertig",
+      infoText:
+        "Prüfen Sie den generierten Therapieplan mit Zielen, Methoden und Meilensteinen. Klicken Sie auf ✓ Generieren für einen neuen Plan.",
+      infoVariant: "success",
+    },
+  ];
 
   async function generatePlan() {
     if (!sessionId) {
@@ -1237,6 +1397,7 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
       const res = await fetch(`${api}/sessions/${sessionId}/therapy-plan`, { method: "POST" });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Plan-Generierung fehlgeschlagen.");
       setPlan(await res.json());
+      setStep(1); // Schritt: Plan fertig
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
     } finally {
@@ -1246,6 +1407,11 @@ function TherapyPlanView({ api, sessionId }: { api: string; sessionId: string | 
 
   return (
     <>
+      <WorkflowStepper
+        steps={THERAPY_PLAN_STEPS}
+        currentStep={step}
+        onStepClick={step > 0 ? (i) => { setStep(i); if (i === 0) setPlan(null); } : undefined}
+      />
       <h1 className="text-xl font-semibold tracking-tight">KI-gestützter Therapieplan</h1>
       <p className="text-sm text-muted-foreground">
         Generieren Sie einen strukturierten Therapieplan mit ICF-Bezug basierend auf dem
@@ -1352,6 +1518,28 @@ function ReportComparisonView({ api }: { api: string }) {
   const [error, setError] = useState<string | null>(null);
   const initialRef = useRef<HTMLInputElement>(null);
   const currentRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState(0);
+
+  const COMPARE_STEPS: StepConfig[] = [
+    {
+      label: "Upload",
+      infoTitle: "Berichte hochladen",
+      infoText:
+        "Laden Sie den Erstbefund und den aktuellen Bericht hoch (PDF, DOCX oder TXT). Die KI analysiert die Unterschiede und erstellt einen strukturierten Fortschrittsbericht.",
+    },
+    {
+      label: "Vergleich",
+      infoTitle: "Vergleich läuft",
+      infoText: "Die KI analysiert beide Berichte und identifiziert Veränderungen je Bereich.",
+    },
+    {
+      label: "Ergebnis",
+      infoTitle: "Vergleichsergebnis",
+      infoText:
+        "Prüfen Sie die erkannten Veränderungen und die Gesamtempfehlung. Klicken Sie auf ✓ Upload für einen neuen Vergleich.",
+      infoVariant: "success",
+    },
+  ];
 
   async function compare() {
     const initialFile = initialRef.current?.files?.[0];
@@ -1361,6 +1549,7 @@ function ReportComparisonView({ api }: { api: string }) {
       return;
     }
     setLoading(true);
+    setStep(1); // Schritt: Vergleich läuft
     setError(null);
     const formData = new FormData();
     formData.append("initial_report", initialFile);
@@ -1369,8 +1558,10 @@ function ReportComparisonView({ api }: { api: string }) {
       const res = await fetch(`${api}/analysis/compare`, { method: "POST", body: formData });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Vergleich fehlgeschlagen.");
       setResult(await res.json());
+      setStep(2); // Schritt: Ergebnis
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
+      setStep(0); // Bei Fehler zurück zu Upload
     } finally {
       setLoading(false);
     }
@@ -1384,6 +1575,11 @@ function ReportComparisonView({ api }: { api: string }) {
 
   return (
     <>
+      <WorkflowStepper
+        steps={COMPARE_STEPS}
+        currentStep={step}
+        onStepClick={step > 0 ? (i) => { setStep(i); if (i === 0) setResult(null); } : undefined}
+      />
       <h1 className="text-xl font-semibold tracking-tight">Vergleichende Berichtsanalyse</h1>
       <p className="text-sm text-muted-foreground">
         Laden Sie zwei Berichte hoch (z.B. Erstbefund und aktueller Befund). Die KI analysiert
@@ -1514,6 +1710,25 @@ function TextSuggestionView({ api }: { api: string }) {
 
   return (
     <>
+      {/* Header-Karte statt Stepper — kein linearer Schritt-Flow */}
+      <div
+        style={{
+          borderLeft: "3px solid var(--border)",
+          border: "1px solid var(--border)",
+          borderLeftWidth: "3px",
+          borderRadius: "0 6px 6px 0",
+          padding: "10px 14px",
+          background: "var(--surface)",
+          marginBottom: "8px",
+        }}
+      >
+        <p style={{ fontSize: "14px", fontWeight: "600", margin: "0 0 3px 0", color: "var(--foreground)" }}>
+          ✏️ Textbausteine
+        </p>
+        <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: 0, lineHeight: "1.5" }}>
+          Geben Sie einen Text ein — die KI schlägt passende Formulierungen vor. Klicken Sie einen Vorschlag um ihn zu übernehmen.
+        </p>
+      </div>
       <h1 className="text-xl font-semibold tracking-tight">Intelligente Textbausteine</h1>
       <p className="text-sm text-muted-foreground">
         Beginnen Sie einen Satz und die KI schlägt kontextbezogene Vervollständigungen
