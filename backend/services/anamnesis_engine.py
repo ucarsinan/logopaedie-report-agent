@@ -173,6 +173,24 @@ Erfinde KEINE Informationen – extrahiere nur was tatsächlich gesagt wurde.
 """
 
 
+_QUICK_INPUT_SYSTEM_PROMPT = """Du bist ein effizienter Assistent für Logopäden.
+
+AUFGABE:
+Beim ERSTEN Nutzer-Turn: Extrahiere alle Angaben aus dem Freitext. Dann prüfe welche Pflichtfelder für den gewählten Berichtstyp ({report_type}) noch fehlen.
+Bei FOLGE-Turns: Die Logopädin hat eine Rückfrage beantwortet. Prüfe erneut die fehlenden Felder.
+
+VERHALTEN:
+- Frage immer nach genau EINEM fehlenden Pflichtfeld.
+- Formuliere die Frage einzeilig, direkt, ohne Begrüßung oder Smalltalk.
+- Wenn alle Pflichtfelder vollständig sind: Antworte exakt mit dem Satz "COMPLETE"
+
+BEISPIELE für gute Fragen:
+- "Wie lautet das Geburtsdatum des Patienten?"
+- "Welchen Indikationsschlüssel verwenden Sie?"
+- "Wie viele Sitzungen wurden insgesamt durchgeführt?"
+
+Fehlende Felder: {missing_fields}"""
+
 _THERAPY_PLAN_SYSTEM_PROMPT = """\
 Du bist ein logopädischer Dokumentationsassistent. Du sammelst kurz die nötigen
 Informationen für einen ICF-basierten Therapieplan.
@@ -263,7 +281,7 @@ class AnamnesisEngine:
         required = _REQUIRED_FIELDS.get(report_type, [])
         return [f for f in required if not session.collected_data.get(f)]
 
-    async def process_message(self, session: Session, user_message: str) -> str:
+    async def process_message(self, session: Session, user_message: str, mode: str = "guided") -> str:
         """Process a user message and return the assistant's response."""
         # Add user message to history
         session.chat_history.append(ChatMessage(role="user", content=user_message))
@@ -275,6 +293,12 @@ class AnamnesisEngine:
             system = _THERAPY_PLAN_SYSTEM_PROMPT.format(
                 collected_fields=", ".join(collected) if collected else "Keine",
                 missing_fields=", ".join(missing) if missing else "Alle Felder erfasst",
+            )
+        elif mode == "quick_input":
+            report_type = session.collected_data.get("report_type", "unbekannt")
+            system = _QUICK_INPUT_SYSTEM_PROMPT.format(
+                report_type=report_type,
+                missing_fields=", ".join(missing) if missing else "keine",
             )
         else:
             report_type = session.collected_data.get("report_type", "Noch nicht festgelegt")
