@@ -17,6 +17,7 @@ class SessionInfo(BaseModel):
     status: str = "anamnesis"  # anamnesis | materials | generating | complete
     report_type: str | None = None
     collected_data: dict = Field(default_factory=dict)
+    chat_history: list["ChatMessage"] = Field(default_factory=list)
 
 
 # ── Chat ────────────────────────────────────────────────────────────────────

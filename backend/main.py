@@ -159,6 +159,7 @@ async def get_session(session_id: str) -> SessionInfo:
         status=session.status,
         report_type=session.report_type,
         collected_data=session.collected_data,
+        chat_history=session.chat_history,
     )
 
 

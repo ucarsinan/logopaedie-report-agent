@@ -150,23 +150,50 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── Create session on mount ────────────────────────────────────────
+  // ── Create or restore session on mount ────────────────────────────
+  const SESSION_STORAGE_KEY = "logopaedie_session_id";
+
   useEffect(() => {
     async function init() {
       try {
+        const storedId = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (storedId) {
+          const res = await fetch(`${API}/sessions/${storedId}`);
+          if (res.ok) {
+            const data = await res.json();
+            setSessionId(data.session_id);
+            if (data.chat_history?.length > 0) {
+              setMessages(
+                data.chat_history.map((m: { role: string; content: string }) => ({
+                  role: m.role as "user" | "assistant",
+                  content: m.content,
+                }))
+              );
+            }
+            setIsAnamnesisComplete(data.status !== "anamnesis");
+            if (data.collected_data?.current_phase) {
+              setCurrentPhase(data.collected_data.current_phase);
+            }
+            if (data.collected_data?.collected_fields) {
+              setCollectedFields(data.collected_data.collected_fields);
+            }
+            return;
+          }
+          // Session abgelaufen oder nicht gefunden
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+
+        // Neue Session erstellen
         const res = await fetch(`${API}/sessions`, { method: "POST" });
         if (!res.ok) throw new Error("Session konnte nicht erstellt werden.");
         const data = await res.json();
         setSessionId(data.session_id);
+        localStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
         if (data.collected_data?.greeting) {
-          setMessages([
-            { role: "assistant", content: data.collected_data.greeting },
-          ]);
+          setMessages([{ role: "assistant", content: data.collected_data.greeting }]);
         }
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Verbindung fehlgeschlagen."
-        );
+        setError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen.");
       }
     }
     init();
