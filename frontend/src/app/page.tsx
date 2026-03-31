@@ -755,6 +755,7 @@ export default function Home() {
                   onChange={setFreeText}
                   onSubmit={sendFreeText}
                   disabled={isSending}
+                  apiUrl={API}
                 />
               )}
               {isSending && (
@@ -1126,6 +1127,90 @@ function QuickReplyBubbles({
 }
 
 
+/* ═══════════════════════════ Dictation Button ═══════════════════════════════ */
+
+function DictationButton({
+  onTranscript,
+  disabled,
+  apiUrl,
+}: {
+  onTranscript: (text: string) => void;
+  disabled?: boolean;
+  apiUrl: string;
+}) {
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isPending, setIsPending] = useState(false);
+
+  async function start() {
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setIsPending(true);
+        try {
+          const form = new FormData();
+          form.append("audio_file", blob, "dictation.webm");
+          const res = await fetch(`${apiUrl}/api/transcribe`, {
+            method: "POST",
+            body: form,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.transcript) onTranscript(data.transcript);
+          }
+        } finally {
+          setIsPending(false);
+        }
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch {
+      // mic access denied or unavailable — silently ignore
+    }
+  }
+
+  function stop() {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  }
+
+  if (isPending) {
+    return (
+      <button disabled className="px-3 py-2 rounded-lg bg-surface-elevated text-foreground/40 text-sm">
+        ⏳
+      </button>
+    );
+  }
+
+  return isRecording ? (
+    <button
+      onClick={stop}
+      className="px-3 py-2 rounded-lg bg-red-600 text-white motion-safe:animate-pulse text-sm"
+      title="Aufnahme stoppen"
+    >
+      <StopIcon />
+    </button>
+  ) : (
+    <button
+      onClick={start}
+      disabled={disabled}
+      className="px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40 text-sm"
+      title="Diktieren"
+    >
+      <MicIcon />
+    </button>
+  );
+}
+
 /* ═══════════════════════════ Mode Selection Cards ═══════════════════════════ */
 
 function ModeSelectionCards({
@@ -1173,6 +1258,7 @@ function FreeTextInput({
   onChange,
   onSubmit,
   disabled,
+  apiUrl,
 }: {
   reportType: string;
   onReportTypeChange: (type: string) => void;
@@ -1180,6 +1266,7 @@ function FreeTextInput({
   onChange: (v: string) => void;
   onSubmit: () => void;
   disabled: boolean;
+  apiUrl: string;
 }) {
   return (
     <div className="flex flex-col gap-3 px-2 pt-2 pb-1">
@@ -1213,13 +1300,20 @@ function FreeTextInput({
           }
         }}
       />
-      <button
-        onClick={onSubmit}
-        disabled={disabled || !value.trim() || !reportType}
-        className="self-end rounded-lg bg-accent px-6 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-      >
-        Analysieren →
-      </button>
+      <div className="flex items-center justify-end gap-2">
+        <DictationButton
+          apiUrl={apiUrl}
+          disabled={disabled}
+          onTranscript={(text) => onChange(value ? value + " " + text : text)}
+        />
+        <button
+          onClick={onSubmit}
+          disabled={disabled || !value.trim() || !reportType}
+          className="rounded-lg bg-accent px-6 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          Analysieren →
+        </button>
+      </div>
     </div>
   );
 }

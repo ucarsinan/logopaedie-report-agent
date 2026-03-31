@@ -134,6 +134,29 @@ async def process_audio(audio_file: UploadFile = File(...)):
             os.unlink(tmp_path)
 
 
+@app.post("/transcribe")
+async def transcribe_only(audio_file: UploadFile = File(...)):
+    """Whisper STT only — no session, no chat engine, just transcript."""
+    suffix = os.path.splitext(audio_file.filename or "audio")[1] or ".webm"
+    tmp_path: str | None = None
+    try:
+        content = await audio_file.read()
+        if len(content) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Datei zu groß. Maximum: 25 MB.")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        transcript = await groq_service.transcribe_audio(tmp_path)
+        return {"transcript": transcript}
+    except RuntimeError as e:
+        if "429" in str(e) or "rate_limit" in str(e):
+            raise HTTPException(status_code=429, detail="Das KI-Tageslimit ist leider erreicht.")
+        raise HTTPException(status_code=500, detail="Transkription fehlgeschlagen.")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 class CreateSessionRequest(BaseModel):
     mode: str = "anamnesis"  # "anamnesis" | "therapy_plan"
 
