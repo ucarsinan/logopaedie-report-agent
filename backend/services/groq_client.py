@@ -31,8 +31,8 @@ _JSON_MODELS = [
 _LEGACY_SYSTEM_PROMPT = (
     "You are an expert speech therapy (Logopädie) assistant. "
     "Extract the patient details from the transcript and format them as a JSON object "
-    "matching the requested schema. If information is missing, infer a professional "
-    "placeholder or state 'Nicht angegeben'."
+    "matching the requested schema. If information is missing, write 'Nicht angegeben'. "
+    "Never invent or guess information."
 )
 
 _LEGACY_SCHEMA = """Return a JSON object with exactly these fields:
@@ -102,6 +102,7 @@ class GroqService:
         system_prompt: str,
         response_format: dict | None = None,
         models: list[str] | None = None,
+        temperature: float | None = None,
     ) -> str:
         """Send a chat completion request with automatic model fallback on rate limits."""
         model_list = models or _CHAT_MODELS
@@ -112,6 +113,7 @@ class GroqService:
                 kwargs: dict = {
                     "model": model,
                     "messages": [{"role": "system", "content": system_prompt}, *messages],
+                    "temperature": temperature if temperature is not None else 0.3,
                 }
                 if response_format:
                     kwargs["response_format"] = response_format
@@ -143,6 +145,7 @@ class GroqService:
             system_prompt,
             response_format={"type": "json_object"},
             models=models or _JSON_MODELS,
+            temperature=0,
         )
         try:
             return json.loads(raw)
