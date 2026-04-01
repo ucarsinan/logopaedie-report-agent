@@ -213,6 +213,7 @@ export default function Home() {
 
   // Audio recording
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -377,10 +378,26 @@ export default function Home() {
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        sendAudio(blob);
+        setIsTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append("audio_file", blob, "recording.webm");
+          const res = await fetch(`${API}/transcribe`, { method: "POST", body: form });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.transcript) {
+              setInput((prev) => prev ? prev + " " + data.transcript : data.transcript);
+              chatInputRef.current?.focus();
+            }
+          }
+        } catch {
+          setError("Transkription fehlgeschlagen.");
+        } finally {
+          setIsTranscribing(false);
+        }
       };
       recorder.start();
       setIsRecording(true);
@@ -784,7 +801,11 @@ export default function Home() {
                   placeholder="Ihre Antwort eingeben…"
                   className="flex-1 rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-ring disabled:opacity-40"
                 />
-                {!isRecording ? (
+                {isTranscribing ? (
+                  <button disabled className="px-4 py-3 rounded-lg bg-surface-elevated text-foreground/40" title="Transkribiert…">
+                    ⏳
+                  </button>
+                ) : !isRecording ? (
                   <button
                     onClick={startRecording}
                     disabled={isSending}
@@ -804,7 +825,7 @@ export default function Home() {
                 )}
                 <button
                   onClick={() => sendMessage(input)}
-                  disabled={isSending || !input.trim()}
+                  disabled={isSending || isTranscribing || !input.trim()}
                   className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40 btn-accent-glow"
                 >
                   Senden
@@ -1159,7 +1180,7 @@ function DictationButton({
         try {
           const form = new FormData();
           form.append("audio_file", blob, "dictation.webm");
-          const res = await fetch(`${apiUrl}/api/transcribe`, {
+          const res = await fetch(`${apiUrl}/transcribe`, {
             method: "POST",
             body: form,
           });
