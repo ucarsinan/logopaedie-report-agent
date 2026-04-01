@@ -114,6 +114,8 @@ oder Korrekturen. Frage, ob noch etwas ergänzt werden soll.
   erkenne das und überspringe bereits beantwortete Fragen
 - Frage nie nach Feldern, die bereits erfasst sind
 - Gib am Ende jeder Nachricht KEINE JSON-Ausgabe – antworte rein im Gesprächston
+- Erfinde NIEMALS Informationen, Namen, Diagnosen oder Befunde.
+- Wenn du etwas nicht weißt: frage nach. Niemals raten oder interpolieren.
 
 ## Vorhandene Unterlagen
 {materials_context}
@@ -173,6 +175,25 @@ Erfinde KEINE Informationen – extrahiere nur was tatsächlich gesagt wurde.
 """
 
 
+_QUICK_INPUT_SYSTEM_PROMPT = """Du bist ein effizienter Assistent für Logopäden.
+
+AUFGABE:
+Beim ERSTEN Nutzer-Turn: Extrahiere alle Angaben aus dem Freitext. Dann prüfe welche Pflichtfelder für den gewählten Berichtstyp ({report_type}) noch fehlen.
+Bei FOLGE-Turns: Die Logopädin hat eine Rückfrage beantwortet. Prüfe erneut die fehlenden Felder.
+
+VERHALTEN:
+- Frage immer nach genau EINEM fehlenden Pflichtfeld.
+- Formuliere die Frage einzeilig, direkt, ohne Begrüßung oder Smalltalk.
+- Wenn alle Pflichtfelder vollständig sind: Antworte exakt mit dem Satz "COMPLETE"
+- Erfinde KEINE Informationen. Wenn Daten fehlen: frage danach.
+
+BEISPIELE für gute Fragen:
+- "Wie lautet das Geburtsdatum des Patienten?"
+- "Welchen Indikationsschlüssel verwenden Sie?"
+- "Wie viele Sitzungen wurden insgesamt durchgeführt?"
+
+Fehlende Felder: {missing_fields}"""
+
 _THERAPY_PLAN_SYSTEM_PROMPT = """\
 Du bist ein logopädischer Dokumentationsassistent. Du sammelst kurz die nötigen
 Informationen für einen ICF-basierten Therapieplan.
@@ -195,6 +216,7 @@ dass der Therapieplan jetzt generiert werden kann.
 ## Aktueller Stand
 Bereits erfasst: {collected_fields}
 Noch fehlend: {missing_fields}
+- Erfinde NIEMALS Informationen. Wenn ein Feld unklar ist: frage konkret nach.
 """
 
 _THERAPY_PLAN_EXTRACTION_PROMPT = """\
@@ -238,6 +260,29 @@ _REQUIRED_FIELDS: dict[str, list[str]] = {
     ],
 }
 
+_VALID_AGE_GROUPS = {"kind", "jugendlich", "erwachsen"}
+_VALID_REPORT_TYPES = {"befundbericht", "therapiebericht_kurz", "therapiebericht_lang", "abschlussbericht"}
+_VALID_PHASES = {"greeting", "report_type", "patient_info", "disorder", "anamnesis", "goals", "summary"}
+_VALID_INDIKATIONSSCHLUESSEL = {"SP1", "SP2", "SP3", "SP4", "SP5", "SP6", "ST1", "ST2", "SC1", "RE1", "RE2", "OFD"}
+
+
+def _validate_extracted_data(data: dict) -> dict:
+    """Remove hallucinated enum values before storing in session."""
+    cleaned = {}
+    for key, value in data.items():
+        if value is None or value == "" or value == []:
+            continue
+        if key == "age_group" and value not in _VALID_AGE_GROUPS:
+            continue
+        if key == "report_type" and value not in _VALID_REPORT_TYPES:
+            continue
+        if key == "phase" and value not in _VALID_PHASES:
+            continue
+        if key == "indikationsschluessel" and value not in _VALID_INDIKATIONSSCHLUESSEL:
+            continue
+        cleaned[key] = value
+    return cleaned
+
 
 class AnamnesisEngine:
     def __init__(self, groq: GroqService) -> None:
@@ -263,7 +308,7 @@ class AnamnesisEngine:
         required = _REQUIRED_FIELDS.get(report_type, [])
         return [f for f in required if not session.collected_data.get(f)]
 
-    async def process_message(self, session: Session, user_message: str) -> str:
+    async def process_message(self, session: Session, user_message: str, mode: str = "guided") -> str:
         """Process a user message and return the assistant's response."""
         # Add user message to history
         session.chat_history.append(ChatMessage(role="user", content=user_message))
@@ -275,6 +320,12 @@ class AnamnesisEngine:
             system = _THERAPY_PLAN_SYSTEM_PROMPT.format(
                 collected_fields=", ".join(collected) if collected else "Keine",
                 missing_fields=", ".join(missing) if missing else "Alle Felder erfasst",
+            )
+        elif mode == "quick_input":
+            report_type = session.collected_data.get("report_type", "unbekannt")
+            system = _QUICK_INPUT_SYSTEM_PROMPT.format(
+                report_type=report_type,
+                missing_fields=", ".join(missing) if missing else "keine",
             )
         else:
             report_type = session.collected_data.get("report_type", "Noch nicht festgelegt")
@@ -302,59 +353,29 @@ class AnamnesisEngine:
         return response_text
 
     async def get_initial_greeting(self, session: Session) -> str:
-        """Generate the initial greeting message to start the anamnesis."""
+        """Return a static greeting — no LLM call to prevent hallucination."""
         if session.therapy_plan_mode:
-            system = _THERAPY_PLAN_SYSTEM_PROMPT.format(
-                collected_fields="Keine",
-                missing_fields=", ".join(_REQUIRED_FIELDS_THERAPY_PLAN),
+            greeting = (
+                "Guten Tag! Ich helfe Ihnen beim Erstellen eines Therapieplans. "
+                "Bitte nennen Sie zunächst das Pseudonym des Patienten."
             )
-            prompt = "Bitte begrüße mich und frage nach dem ersten fehlenden Feld (Pseudonym des Patienten)."
         else:
-            system = _ANAMNESIS_SYSTEM_PROMPT.format(
-                report_type="Noch nicht festgelegt",
-                age_group="Noch nicht festgelegt",
-                disorder="Noch nicht festgelegt",
-                collected_fields="Keine",
-                missing_fields="Berichtstyp zuerst klären",
-                materials_context=self._format_materials_context(session),
+            greeting = (
+                "Guten Tag! Für welchen Berichtstyp benötigen Sie Unterstützung?\n\n"
+                "– Befundbericht\n– Therapiebericht kurz\n– Therapiebericht lang\n– Abschlussbericht"
             )
-            prompt = "Bitte begrüße mich und frage, welchen Berichtstyp ich erstellen möchte."
-
-        messages = [{"role": "user", "content": prompt}]
-        response_text = await self._groq.chat_completion(messages, system)
-
-        session.chat_history.append(ChatMessage(role="assistant", content=response_text))
-        return response_text
+        session.chat_history.append(ChatMessage(role="assistant", content=greeting))
+        return greeting
 
     async def get_contextual_greeting(self, session: Session) -> str:
-        """Generate a contextual greeting for a returning patient in a new session."""
-        # Check for patient name (pseudonym first, then fallback to patient_name)
+        """Return a static contextual greeting — no LLM call."""
         patient_name = session.collected_data.get("patient_pseudonym") or session.collected_data.get("patient_name")
-
-        # If no patient name found, fall back to initial greeting
-        if not patient_name:
-            return await self.get_initial_greeting(session)
-
-        # Generate contextual greeting for returning patient
-        system = _ANAMNESIS_SYSTEM_PROMPT.format(
-            report_type="Noch nicht festgelegt",
-            age_group="Noch nicht festgelegt",
-            disorder="Noch nicht festgelegt",
-            collected_fields="Keine",
-            missing_fields="Berichtstyp zuerst klären",
-            materials_context=self._format_materials_context(session),
-        )
-
-        messages = [
-            {
-                "role": "user",
-                "content": f"Bitte begrüße mich für eine neue Sitzung mit {patient_name} und frage, welchen Berichtstyp ich diesmal erstellen möchte.",
-            }
-        ]
-        response_text = await self._groq.chat_completion(messages, system)
-
-        session.chat_history.append(ChatMessage(role="assistant", content=response_text))
-        return response_text
+        if patient_name:
+            greeting = f"Willkommen zurück! Wir setzen die Dokumentation für {patient_name} fort. Um was für einen Bericht handelt es sich?"
+        else:
+            greeting = "Willkommen zurück! Um was für einen Bericht handelt es sich?"
+        session.chat_history.append(ChatMessage(role="assistant", content=greeting))
+        return greeting
 
     async def _extract_data(self, session: Session) -> None:
         """Extract structured data from the conversation so far."""
@@ -377,9 +398,8 @@ class AnamnesisEngine:
                 if data.get("is_complete"):
                     session.status = "materials"
                 if data.get("data"):
-                    for key, value in data["data"].items():
-                        if value is not None and value != [] and value != "":
-                            session.collected_data[key] = value
+                    validated = _validate_extracted_data(data["data"])
+                    session.collected_data.update(validated)
             else:
                 data = await self._groq.json_completion(extraction_messages, _EXTRACTION_PROMPT)
 
@@ -397,10 +417,8 @@ class AnamnesisEngine:
                     session.status = "materials"
 
                 if data.get("data"):
-                    for key, value in data["data"].items():
-                        if value is not None and value != [] and value != "":
-                            session.collected_data[key] = value
+                    validated = _validate_extracted_data(data["data"])
+                    session.collected_data.update(validated)
 
-        except RuntimeError:
-            # Extraction failed – not critical, conversation continues
-            pass
+        except RuntimeError as e:
+            print(f"[WARN] _extract_data failed: {e}")

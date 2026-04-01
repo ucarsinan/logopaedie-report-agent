@@ -199,6 +199,9 @@ export default function Home() {
   const [collectedFields, setCollectedFields] = useState<string[]>([]);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState("greeting");
+  const [inputMode, setInputMode] = useState<"select" | "free" | "guided">("select");
+  const [freeText, setFreeText] = useState("");
+  const [freeTextReportType, setFreeTextReportType] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [report, setReport] = useState<ReportData | null>(null);
   const [savedReportId, setSavedReportId] = useState<number | null>(null);
@@ -326,6 +329,42 @@ export default function Home() {
     },
     [sessionId]
   );
+
+  // ── Send free-text (quick_input mode) ─────────────────────────────
+  const sendFreeText = useCallback(async () => {
+    if (!freeText.trim() || !freeTextReportType || isSending || !sessionId) return;
+
+    const combinedMessage = `Berichtstyp: ${freeTextReportType}\n\n${freeText}`;
+
+    setIsSending(true);
+    setMessages((prev) => [...prev, { role: "user" as const, content: freeText }]);
+    setFreeText("");
+
+    try {
+      const res = await fetch(`${API}/sessions/${sessionId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: combinedMessage, mode: "quick_input" }),
+      });
+
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+      }
+
+      const data: ChatResponse = await res.json();
+      setMessages((prev) => [...prev, { role: "assistant" as const, content: data.message }]);
+      setCurrentPhase(data.phase);
+      setIsAnamnesisComplete(data.is_anamnesis_complete);
+      setCollectedFields(data.collected_fields ?? []);
+      setMissingFields(data.missing_fields ?? []);
+    } catch (err) {
+      setMessages((prev) => prev.slice(0, -1));
+      setError(err instanceof Error ? err.message : "Fehler beim Senden. Bitte erneut versuchen.");
+    } finally {
+      setIsSending(false);
+    }
+  }, [sessionId, freeText, freeTextReportType, isSending]);
 
   // ── Audio recording ────────────────────────────────────────────────
   async function startRecording() {
@@ -485,6 +524,9 @@ export default function Home() {
       setCollectedFields([]);
       setMissingFields([]);
       setCurrentPhase("greeting");
+      setInputMode("select");
+      setFreeText("");
+      setFreeTextReportType("");
       setUploadedFiles([]);
       setConsentChecked(false);
       setMaterialsConsent(false);
@@ -520,6 +562,9 @@ export default function Home() {
       setCollectedFields([]);
       setMissingFields([]);
       setCurrentPhase("greeting");
+      setInputMode("select");
+      setFreeText("");
+      setFreeTextReportType("");
       setUploadedFiles([]);
       setConsentChecked(false);
       setMaterialsConsent(false);
@@ -696,8 +741,22 @@ export default function Home() {
               {messages.map((msg, i) => (
                 <ChatBubble key={i} role={msg.role} content={msg.content} />
               ))}
-              {currentPhase === "greeting" && (
+              {currentPhase === "greeting" && inputMode === "select" && (
+                <ModeSelectionCards onSelect={(mode) => setInputMode(mode)} />
+              )}
+              {currentPhase === "greeting" && inputMode === "guided" && (
                 <QuickReplyBubbles onSelect={sendMessage} disabled={isSending} />
+              )}
+              {currentPhase === "greeting" && inputMode === "free" && (
+                <FreeTextInput
+                  reportType={freeTextReportType}
+                  onReportTypeChange={setFreeTextReportType}
+                  value={freeText}
+                  onChange={setFreeText}
+                  onSubmit={sendFreeText}
+                  disabled={isSending}
+                  apiUrl={API}
+                />
               )}
               {isSending && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1067,6 +1126,197 @@ function QuickReplyBubbles({
   );
 }
 
+
+/* ═══════════════════════════ Dictation Button ═══════════════════════════════ */
+
+function DictationButton({
+  onTranscript,
+  disabled,
+  apiUrl,
+}: {
+  onTranscript: (text: string) => void;
+  disabled?: boolean;
+  apiUrl: string;
+}) {
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isPending, setIsPending] = useState(false);
+
+  async function start() {
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setIsPending(true);
+        try {
+          const form = new FormData();
+          form.append("audio_file", blob, "dictation.webm");
+          const res = await fetch(`${apiUrl}/api/transcribe`, {
+            method: "POST",
+            body: form,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.transcript) onTranscript(data.transcript);
+          }
+        } finally {
+          setIsPending(false);
+        }
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch {
+      // mic access denied or unavailable — silently ignore
+    }
+  }
+
+  function stop() {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  }
+
+  if (isPending) {
+    return (
+      <button disabled className="px-3 py-2 rounded-lg bg-surface-elevated text-foreground/40 text-sm">
+        ⏳
+      </button>
+    );
+  }
+
+  return isRecording ? (
+    <button
+      onClick={stop}
+      className="px-3 py-2 rounded-lg bg-red-600 text-white motion-safe:animate-pulse text-sm"
+      title="Aufnahme stoppen"
+    >
+      <StopIcon />
+    </button>
+  ) : (
+    <button
+      onClick={start}
+      disabled={disabled}
+      className="px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40 text-sm"
+      title="Diktieren"
+    >
+      <MicIcon />
+    </button>
+  );
+}
+
+/* ═══════════════════════════ Mode Selection Cards ═══════════════════════════ */
+
+function ModeSelectionCards({
+  onSelect,
+}: {
+  onSelect: (mode: "free" | "guided") => void;
+}) {
+  return (
+    <div className="flex gap-3 pl-2 pt-2 pb-1">
+      <button
+        onClick={() => onSelect("free")}
+        className="flex-1 rounded-xl border border-border-strong bg-surface-2 hover:bg-surface-3 hover:border-accent/60 transition-all duration-150 p-4 text-left"
+      >
+        <div className="text-base font-semibold text-foreground mb-1">✏️ Freitext</div>
+        <div className="text-xs text-muted-foreground leading-snug">
+          Tippe alles auf einmal — ich frage nur nach was fehlt
+        </div>
+      </button>
+      <button
+        onClick={() => onSelect("guided")}
+        className="flex-1 rounded-xl border border-border-strong bg-surface-2 hover:bg-surface-3 hover:border-accent/60 transition-all duration-150 p-4 text-left"
+      >
+        <div className="text-base font-semibold text-foreground mb-1">💬 Geführtes Gespräch</div>
+        <div className="text-xs text-muted-foreground leading-snug">
+          Schritt für Schritt durch alle relevanten Informationen
+        </div>
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════ Free Text Input ════════════════════════════ */
+
+const FREE_TEXT_REPORT_TYPES = [
+  { key: "befundbericht", label: "Befundbericht" },
+  { key: "therapiebericht_kurz", label: "Therapiebericht kurz" },
+  { key: "therapiebericht_lang", label: "Therapiebericht lang" },
+  { key: "abschlussbericht", label: "Abschlussbericht" },
+] as const;
+
+function FreeTextInput({
+  reportType,
+  onReportTypeChange,
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+  apiUrl,
+}: {
+  reportType: string;
+  onReportTypeChange: (type: string) => void;
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  disabled: boolean;
+  apiUrl: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 px-2 pt-2 pb-1">
+      <div className="flex flex-wrap gap-2">
+        {FREE_TEXT_REPORT_TYPES.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => onReportTypeChange(key)}
+            className={[
+              "rounded-full border px-4 py-1.5 text-xs font-medium transition-all duration-150",
+              reportType === key
+                ? "border-accent bg-accent text-white"
+                : "border-border-strong text-muted-foreground hover:border-accent/60 hover:text-foreground",
+            ].join(" ")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        rows={8}
+        placeholder="Beschreibe Patient, Diagnose, Therapieverlauf — alles was du weißt. Ich frage nur nach was fehlt."
+        className="w-full rounded-lg bg-input border border-border-strong px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-accent/50"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && e.ctrlKey) {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+      />
+      <div className="flex items-center justify-end gap-2">
+        <DictationButton
+          apiUrl={apiUrl}
+          disabled={disabled}
+          onTranscript={(text) => onChange(value ? value + " " + text : text)}
+        />
+        <button
+          onClick={onSubmit}
+          disabled={disabled || !value.trim() || !reportType}
+          className="rounded-lg bg-accent px-6 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          Analysieren →
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════ Drop Zone ═══════════════════════════════════ */
 
