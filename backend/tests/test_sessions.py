@@ -17,7 +17,7 @@ def test_get_session(client, session_id):
 
 
 def test_get_session_not_found(client):
-    res = client.get("/sessions/nonexistent")
+    res = client.get("/sessions/aabbccddeeff")
     assert res.status_code == 404
 
 
@@ -49,7 +49,7 @@ def test_chat_empty_message(client, session_id):
 
 def test_chat_session_not_found(client, mock_groq):
     res = client.post(
-        "/sessions/nonexistent/chat",
+        "/sessions/aabbccddeeff/chat",
         json={"message": "Hallo"},
     )
     assert res.status_code == 404

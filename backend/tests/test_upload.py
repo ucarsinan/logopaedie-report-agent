@@ -27,7 +27,7 @@ def test_upload_unsupported_type(client, session_id):
 
 def test_upload_session_not_found(client):
     res = client.post(
-        "/sessions/nonexistent/upload",
+        "/sessions/aabbccddeeff/upload",
         files={"file": ("test.txt", io.BytesIO(b"test"), "text/plain")},
     )
     assert res.status_code == 404

@@ -25,7 +25,7 @@ def test_generate_report(client, session_id, mock_groq):
 
 
 def test_generate_report_session_not_found(client, mock_groq):
-    res = client.post("/sessions/nonexistent/generate")
+    res = client.post("/sessions/aabbccddeeff/generate")
     assert res.status_code == 404
 
 

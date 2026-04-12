@@ -1,42 +1,72 @@
-"""Tests for in-memory session store."""
+"""Tests for Redis-backed session store."""
 
+import json
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from backend.services.session_store import Session, SessionStore
+from services.session_store import Session, SessionStore
+
+
+class FakeRedis:
+    """In-memory fake for Upstash Redis used in session store tests."""
+
+    def __init__(self):
+        self._data = {}
+
+    def set(self, key, value, **kwargs):
+        self._data[key] = value
+
+    def get(self, key):
+        return self._data.get(key)
+
+    def delete(self, key):
+        self._data.pop(key, None)
+
+    def scan(self, cursor, match=None, count=None):
+        keys = [k for k in self._data if match is None or k.startswith(match.replace("*", ""))]
+        return (0, keys)
+
+
+def _make_store():
+    """Create a SessionStore with a fake Redis backend."""
+    fake = FakeRedis()
+    patcher = patch("services.session_store._get_redis", return_value=fake)
+    patcher.start()
+    return SessionStore(), fake, patcher
 
 
 def test_create_and_get():
-    store = SessionStore()
-    session = store.create()
-    assert isinstance(session, Session)
-    assert store.get(session.session_id) is session
+    store, fake, patcher = _make_store()
+    try:
+        session = store.create()
+        assert isinstance(session, Session)
+        loaded = store.get(session.session_id)
+        assert loaded is not None
+        assert loaded.session_id == session.session_id
+    finally:
+        patcher.stop()
 
 
 def test_get_nonexistent():
-    store = SessionStore()
-    assert store.get("does-not-exist") is None
+    store, fake, patcher = _make_store()
+    try:
+        assert store.get("does-not-exist") is None
+    finally:
+        patcher.stop()
 
 
 def test_expired_session():
-    store = SessionStore()
-    session = store.create()
-    # Simulate expiration
-    session.created_at = time.time() - (3 * 60 * 60)  # 3h ago
-    assert store.get(session.session_id) is None
-
-
-def test_cleanup_expired():
-    store = SessionStore()
-    s1 = store.create()
-    s2 = store.create()
-    # Expire s1
-    s1.created_at = time.time() - (3 * 60 * 60)
-    # Creating a new session triggers cleanup
-    s3 = store.create()
-    assert store.get(s1.session_id) is None
-    assert store.get(s2.session_id) is s2
-    assert store.get(s3.session_id) is s3
+    store, fake, patcher = _make_store()
+    try:
+        session = store.create()
+        # Manipulate stored data to simulate expiration
+        key = f"session:{session.session_id}"
+        data = json.loads(fake.get(key))
+        data["created_at"] = time.time() - (25 * 60 * 60)  # 25h ago
+        fake.set(key, json.dumps(data))
+        assert store.get(session.session_id) is None
+    finally:
+        patcher.stop()
 
 
 def test_session_initial_state():

@@ -2,7 +2,8 @@
 
 import pytest
 
-from backend.services.file_processor import extract_text
+from services.file_processor import extract_text
+from exceptions import FileTooLargeError, UnsupportedFileTypeError
 
 
 @pytest.mark.asyncio
@@ -21,12 +22,12 @@ async def test_extract_txt_by_content_type():
 
 @pytest.mark.asyncio
 async def test_unsupported_type():
-    with pytest.raises(ValueError, match="nicht unterstützt"):
+    with pytest.raises(UnsupportedFileTypeError, match="nicht unterstützt"):
         await extract_text(b"data", "file.xyz", "application/octet-stream")
 
 
 @pytest.mark.asyncio
 async def test_file_too_large():
     large = b"x" * (11 * 1024 * 1024)  # 11 MB
-    with pytest.raises(ValueError, match="zu groß"):
+    with pytest.raises(FileTooLargeError, match="zu groß"):
         await extract_text(large, "big.txt", "text/plain")

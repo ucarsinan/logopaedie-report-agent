@@ -37,5 +37,5 @@ def test_generate_therapy_plan(client, session_id, mock_groq):
 
 
 def test_therapy_plan_session_not_found(client, mock_groq):
-    res = client.post("/sessions/nonexistent/therapy-plan")
+    res = client.post("/sessions/aabbccddeeff/therapy-plan")
     assert res.status_code == 404
