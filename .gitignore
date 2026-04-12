@@ -27,3 +27,9 @@ docs/superpowers/
 # OS
 .DS_Store
 .vercel
+
+# Local SQLite databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
