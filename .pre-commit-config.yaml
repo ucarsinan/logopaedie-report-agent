@@ -5,15 +5,45 @@ repos:
       - id: ruff
         args: [--fix]
         files: ^backend/
+        stages: [pre-commit]
       - id: ruff-format
         files: ^backend/
+        stages: [pre-commit]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        stages: [pre-commit]
       - id: end-of-file-fixer
+        stages: [pre-commit]
       - id: check-yaml
+        stages: [pre-commit]
       - id: check-added-large-files
         args: [--maxkb=500]
+        stages: [pre-commit]
       - id: check-merge-conflict
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: backend-pytest
+        name: backend · pytest
+        entry: bash -c 'cd backend && GROQ_API_KEY=test-key-not-real pytest -q --tb=short'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: frontend-eslint
+        name: frontend · eslint
+        entry: bash -c 'cd frontend && npx eslint .'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: frontend-test
+        name: frontend · vitest
+        entry: bash -c 'cd frontend && npm test -- --run'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

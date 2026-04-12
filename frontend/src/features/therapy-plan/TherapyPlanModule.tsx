@@ -35,7 +35,7 @@ interface TherapyPlanModuleProps {
   sessionId: string | null;
 }
 
-export function TherapyPlanModule({ sessionId: _sessionId }: TherapyPlanModuleProps) {
+export function TherapyPlanModule({}: TherapyPlanModuleProps) {
   const [tpMode, setTpMode] = useState<TpMode>("select");
   const [tpSessionId, setTpSessionId] = useState<string | null>(null);
   const [tpReportId, setTpReportId] = useState<number | null>(null);

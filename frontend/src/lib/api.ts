@@ -1,7 +1,6 @@
 import type {
   ChatResponse,
   ReportData,
-  ReportSummary,
   ReportDetail,
   ReportListResponse,
   ReportStats,

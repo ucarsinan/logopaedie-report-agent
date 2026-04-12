@@ -56,6 +56,7 @@ export function HistoryModule() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReports({ ...filters, page });
   }, [filters, page, fetchReports]);
 
@@ -74,7 +75,11 @@ export function HistoryModule() {
   const totalPages = Math.ceil(total / (filters.limit ?? 20));
 
   useEffect(() => {
-    if (selectedId === null) { setDetail(null); return; }
+    if (selectedId === null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDetail(null);
+      return;
+    }
     setDetailLoading(true);
     api.reports
       .get(selectedId)

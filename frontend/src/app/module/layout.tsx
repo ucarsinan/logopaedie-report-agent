@@ -26,7 +26,7 @@ const MODULE_LABELS: Record<string, string> = Object.fromEntries(
 function ModuleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const activeSlug = pathname.split("/").pop() ?? "report";
-  const { messages, isSending, error, handleSoftReset, handleFullReset } = useSession();
+  const { isSending, error, handleSoftReset, handleFullReset } = useSession();
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     if (typeof window === "undefined") return false;

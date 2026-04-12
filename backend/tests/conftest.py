@@ -57,7 +57,8 @@ def client(mock_groq, mock_redis):
 
     from main import app
 
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 @pytest.fixture()
@@ -65,9 +66,6 @@ def session_id(client, mock_groq, mock_redis):
     """Create a session and return its ID."""
     mock_groq["chat"].return_value = "Willkommen! Welchen Berichtstyp möchten Sie erstellen?"
     # Mock Redis.get to return the session data after creation
-    import json as _json
-    original_set = mock_redis.set
-
     _stored = {}
 
     def fake_set(key, value, **kwargs):

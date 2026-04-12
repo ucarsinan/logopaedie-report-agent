@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseAudioRecordingOptions {
   onResult: (blob: Blob) => void | Promise<void>;
@@ -17,7 +17,9 @@ export function useAudioRecording({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const onResultRef = useRef(onResult);
-  onResultRef.current = onResult;
+  useEffect(() => {
+    onResultRef.current = onResult;
+  });
 
   const startRecording = useCallback(async () => {
     audioChunksRef.current = [];
