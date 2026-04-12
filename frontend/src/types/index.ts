@@ -56,7 +56,44 @@ export interface ReportData {
 }
 
 export type AppPhase = "pre-upload" | "chat" | "generating" | "preview";
-export type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest" | "history";
+export type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest" | "history" | "soap";
+
+/* ═══════════════════════════════ Report List/Stats ═══════════════════════════ */
+
+export interface ReportListResponse {
+  items: ReportSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ReportStats {
+  total: number;
+  by_type: Record<string, number>;
+  latest_date: string | null;
+}
+
+export interface ReportFilterParams {
+  pseudonym?: string;
+  report_type?: string;
+  from_date?: string;
+  to_date?: string;
+  page?: number;
+  limit?: number;
+}
+
+/* ═══════════════════════════════ SOAP Notes ══════════════════════════════════ */
+
+export interface SOAPNote {
+  id?: number;
+  report_id?: number | null;
+  session_id?: string | null;
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  created_at?: string;
+}
 
 /* ═══════════════════════════════ Report Types ═════════════════════════════════ */
 

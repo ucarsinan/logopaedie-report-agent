@@ -4,6 +4,11 @@ import os
 
 from sqlmodel import Session, SQLModel, create_engine
 
+# Import all models so SQLModel registers their tables
+import models.report_record  # noqa: F401
+import models.therapy_plan_record  # noqa: F401
+import models.soap_record  # noqa: F401
+
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL", "sqlite:///./reports.db")
 
 # Neon uses postgres:// — SQLAlchemy requires postgresql://

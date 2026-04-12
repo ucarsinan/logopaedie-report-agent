@@ -15,6 +15,7 @@ import { TherapyPlanModule } from "@/features/therapy-plan/TherapyPlanModule";
 import { CompareModule } from "@/features/compare/CompareModule";
 import { SuggestModule } from "@/features/suggest/SuggestModule";
 import { HistoryModule } from "@/features/history/HistoryModule";
+import { SOAPModule } from "@/features/soap/SOAPModule";
 
 const SESSION_STORAGE_KEY = "logopaedie_session_id";
 
@@ -25,6 +26,7 @@ const MODULE_LABELS: Record<AppModule, string> = {
   compare: "Berichtsvergleich",
   suggest: "Textbausteine",
   history: "Bericht-Verlauf",
+  soap: "SOAP-Notizen",
 };
 
 const MODULE_TABS: [AppModule, string, string][] = [
@@ -34,6 +36,7 @@ const MODULE_TABS: [AppModule, string, string][] = [
   ["compare", "Berichtsvergleich", "Zwei Berichte gegenüberstellen und Fortschritt messen"],
   ["suggest", "Textbausteine", "KI-Formulierungsvorschläge während des Schreibens"],
   ["history", "Bericht-Verlauf", "Alle gespeicherten Berichte anzeigen und durchsuchen"],
+  ["soap", "SOAP-Notizen", "Strukturierte klinische Notizen im SOAP-Format generieren"],
 ];
 
 export default function Home() {
@@ -48,7 +51,7 @@ export default function Home() {
   // Read module from URL on mount
   useEffect(() => {
     const m = new URLSearchParams(window.location.search).get("module");
-    const valid: AppModule[] = ["report", "phonology", "therapy-plan", "compare", "suggest"];
+    const valid: AppModule[] = ["report", "phonology", "therapy-plan", "compare", "suggest", "history", "soap"];
     if (valid.includes(m as AppModule)) {
       setActiveModule(m as AppModule);
     }
@@ -206,6 +209,10 @@ export default function Home() {
 
         <ErrorBoundary fallbackTitle="Verlauf-Fehler">
           {activeModule === "history" && <HistoryModule />}
+        </ErrorBoundary>
+
+        <ErrorBoundary fallbackTitle="SOAP-Fehler">
+          {activeModule === "soap" && <SOAPModule sessionId={sessionId} />}
         </ErrorBoundary>
       </main>
 

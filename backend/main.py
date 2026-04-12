@@ -33,7 +33,7 @@ from exceptions import (
 from logging_config import setup_logging
 from middleware.auth import APIKeyAuthMiddleware
 from middleware.rate_limiter import limiter
-from routers import analysis, health, legacy, reports, sessions, suggestions, therapy_plans
+from routers import analysis, exports, health, legacy, reports, sessions, soap, suggestions, therapy_plans
 
 load_dotenv()
 setup_logging()
@@ -162,4 +162,6 @@ app.include_router(reports.router)
 app.include_router(analysis.router)
 app.include_router(therapy_plans.router)
 app.include_router(suggestions.router)
+app.include_router(exports.router)
+app.include_router(soap.router)
 app.include_router(legacy.router)

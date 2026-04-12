@@ -7,6 +7,7 @@ from services.phonological_analyzer import PhonologicalAnalyzer
 from services.therapy_planner import TherapyPlanner
 from services.report_comparator import ReportComparator
 from services.text_suggester import TextSuggester
+from services.soap_generator import SOAPGenerator
 
 # ── Singletons (instantiated once at import time) ─────────────────────────
 groq_service = GroqService()
@@ -16,6 +17,7 @@ phonological_analyzer = PhonologicalAnalyzer(groq_service)
 therapy_planner = TherapyPlanner(groq_service)
 report_comparator = ReportComparator(groq_service)
 text_suggester = TextSuggester(groq_service)
+soap_generator = SOAPGenerator(groq_service)
 
 
 # ── Depends() providers ───────────────────────────────────────────────────
@@ -45,3 +47,7 @@ def get_report_comparator() -> ReportComparator:
 
 def get_text_suggester() -> TextSuggester:
     return text_suggester
+
+
+def get_soap_generator() -> SOAPGenerator:
+    return soap_generator

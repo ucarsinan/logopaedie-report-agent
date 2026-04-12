@@ -60,7 +60,7 @@ export function TherapyPlanModule({ sessionId: _sessionId }: TherapyPlanModulePr
 
   useEffect(() => {
     api.therapyPlans.list().then(setSavedPlans).catch(() => {});
-    api.reports.list().then(setSavedReports).catch(() => {});
+    api.reports.list().then((res) => setSavedReports(res.items)).catch(() => {});
   }, []);
 
   useEffect(() => {

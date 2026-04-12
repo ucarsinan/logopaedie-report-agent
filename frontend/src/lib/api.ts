@@ -3,6 +3,10 @@ import type {
   ReportData,
   ReportSummary,
   ReportDetail,
+  ReportListResponse,
+  ReportStats,
+  ReportFilterParams,
+  SOAPNote,
   TherapyPlanSummary,
   UploadedFile,
 } from "@/types";
@@ -113,16 +117,35 @@ export const api = {
   },
 
   reports: {
-    list: async (): Promise<ReportSummary[]> => {
-      const res = await fetch(`${API}/reports`);
-      if (!res.ok) throw new Error("Fehler beim Laden der Berichte");
-      return res.json();
+    list: (params?: ReportFilterParams): Promise<ReportListResponse> => {
+      const qs = new URLSearchParams();
+      if (params?.pseudonym) qs.set("pseudonym", params.pseudonym);
+      if (params?.report_type) qs.set("report_type", params.report_type);
+      if (params?.from_date) qs.set("from_date", params.from_date);
+      if (params?.to_date) qs.set("to_date", params.to_date);
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      const q = qs.toString();
+      return fetchApi<ReportListResponse>(`/reports${q ? `?${q}` : ""}`);
     },
-    get: async (id: number): Promise<ReportDetail> => {
-      const res = await fetch(`${API}/reports/${id}`);
-      if (!res.ok) throw new Error("Bericht nicht gefunden");
-      return res.json();
+    get: (id: number): Promise<ReportDetail> =>
+      fetchApi<ReportDetail>(`/reports/${id}`),
+    stats: (): Promise<ReportStats> =>
+      fetchApi<ReportStats>("/reports/stats"),
+    downloadPdf: async (id: number): Promise<Blob> => {
+      const res = await fetch(`${API}/reports/${id}/pdf`);
+      if (!res.ok) throw new Error("PDF-Download fehlgeschlagen");
+      return res.blob();
     },
+  },
+
+  soap: {
+    generate: (sessionId: string): Promise<SOAPNote> =>
+      fetchApi<SOAPNote>(`/sessions/${sessionId}/soap`, { method: "POST" }),
+    get: (id: number): Promise<SOAPNote> =>
+      fetchApi<SOAPNote>(`/soap/${id}`),
+    fromReport: (reportId: number): Promise<SOAPNote> =>
+      fetchApi<SOAPNote>(`/reports/${reportId}/soap`, { method: "POST" }),
   },
 
   therapyPlans: {

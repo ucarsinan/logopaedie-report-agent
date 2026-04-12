@@ -12,7 +12,7 @@ export default function BerichtePage() {
   useEffect(() => {
     api.reports
       .list()
-      .then(setReports)
+      .then((res) => setReports(res.items))
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
