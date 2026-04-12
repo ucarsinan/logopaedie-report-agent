@@ -44,7 +44,8 @@ export function DictationButton({ onTranscript, disabled }: DictationButtonProps
     <button
       onClick={startRecording}
       disabled={disabled}
-      className="px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40 text-sm"
+      className="px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+      aria-label="Diktieren"
       title="Diktieren"
     >
       <MicIcon />

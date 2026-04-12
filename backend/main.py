@@ -8,14 +8,19 @@ from contextlib import asynccontextmanager
 # both locally (when running via uvicorn backend.main:app) and on Vercel.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Load .env BEFORE importing routers — they transitively import dependencies.py
+# which instantiates GroqService() at module level and reads GROQ_API_KEY.
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi.errors import RateLimitExceeded
 
-from database import create_db_and_tables
-from exceptions import (
+load_dotenv()
+
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+
+from database import create_db_and_tables  # noqa: E402
+from exceptions import (  # noqa: E402
     AIServiceError,
     FileTooLargeError,
     ModelExhaustedError,
@@ -28,12 +33,21 @@ from exceptions import (
     UnsupportedFileTypeError,
     ValidationError,
 )
-from logging_config import setup_logging
-from middleware.auth import APIKeyAuthMiddleware
-from middleware.rate_limiter import limiter
-from routers import analysis, exports, health, legacy, reports, sessions, soap, suggestions, therapy_plans
+from logging_config import setup_logging  # noqa: E402
+from middleware.auth import APIKeyAuthMiddleware  # noqa: E402
+from middleware.rate_limiter import limiter  # noqa: E402
+from routers import (  # noqa: E402
+    analysis,
+    exports,
+    health,
+    legacy,
+    reports,
+    sessions,
+    soap,
+    suggestions,
+    therapy_plans,
+)
 
-load_dotenv()
 setup_logging()
 
 

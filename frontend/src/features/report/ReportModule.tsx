@@ -86,6 +86,7 @@ export function ReportModule({
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [report, setReport] = useState<ReportData | null>(null);
   const [savedReportId, setSavedReportId] = useState<number | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [consentChecked, setConsentChecked] = useState(false);
 
   // Restore session on mount
@@ -158,8 +159,13 @@ export function ReportModule({
     if (!sessionId) return;
     try {
       await api.sessions.consent(sessionId, true);
-    } catch {
-      // Proceed even if consent request fails
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `Einwilligung konnte nicht gespeichert werden: ${err.message}`
+          : "Einwilligung konnte nicht gespeichert werden.",
+      );
+      return;
     }
     setPhase("chat");
   }
@@ -174,6 +180,7 @@ export function ReportModule({
       setReport(data);
       if (data._db_id) {
         setSavedReportId(data._db_id);
+        setSavedAt(Date.now());
       }
       setPhase("preview");
     } catch (err) {
@@ -195,6 +202,7 @@ export function ReportModule({
     setConsentChecked(false);
     setReport(null);
     setSavedReportId(null);
+    setSavedAt(null);
   }, []);
 
   // Allow parent to trigger reset via onRequestReset
@@ -257,42 +265,97 @@ export function ReportModule({
       {/* Preview phase */}
       {phase === "preview" && report && (
         <>
-          <div className="flex flex-col gap-2 print:hidden">
-            <div className="flex items-center justify-between">
-              <h1 className="text-xl font-semibold tracking-tight">
-                Generierter Bericht
-              </h1>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPhase("chat")}
-                  className="text-sm text-muted-foreground hover:text-foreground"
+          <div className="flex flex-col gap-3 print:hidden">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <h1 className="text-xl font-semibold tracking-tight">
+                  Generierter Bericht
+                </h1>
+                {savedReportId && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <svg
+                      className="size-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <path d="m9 11 3 3L22 4" />
+                    </svg>
+                    Gespeichert
+                    {savedAt && (
+                      <span className="text-muted-foreground">
+                        {"\u00b7 "}
+                        {new Date(savedAt).toLocaleTimeString("de-DE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/module/history"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  {"\u2190"} Zurück
-                </button>
+                  Alle Berichte
+                </Link>
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
+                  <svg
+                    className="size-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
+                  </svg>
                   Drucken / PDF
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <svg
+                    className="size-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Neue Sitzung starten
                 </button>
               </div>
             </div>
-            <div className="flex gap-4">
-              {savedReportId && (
-                <Link
-                  href="/module/history"
-                  className="text-sm text-muted-foreground hover:underline"
-                >
-                  Bericht dauerhaft ansehen {"\u2192"}
-                </Link>
-              )}
-              <Link
-                href="/module/history"
-                className="text-sm text-muted-foreground hover:underline"
-              >
-                Alle Berichte
-              </Link>
-            </div>
+            <button
+              onClick={() => setPhase("chat")}
+              className="self-start text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {"\u2190"} Zurück zum Gespräch
+            </button>
           </div>
           <ReportPreview report={report} />
         </>

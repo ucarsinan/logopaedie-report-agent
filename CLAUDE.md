@@ -85,17 +85,25 @@ Portfolio-Projekt (Demo/Showcase), deployed auf Vercel als Monorepo mit Vercel S
 ## Lokale Entwicklung
 
 ```bash
-# Backend
+# Beide Services parallel (empfohlen)
+./dev.sh
+
+# Oder einzeln:
 cd backend && pip install -r requirements.txt -r requirements-dev.txt
 uvicorn backend.main:app --reload --port 8001
 
-# Frontend
 cd frontend && npm install && npm run dev
 
 # Tests
 cd backend && python -m pytest
 cd frontend && npm test
 ```
+
+> **Port-Konvention:** Backend läuft IMMER auf `:8001`, Frontend auf `:3000`.
+> Der Next.js-Rewrite in `frontend/next.config.ts` proxied `/api/*` → `http://localhost:8001/*`.
+> Default in `frontend/src/lib/api.ts` (`NEXT_PUBLIC_API_URL`) ist ebenfalls `:8001`.
+> Wenn du den Backend-Port änderst, müssen ALLE drei Stellen synchron bleiben:
+> `dev.sh`, `next.config.ts`, `api.ts`.
 
 Env-Vars: `GROQ_API_KEY`, `ALLOWED_ORIGINS`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `DATABASE_URL`
 

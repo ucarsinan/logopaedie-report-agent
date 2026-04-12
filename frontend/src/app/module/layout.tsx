@@ -64,7 +64,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <nav className="flex gap-1 -mb-px overflow-x-auto">
+          <nav className="relative flex gap-1 -mb-px overflow-x-auto after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-8 after:bg-gradient-to-l after:from-background after:to-transparent md:after:hidden">
             {MODULE_TABS.map(([key, label, tooltip]) => (
               <Link
                 key={key}

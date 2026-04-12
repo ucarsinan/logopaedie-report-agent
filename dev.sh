@@ -49,9 +49,9 @@ fi
 echo -e "\n${GREEN}Starting services...${NC}\n"
 
 (
-  echo -e "${BLUE}[Backend]${NC} Starting uvicorn on :8000"
+  echo -e "${BLUE}[Backend]${NC} Starting uvicorn on :8001"
   cd "$BACKEND_DIR"
-  .venv/bin/uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000 2>&1 | sed "s/^/[Backend] /"
+  .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8001 2>&1 | sed "s/^/[Backend] /"
 ) &
 
 (
@@ -60,7 +60,7 @@ echo -e "\n${GREEN}Starting services...${NC}\n"
   npm run dev 2>&1 | sed "s/^/[Frontend] /"
 ) &
 
-echo -e "${GREEN}Backend:${NC}  http://localhost:8000"
+echo -e "${GREEN}Backend:${NC}  http://localhost:8001"
 echo -e "${GREEN}Frontend:${NC} http://localhost:3000"
 echo -e "${YELLOW}Press Ctrl+C to stop both services${NC}\n"
 

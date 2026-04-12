@@ -122,7 +122,7 @@ export function PhonologyModule() {
       <button
         onClick={analyze}
         disabled={loading}
-        className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40"
+        className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {loading ? "Analysiere…" : "Analyse starten"}
       </button>

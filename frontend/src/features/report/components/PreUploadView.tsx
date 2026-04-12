@@ -108,7 +108,7 @@ export function PreUploadView({
         </label>
       )}
 
-      <div className="flex gap-2.5 justify-center">
+      <div className="flex gap-2.5 justify-center items-center">
         <button
           onClick={onSkip}
           className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -119,9 +119,9 @@ export function PreUploadView({
           <button
             onClick={onProceed}
             disabled={!consentChecked}
-            className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-5 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Weiter
+            Weiter {"\u2192"}
           </button>
         )}
       </div>

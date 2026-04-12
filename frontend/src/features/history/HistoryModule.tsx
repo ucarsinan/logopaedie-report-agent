@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
@@ -185,11 +186,45 @@ export function HistoryModule() {
       {fetchError && <p className="text-destructive text-sm">Fehler: {fetchError}</p>}
 
       {!loading && !fetchError && reports.length === 0 && (
-        <p className="text-muted-foreground text-sm">
-          {total === 0
-            ? 'Noch keine Berichte gespeichert. Erstelle deinen ersten Bericht im Tab "Berichterstellung".'
-            : "Keine Berichte für diese Filter gefunden."}
-        </p>
+        total === 0 ? (
+          <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border bg-card/50 px-6 py-12 text-center">
+            <svg
+              aria-hidden="true"
+              className="size-10 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <line x1="10" y1="9" x2="8" y2="9" />
+            </svg>
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-foreground">
+                Noch keine Berichte gespeichert
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Starten Sie ein Anamnesegespräch, um Ihren ersten Bericht zu generieren.
+              </p>
+            </div>
+            <Link
+              href="/module/report"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Ersten Bericht erstellen
+              <span aria-hidden="true">{"\u2192"}</span>
+            </Link>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Keine Berichte für diese Filter gefunden.
+          </p>
+        )
       )}
 
       {!loading && !fetchError && reports.length > 0 && (

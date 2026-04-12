@@ -15,7 +15,7 @@ import type { PhonologicalAnalysisData, ReportComparisonData } from "@/types/pho
 export { REPORT_TYPE_LABELS } from "@/types";
 export type { ReportSummary, ReportDetail, TherapyPlanSummary } from "@/types";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
 
 /* ═══════════════════════════════ Shared fetch helper ═════════════════════════ */
 

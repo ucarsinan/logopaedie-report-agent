@@ -122,9 +122,10 @@ export function ChatView({
             <button
               onClick={onRequestReset}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+              aria-label="Sitzung abbrechen und neu starten"
               title="Sitzung abbrechen und neu starten"
             >
-              <svg className="size-3" viewBox="0 0 16 16" fill="currentColor">
+              <svg aria-hidden="true" className="size-3" viewBox="0 0 16 16" fill="currentColor">
                 <path fillRule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z" clipRule="evenodd" />
               </svg>
               Abbrechen
@@ -173,6 +174,7 @@ export function ChatView({
       {/* Unified input — always visible */}
       <ChatInput
         onSend={handleFreeTextSend}
+        onError={(msg) => setError(msg)}
         disabled={isSending}
         placeholder={inputPlaceholder}
         showAttachment={showWelcome}

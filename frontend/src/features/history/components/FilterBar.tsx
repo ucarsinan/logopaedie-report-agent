@@ -38,7 +38,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
 
   return (
     <div className="flex flex-wrap gap-3 items-end p-4 rounded-lg border border-border bg-card">
-      <div className="flex flex-col gap-1 min-w-[160px] flex-1">
+      <div className="flex flex-col gap-1 w-full sm:min-w-[160px] sm:w-auto sm:flex-1">
         <label className="text-xs text-muted-foreground">Pseudonym</label>
         <input
           type="text"
@@ -48,7 +48,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
           className="px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
         />
       </div>
-      <div className="flex flex-col gap-1 min-w-[160px]">
+      <div className="flex flex-col gap-1 w-full sm:min-w-[160px] sm:w-auto">
         <label className="text-xs text-muted-foreground">Berichttyp</label>
         <select
           value={reportType}

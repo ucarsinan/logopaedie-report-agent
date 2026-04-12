@@ -293,7 +293,7 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
             <button
               onClick={sendTpMessage}
               disabled={tpIsSending || !tpInput.trim()}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Senden
             </button>
@@ -335,7 +335,7 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
               <button
                 onClick={generateFromReport}
                 disabled={!selectedReportId}
-                className="px-5 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+                className="px-5 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Generieren
               </button>
@@ -528,7 +528,7 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
                     <button
                       onClick={saveEditedPlan}
                       disabled={isSaving || !tpSavedId}
-                      className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+                      className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isSaving ? "Speichert…" : "Speichern"}
                     </button>
@@ -553,7 +553,7 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
                   <button
                     onClick={savePlan}
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-lg border border-accent text-accent text-sm font-medium hover:bg-accent hover:text-white transition-colors disabled:opacity-40"
+                    className="px-4 py-2 rounded-lg border border-accent text-accent text-sm font-medium hover:bg-accent hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {isSaving ? "Speichert…" : "In Datenbank speichern"}
                   </button>
