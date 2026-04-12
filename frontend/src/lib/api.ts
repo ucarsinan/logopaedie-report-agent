@@ -1,46 +1,117 @@
+import type {
+  ChatResponse,
+  ReportData,
+  ReportSummary,
+  ReportDetail,
+  TherapyPlanSummary,
+  UploadedFile,
+} from "@/types";
+import type { TherapyPlanData } from "@/types/therapy-plan";
+import type { PhonologicalAnalysisData, ReportComparisonData } from "@/types/phonology";
+
+export { REPORT_TYPE_LABELS } from "@/types";
+export type { ReportSummary, ReportDetail, TherapyPlanSummary } from "@/types";
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export interface TherapyPlanSummary {
-  id: number;
-  created_at: string;
-  patient_pseudonym: string;
-  report_id: number | null;
+/* ═══════════════════════════════ Shared fetch helper ═════════════════════════ */
+
+async function fetchApi<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const res = await fetch(`${API}${path}`, init);
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail ?? res.statusText);
+  }
+  return res.json();
 }
 
-export interface ReportSummary {
-  id: number;
-  pseudonym: string;
-  report_type: string;
-  created_at: string;
-}
-
-export interface ReportDetail extends ReportSummary {
-  patient?: { pseudonym: string; age_group: string; gender: string | null };
-  diagnose?: { icd_10_codes: string[]; indikationsschluessel: string; diagnose_text: string };
-  anamnese?: string;
-  befund?: string;
-  therapieindikation?: string;
-  therapieziele?: string[];
-  empfehlung?: string;
-  empfehlungen?: string;
-  therapeutische_diagnostik?: string;
-  aktueller_krankheitsstatus?: string;
-  aktueller_therapiestand?: string;
-  weiteres_vorgehen?: string;
-  therapieverlauf_zusammenfassung?: string;
-  ergebnis?: string;
-  _db_id?: number;
-  [key: string]: unknown;
-}
-
-export const REPORT_TYPE_LABELS: Record<string, string> = {
-  befundbericht: "Befundbericht",
-  therapiebericht_kurz: "Therapiebericht (kurz)",
-  therapiebericht_lang: "Therapiebericht (lang)",
-  abschlussbericht: "Abschlussbericht",
-};
+/* ═══════════════════════════════ API Object ══════════════════════════════════ */
 
 export const api = {
+  health: () => fetchApi<{ status: string }>("/health"),
+
+  sessions: {
+    create: (mode?: string) =>
+      fetchApi<{ session_id: string; collected_data?: { greeting?: string } }>(
+        "/sessions",
+        {
+          method: "POST",
+          ...(mode
+            ? {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode }),
+              }
+            : {}),
+        },
+      ),
+
+    get: (id: string) =>
+      fetchApi<{
+        session_id: string;
+        status: string;
+        chat_history?: { role: string; content: string }[];
+        collected_data?: {
+          greeting?: string;
+          current_phase?: string;
+          collected_fields?: string[];
+        };
+        materials_consent?: boolean;
+      }>(`/sessions/${id}`),
+
+    chat: (id: string, message: string, mode?: string) =>
+      fetchApi<ChatResponse>(`/sessions/${id}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, ...(mode ? { mode } : {}) }),
+      }),
+
+    audio: (id: string, blob: Blob) => {
+      const formData = new FormData();
+      formData.append("audio_file", blob, "recording.webm");
+      return fetchApi<ChatResponse>(`/sessions/${id}/audio`, {
+        method: "POST",
+        body: formData,
+      });
+    },
+
+    upload: (id: string, file: File, materialType = "sonstiges") => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return fetchApi<UploadedFile>(
+        `/sessions/${id}/upload?material_type=${encodeURIComponent(materialType)}`,
+        { method: "POST", body: formData },
+      );
+    },
+
+    consent: (id: string, consent: boolean) =>
+      fetchApi<void>(`/sessions/${id}/materials-consent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent }),
+      }),
+
+    generate: (id: string) =>
+      fetchApi<ReportData & { _db_id?: number }>(`/sessions/${id}/generate`, {
+        method: "POST",
+      }),
+
+    report: (id: string) => fetchApi<ReportData>(`/sessions/${id}/report`),
+
+    newConversation: (id: string) =>
+      fetchApi<{ collected_data?: { greeting?: string } }>(
+        `/sessions/${id}/new-conversation`,
+        { method: "POST" },
+      ),
+
+    therapyPlan: (id: string) =>
+      fetchApi<TherapyPlanData>(`/sessions/${id}/therapy-plan`, {
+        method: "POST",
+      }),
+  },
+
   reports: {
     list: async (): Promise<ReportSummary[]> => {
       const res = await fetch(`${API}/reports`);
@@ -53,6 +124,7 @@ export const api = {
       return res.json();
     },
   },
+
   therapyPlans: {
     list: async (): Promise<TherapyPlanSummary[]> => {
       const res = await fetch(`${API}/therapy-plans`);
@@ -64,11 +136,19 @@ export const api = {
       if (!res.ok) throw new Error("Therapieplan nicht gefunden");
       return res.json();
     },
-    save: async (sessionId: string, planData: Record<string, unknown>, reportId?: number): Promise<TherapyPlanSummary> => {
+    save: async (
+      sessionId: string,
+      planData: Record<string, unknown>,
+      reportId?: number,
+    ): Promise<TherapyPlanSummary> => {
       const res = await fetch(`${API}/therapy-plans`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, plan_data: planData, report_id: reportId ?? null }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          plan_data: planData,
+          report_id: reportId ?? null,
+        }),
       });
       if (!res.ok) throw new Error("Fehler beim Speichern des Therapieplans");
       return res.json();
@@ -79,7 +159,54 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(plan),
       });
-      if (!res.ok) throw new Error("Fehler beim Aktualisieren des Therapieplans");
+      if (!res.ok)
+        throw new Error("Fehler beim Aktualisieren des Therapieplans");
     },
+  },
+
+  analysis: {
+    phonologicalText: (
+      pairs: { target: string; production: string }[],
+      ageGroup?: string,
+    ) =>
+      fetchApi<PhonologicalAnalysisData>(
+        `/analysis/phonological-text${ageGroup ? `?child_age=${encodeURIComponent(ageGroup)}` : ""}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pairs),
+        },
+      ),
+
+    compare: (initialReport: File, currentReport: File) => {
+      const formData = new FormData();
+      formData.append("initial_report", initialReport);
+      formData.append("current_report", currentReport);
+      return fetchApi<ReportComparisonData>("/analysis/compare", {
+        method: "POST",
+        body: formData,
+      });
+    },
+  },
+
+  suggest: (
+    text: string,
+    reportType?: string,
+    disorder?: string,
+    section?: string,
+  ) =>
+    fetchApi<{ suggestions: string[] }>("/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, report_type: reportType, disorder, section }),
+    }),
+
+  transcribe: (blob: Blob) => {
+    const form = new FormData();
+    form.append("audio_file", blob, "recording.webm");
+    return fetchApi<{ transcript?: string }>("/transcribe", {
+      method: "POST",
+      body: form,
+    });
   },
 };

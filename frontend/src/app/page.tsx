@@ -9,69 +9,22 @@ import type { StepConfig } from "@/components/WorkflowStepper";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
-import { ReportSummary, ReportDetail, REPORT_TYPE_LABELS, api as reportsApi } from "@/lib/api";
+import { api } from "@/lib/api";
+import { REPORT_TYPE_LABELS } from "@/types";
+import type {
+  ChatMsg,
+  UploadedFile,
+  ReportData,
+  AppPhase,
+  AppModule,
+  ReportSummary,
+  ReportDetail,
+  TherapyPlanSummary,
+} from "@/types";
+import type { PhonologicalAnalysisData, ReportComparisonData } from "@/types/phonology";
+import type { TherapyPlanData } from "@/types/therapy-plan";
+import { useAudioRecording } from "@/hooks/useAudioRecording";
 
-/* ═══════════════════════════════════ Types ═══════════════════════════════════ */
-
-interface ChatMsg {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface ChatResponse {
-  message: string;
-  phase: string;
-  is_anamnesis_complete: boolean;
-  collected_fields: string[];
-  missing_fields: string[];
-  transcript?: string;
-}
-
-interface UploadedFile {
-  filename: string;
-  material_type: string;
-  extracted_text: string;
-}
-
-interface DiagnoseData {
-  icd_10_codes: string[];
-  indikationsschluessel: string;
-  diagnose_text: string;
-}
-
-interface PatientData {
-  pseudonym: string;
-  age_group: string;
-  gender: string | null;
-}
-
-// Union report shape – fields vary by report_type
-interface ReportData {
-  report_type: string;
-  patient: PatientData;
-  diagnose: DiagnoseData;
-  // befundbericht
-  anamnese?: string;
-  befund?: string;
-  therapieindikation?: string;
-  therapieziele?: string[];
-  empfehlung?: string;
-  // therapiebericht_kurz
-  empfehlungen?: string;
-  // therapiebericht_lang
-  therapeutische_diagnostik?: string;
-  aktueller_krankheitsstatus?: string;
-  aktueller_therapiestand?: string;
-  weiteres_vorgehen?: string;
-  // abschlussbericht
-  therapieverlauf_zusammenfassung?: string;
-  ergebnis?: string;
-}
-
-type AppPhase = "pre-upload" | "chat" | "generating" | "preview";
-type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest" | "history";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const SESSION_STORAGE_KEY = "logopaedie_session_id";
 
 const REPORT_STEPS: StepConfig[] = [
@@ -116,61 +69,6 @@ const STEP_TO_PHASE: Record<number, AppPhase> = {
   3: "preview",
 };
 
-/* ═══════════════════════════ Feature Types ═══════════════════════════════ */
-
-interface PhonologicalProcess {
-  target_word: string;
-  production: string;
-  processes: string[];
-  severity: string;
-}
-
-interface PhonologicalAnalysisData {
-  items: PhonologicalProcess[];
-  summary: string;
-  age_appropriate: boolean;
-  recommended_focus: string[];
-}
-
-interface TherapyGoal {
-  icf_code: string;
-  goal_text: string;
-  methods: string[];
-  milestones: string[];
-  timeframe: string;
-}
-
-interface TherapyPhaseData {
-  phase_name: string;
-  goals: TherapyGoal[];
-  duration: string;
-}
-
-interface TherapyPlanData {
-  patient_pseudonym: string;
-  diagnose_text: string;
-  plan_phases: TherapyPhaseData[];
-  frequency: string;
-  total_sessions: number;
-  elternberatung: string;
-  haeusliche_uebungen: string[];
-}
-
-interface ComparisonItem {
-  category: string;
-  initial_finding: string;
-  current_finding: string;
-  change: string;
-  details: string;
-}
-
-interface ReportComparisonData {
-  items: ComparisonItem[];
-  overall_progress: string;
-  remaining_issues: string[];
-  recommendation: string;
-}
-
 /* ═══════════════════════════════ Main Component ═════════════════════════════ */
 
 export default function Home() {
@@ -211,11 +109,24 @@ export default function Home() {
   const [materialsConsent, setMaterialsConsent] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Audio recording
-  const [isRecording, setIsRecording] = useState(false);
+  // Audio recording (transcribe-to-text for input field)
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const { isRecording, startRecording, stopRecording } = useAudioRecording({
+    onResult: async (blob) => {
+      setIsTranscribing(true);
+      try {
+        const data = await api.transcribe(blob);
+        if (data.transcript) {
+          setInput((prev) => prev ? prev + " " + data.transcript! : data.transcript!);
+          chatInputRef.current?.focus();
+        }
+      } catch {
+        setError("Transkription fehlgeschlagen.");
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+  });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -243,13 +154,12 @@ export default function Home() {
       try {
         const storedId = localStorage.getItem(SESSION_STORAGE_KEY);
         if (storedId) {
-          const res = await fetch(`${API}/sessions/${storedId}`);
-          if (res.ok) {
-            const data = await res.json();
+          try {
+            const data = await api.sessions.get(storedId);
             setSessionId(data.session_id);
-            if (data.chat_history?.length > 0) {
+            if (data.chat_history?.length) {
               setMessages(
-                data.chat_history.map((m: { role: string; content: string }) => ({
+                data.chat_history.map((m) => ({
                   role: m.role as "user" | "assistant",
                   content: m.content,
                 }))
@@ -268,15 +178,14 @@ export default function Home() {
             }
             setPhase("chat");
             return;
+          } catch {
+            // Session abgelaufen oder nicht gefunden
+            localStorage.removeItem(SESSION_STORAGE_KEY);
           }
-          // Session abgelaufen oder nicht gefunden
-          localStorage.removeItem(SESSION_STORAGE_KEY);
         }
 
         // Neue Session erstellen
-        const res = await fetch(`${API}/sessions`, { method: "POST" });
-        if (!res.ok) throw new Error("Session konnte nicht erstellt werden.");
-        const data = await res.json();
+        const data = await api.sessions.create();
         setSessionId(data.session_id);
         localStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
         if (data.collected_data?.greeting) {
@@ -303,16 +212,7 @@ export default function Home() {
       setInput("");
 
       try {
-        const res = await fetch(`${API}/sessions/${sessionId}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text }),
-        });
-        if (!res.ok) {
-          const detail = await res.json().catch(() => null);
-          throw new Error(detail?.detail ?? "Fehler beim Senden.");
-        }
-        const data: ChatResponse = await res.json();
+        const data = await api.sessions.chat(sessionId, text);
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: data.message },
@@ -342,18 +242,7 @@ export default function Home() {
     setFreeText("");
 
     try {
-      const res = await fetch(`${API}/sessions/${sessionId}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: combinedMessage, mode: "quick_input" }),
-      });
-
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.detail ?? `HTTP ${res.status}`);
-      }
-
-      const data: ChatResponse = await res.json();
+      const data = await api.sessions.chat(sessionId, combinedMessage, "quick_input");
       setMessages((prev) => [...prev, { role: "assistant" as const, content: data.message }]);
       setCurrentPhase(data.phase);
       setIsAnamnesisComplete(data.is_anamnesis_complete);
@@ -367,50 +256,7 @@ export default function Home() {
     }
   }, [sessionId, freeText, freeTextReportType, isSending]);
 
-  // ── Audio recording ────────────────────────────────────────────────
-  async function startRecording() {
-    setError(null);
-    audioChunksRef.current = [];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        setIsTranscribing(true);
-        try {
-          const form = new FormData();
-          form.append("audio_file", blob, "recording.webm");
-          const res = await fetch(`${API}/transcribe`, { method: "POST", body: form });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.transcript) {
-              setInput((prev) => prev ? prev + " " + data.transcript : data.transcript);
-              chatInputRef.current?.focus();
-            }
-          }
-        } catch {
-          setError("Transkription fehlgeschlagen.");
-        } finally {
-          setIsTranscribing(false);
-        }
-      };
-      recorder.start();
-      setIsRecording(true);
-    } catch {
-      setError("Mikrofon-Zugriff verweigert oder nicht verfügbar.");
-    }
-  }
-
-  function stopRecording() {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
-  }
-
+  // ── Send audio as chat message ──────────────────────────────────────
   async function sendAudio(blob: Blob) {
     if (!sessionId) return;
     setIsSending(true);
@@ -420,19 +266,8 @@ export default function Home() {
       { role: "user", content: "🎤 Sprachnachricht wird verarbeitet…" },
     ]);
 
-    const formData = new FormData();
-    formData.append("audio_file", blob, "recording.webm");
-
     try {
-      const res = await fetch(`${API}/sessions/${sessionId}/audio`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.detail ?? "Audio-Verarbeitung fehlgeschlagen.");
-      }
-      const data: ChatResponse = await res.json();
+      const data = await api.sessions.audio(sessionId, blob);
       setMessages((prev) => [
         ...prev.slice(0, -1),
         { role: "user", content: data.transcript ?? "🎤 (Sprachnachricht)" },
@@ -455,19 +290,8 @@ export default function Home() {
     setError(null);
 
     for (const file of Array.from(files)) {
-      const formData = new FormData();
-      formData.append("file", file);
-
       try {
-        const res = await fetch(
-          `${API}/sessions/${sessionId}/upload?material_type=sonstiges`,
-          { method: "POST", body: formData }
-        );
-        if (!res.ok) {
-          const detail = await res.json().catch(() => null);
-          throw new Error(detail?.detail ?? `Upload von ${file.name} fehlgeschlagen.`);
-        }
-        const data = await res.json();
+        const data = await api.sessions.upload(sessionId, file);
         setUploadedFiles((prev) => [...prev, data]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload fehlgeschlagen.");
@@ -479,11 +303,7 @@ export default function Home() {
   async function handleConsentAndProceed() {
     if (!sessionId) return;
     try {
-      await fetch(`${API}/sessions/${sessionId}/materials-consent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consent: true }),
-      });
+      await api.sessions.consent(sessionId, true);
       setMaterialsConsent(true);
     } catch {
       // Proceed even if consent request fails — fallback to no-material mode
@@ -498,17 +318,10 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await fetch(`${API}/sessions/${sessionId}/generate`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.detail ?? "Berichtgenerierung fehlgeschlagen.");
-      }
-      const data = await res.json();
+      const data = await api.sessions.generate(sessionId);
       setReport(data);
-      if ((data as { _db_id?: number })._db_id) {
-        setSavedReportId((data as { _db_id: number })._db_id);
+      if (data._db_id) {
+        setSavedReportId(data._db_id);
       }
       setPhase("preview");
     } catch (err) {
@@ -523,14 +336,7 @@ export default function Home() {
     setIsSending(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/sessions/${sessionId}/new-conversation`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.detail ?? "Zurücksetzen fehlgeschlagen.");
-      }
-      const data = await res.json();
+      const data = await api.sessions.newConversation(sessionId);
       setMessages(
         data.collected_data?.greeting
           ? [{ role: "assistant", content: data.collected_data.greeting }]
@@ -561,12 +367,7 @@ export default function Home() {
     setIsSending(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/sessions`, { method: "POST" });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.detail ?? "Neue Session konnte nicht erstellt werden.");
-      }
-      const data = await res.json();
+      const data = await api.sessions.create();
       setSessionId(data.session_id);
       localStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
       setMessages(
@@ -698,22 +499,22 @@ export default function Home() {
 
         {/* ── Module: Phonological Analysis ─────────────────────── */}
         {activeModule === "phonology" && (
-          <PhonologicalAnalysisView api={API} />
+          <PhonologicalAnalysisView />
         )}
 
         {/* ── Module: Therapy Plan ──────────────────────────────── */}
         {activeModule === "therapy-plan" && (
-          <TherapyPlanView api={API} sessionId={sessionId} />
+          <TherapyPlanView sessionId={sessionId} />
         )}
 
         {/* ── Module: Report Comparison ─────────────────────────── */}
         {activeModule === "compare" && (
-          <ReportComparisonView api={API} />
+          <ReportComparisonView />
         )}
 
         {/* ── Module: Text Suggestions ──────────────────────────── */}
         {activeModule === "suggest" && (
-          <TextSuggestionView api={API} />
+          <TextSuggestionView />
         )}
 
         {/* ── Module: Report History ────────────────────────────── */}
@@ -772,7 +573,6 @@ export default function Home() {
                   onChange={setFreeText}
                   onSubmit={sendFreeText}
                   disabled={isSending}
-                  apiUrl={API}
                 />
               )}
               {isSending && (
@@ -1153,56 +953,22 @@ function QuickReplyBubbles({
 function DictationButton({
   onTranscript,
   disabled,
-  apiUrl,
 }: {
   onTranscript: (text: string) => void;
   disabled?: boolean;
-  apiUrl: string;
 }) {
-  const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const [isPending, setIsPending] = useState(false);
-
-  async function start() {
-    audioChunksRef.current = [];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        setIsPending(true);
-        try {
-          const form = new FormData();
-          form.append("audio_file", blob, "dictation.webm");
-          const res = await fetch(`${apiUrl}/transcribe`, {
-            method: "POST",
-            body: form,
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.transcript) onTranscript(data.transcript);
-          }
-        } finally {
-          setIsPending(false);
-        }
-      };
-      recorder.start();
-      setIsRecording(true);
-    } catch {
-      // mic access denied or unavailable — silently ignore
-    }
-  }
-
-  function stop() {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
-  }
+  const { isRecording, startRecording, stopRecording } = useAudioRecording({
+    onResult: async (blob) => {
+      setIsPending(true);
+      try {
+        const data = await api.transcribe(blob);
+        if (data.transcript) onTranscript(data.transcript);
+      } finally {
+        setIsPending(false);
+      }
+    },
+  });
 
   if (isPending) {
     return (
@@ -1214,7 +980,7 @@ function DictationButton({
 
   return isRecording ? (
     <button
-      onClick={stop}
+      onClick={stopRecording}
       className="px-3 py-2 rounded-lg bg-red-600 text-white motion-safe:animate-pulse text-sm"
       title="Aufnahme stoppen"
     >
@@ -1222,7 +988,7 @@ function DictationButton({
     </button>
   ) : (
     <button
-      onClick={start}
+      onClick={startRecording}
       disabled={disabled}
       className="px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border-strong text-foreground/80 transition-colors disabled:opacity-40 text-sm"
       title="Diktieren"
@@ -1279,7 +1045,6 @@ function FreeTextInput({
   onChange,
   onSubmit,
   disabled,
-  apiUrl,
 }: {
   reportType: string;
   onReportTypeChange: (type: string) => void;
@@ -1287,7 +1052,6 @@ function FreeTextInput({
   onChange: (v: string) => void;
   onSubmit: () => void;
   disabled: boolean;
-  apiUrl: string;
 }) {
   return (
     <div className="flex flex-col gap-3 px-2 pt-2 pb-1">
@@ -1323,7 +1087,6 @@ function FreeTextInput({
       />
       <div className="flex items-center justify-end gap-2">
         <DictationButton
-          apiUrl={apiUrl}
           disabled={disabled}
           onTranscript={(text) => onChange(value ? value + " " + text : text)}
         />
@@ -1481,7 +1244,7 @@ function ReportSection({
 
 /* ═══════════════════════════ Phonological Analysis View ══════════════════════ */
 
-function PhonologicalAnalysisView({ api }: { api: string }) {
+function PhonologicalAnalysisView() {
   const [wordPairs, setWordPairs] = useState<{ target: string; production: string }[]>([
     { target: "", production: "" },
   ]);
@@ -1529,13 +1292,8 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
     setStep(1); // Schritt: Analyse läuft
     setError(null);
     try {
-      const res = await fetch(`${api}/analysis/phonological-text?${childAge ? `child_age=${encodeURIComponent(childAge)}` : ""}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(valid),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Analyse fehlgeschlagen.");
-      setResult(await res.json());
+      const data = await api.analysis.phonologicalText(valid, childAge || undefined);
+      setResult(data);
       setStep(2); // Schritt: Ergebnis
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
@@ -1678,20 +1436,6 @@ function PhonologicalAnalysisView({ api }: { api: string }) {
 
 type TpMode = "select" | "chat" | "from-report" | "generating" | "plan";
 
-interface SavedReportSummary {
-  id: number;
-  pseudonym: string;
-  report_type: string;
-  created_at: string;
-}
-
-interface SavedPlanSummary {
-  id: number;
-  created_at: string;
-  patient_pseudonym: string;
-  report_id: number | null;
-}
-
 const THERAPY_PLAN_STEPS: StepConfig[] = [
   {
     label: "Eingabe",
@@ -1713,7 +1457,7 @@ const THERAPY_PLAN_STEPS: StepConfig[] = [
   },
 ];
 
-function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionId: string | null }) {
+function TherapyPlanView({ sessionId: _sessionId }: { sessionId: string | null }) {
   const [tpMode, setTpMode] = useState<TpMode>("select");
   const [tpSessionId, setTpSessionId] = useState<string | null>(null);
   const [tpReportId, setTpReportId] = useState<number | null>(null);
@@ -1725,8 +1469,8 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
   const [tpSavedId, setTpSavedId] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<TherapyPlanData | null>(null);
-  const [savedPlans, setSavedPlans] = useState<SavedPlanSummary[]>([]);
-  const [savedReports, setSavedReports] = useState<SavedReportSummary[]>([]);
+  const [savedPlans, setSavedPlans] = useState<TherapyPlanSummary[]>([]);
+  const [savedReports, setSavedReports] = useState<ReportSummary[]>([]);
   const [selectedReportId, setSelectedReportId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1738,15 +1482,9 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
 
   // Load saved plans and reports on mount
   useEffect(() => {
-    fetch(`${api}/therapy-plans`)
-      .then((r) => r.ok ? r.json() : [])
-      .then(setSavedPlans)
-      .catch(() => {});
-    fetch(`${api}/reports`)
-      .then((r) => r.ok ? r.json() : [])
-      .then(setSavedReports)
-      .catch(() => {});
-  }, [api]);
+    api.therapyPlans.list().then(setSavedPlans).catch(() => {});
+    api.reports.list().then(setSavedReports).catch(() => {});
+  }, []);
 
   // Auto-scroll mini-chat
   useEffect(() => {
@@ -1756,13 +1494,7 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
   async function startMiniChat() {
     setError(null);
     try {
-      const res = await fetch(`${api}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "therapy_plan" }),
-      });
-      if (!res.ok) throw new Error("Session konnte nicht erstellt werden.");
-      const data = await res.json();
+      const data = await api.sessions.create("therapy_plan");
       setTpSessionId(data.session_id);
       const greeting = data.collected_data?.greeting ?? "Guten Tag! Für welchen Patienten möchten Sie einen Therapieplan erstellen?";
       setTpMessages([{ role: "assistant", content: greeting }]);
@@ -1780,13 +1512,7 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
     setTpIsSending(true);
     setError(null);
     try {
-      const res = await fetch(`${api}/sessions/${tpSessionId}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Fehler.");
-      const data: ChatResponse = await res.json();
+      const data = await api.sessions.chat(tpSessionId, msg);
       setTpMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
       if (data.is_anamnesis_complete) setTpIsComplete(true);
     } catch (err) {
@@ -1800,9 +1526,7 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
     setTpMode("generating");
     setError(null);
     try {
-      const res = await fetch(`${api}/sessions/${sid}/therapy-plan`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Plan-Generierung fehlgeschlagen.");
-      const p = await res.json();
+      const p = await api.sessions.therapyPlan(sid);
       setPlan(p);
       if (rid) setTpReportId(rid);
       setTpMode("plan");
@@ -1818,13 +1542,7 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
     // Create a temporary session for plan generation using report context
     setError(null);
     try {
-      const sessionRes = await fetch(`${api}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "anamnesis" }),
-      });
-      if (!sessionRes.ok) throw new Error("Session konnte nicht erstellt werden.");
-      const sessionData = await sessionRes.json();
+      const sessionData = await api.sessions.create("anamnesis");
       const sid = sessionData.session_id;
       setTpSessionId(sid);
       await generateFromSession(sid, rid);
@@ -1838,17 +1556,11 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
     setIsSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${api}/therapy-plans`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: tpSessionId,
-          plan_data: plan,
-          report_id: tpReportId ?? null,
-        }),
-      });
-      if (!res.ok) throw new Error("Fehler beim Speichern.");
-      const saved: SavedPlanSummary = await res.json();
+      const saved = await api.therapyPlans.save(
+        tpSessionId,
+        plan as unknown as Record<string, unknown>,
+        tpReportId ?? undefined,
+      );
       setTpSavedId(saved.id);
       setSavedPlans((prev) => [saved, ...prev]);
     } catch (err) {
@@ -1863,12 +1575,10 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
     setIsSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${api}/therapy-plans/${tpSavedId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editData),
-      });
-      if (!res.ok) throw new Error("Fehler beim Speichern.");
+      await api.therapyPlans.update(
+        tpSavedId,
+        editData as unknown as Record<string, unknown>,
+      );
       setPlan(editData);
       setIsEditing(false);
     } catch (err) {
@@ -1881,11 +1591,9 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
   async function loadSavedPlan(id: number) {
     setError(null);
     try {
-      const res = await fetch(`${api}/therapy-plans/${id}`);
-      if (!res.ok) throw new Error("Plan nicht gefunden.");
-      const data = await res.json();
-      setPlan(data as TherapyPlanData);
-      setTpSavedId(data._db_id ?? id);
+      const data = await api.therapyPlans.get(id);
+      setPlan(data as unknown as TherapyPlanData);
+      setTpSavedId((data._db_id as number | undefined) ?? id);
       setTpMode("plan");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
@@ -1905,13 +1613,6 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
     setError(null);
     setSelectedReportId("");
   }
-
-  const REPORT_TYPE_LABELS: Record<string, string> = {
-    befundbericht: "Befundbericht",
-    therapiebericht_kurz: "Therapiebericht (kurz)",
-    therapiebericht_lang: "Therapiebericht (lang)",
-    abschlussbericht: "Abschlussbericht",
-  };
 
   return (
     <>
@@ -2303,7 +2004,7 @@ function TherapyPlanView({ api, sessionId: _sessionId }: { api: string; sessionI
 
 /* ═══════════════════════════ Report Comparison View ══════════════════════════ */
 
-function ReportComparisonView({ api }: { api: string }) {
+function ReportComparisonView() {
   const [result, setResult] = useState<ReportComparisonData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2342,13 +2043,9 @@ function ReportComparisonView({ api }: { api: string }) {
     setLoading(true);
     setStep(1); // Schritt: Vergleich läuft
     setError(null);
-    const formData = new FormData();
-    formData.append("initial_report", initialFile);
-    formData.append("current_report", currentFile);
     try {
-      const res = await fetch(`${api}/analysis/compare`, { method: "POST", body: formData });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Vergleich fehlgeschlagen.");
-      setResult(await res.json());
+      const data = await api.analysis.compare(initialFile, currentFile);
+      setResult(data);
       setStep(2); // Schritt: Ergebnis
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler.");
@@ -2457,7 +2154,7 @@ function ReportComparisonView({ api }: { api: string }) {
 
 /* ═══════════════════════════ Text Suggestion View ════════════════════════════ */
 
-function TextSuggestionView({ api }: { api: string }) {
+function TextSuggestionView() {
   const [text, setText] = useState("");
   const [reportType, setReportType] = useState("befundbericht");
   const [disorder, setDisorder] = useState("");
@@ -2479,13 +2176,7 @@ function TextSuggestionView({ api }: { api: string }) {
   async function fetchSuggestions(input: string) {
     setLoading(true);
     try {
-      const res = await fetch(`${api}/suggest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, report_type: reportType, disorder, section }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await api.suggest(input, reportType, disorder, section);
       setSuggestions(data.suggestions || []);
     } catch {
       /* ignore */
@@ -2670,7 +2361,7 @@ function HistoryView() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
-    reportsApi.reports
+    api.reports
       .list()
       .then(setReports)
       .catch((e: Error) => setFetchError(e.message))
@@ -2680,7 +2371,7 @@ function HistoryView() {
   useEffect(() => {
     if (selectedId === null) { setDetail(null); return; }
     setDetailLoading(true);
-    reportsApi.reports
+    api.reports
       .get(selectedId)
       .then(setDetail)
       .catch(() => setDetail(null))
