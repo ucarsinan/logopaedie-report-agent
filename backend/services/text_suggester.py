@@ -86,7 +86,7 @@ class TextSuggester:
                 "role": "user",
                 "content": (
                     f"Vervollständige den folgenden angefangenen Text:\n\n"
-                    f"\"{text}\"\n\n"
+                    f'"{text}"\n\n'
                     "Antworte ausschließlich mit dem JSON-Objekt."
                 ),
             }
@@ -94,6 +94,4 @@ class TextSuggester:
 
         data = await self._groq.json_completion(messages, system)
 
-        return TextSuggestion(
-            suggestions=data.get("suggestions", [])
-        )
+        return TextSuggestion(suggestions=data.get("suggestions", []))

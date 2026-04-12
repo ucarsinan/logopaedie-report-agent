@@ -62,8 +62,9 @@ class SOAPGenerator:
 
             patient = report.get("patient", {})
             if patient:
-                context_parts.append(f"\nPatient: {patient.get('pseudonym', 'Unbekannt')}, "
-                                     f"Alter: {patient.get('age_group', 'k.A.')}")
+                context_parts.append(
+                    f"\nPatient: {patient.get('pseudonym', 'Unbekannt')}, Alter: {patient.get('age_group', 'k.A.')}"
+                )
 
             diagnose = report.get("diagnose", {})
             if diagnose:

@@ -251,25 +251,39 @@ Setze Felder auf null wenn nicht im Gespräch erwähnt.
 Erfinde KEINE Informationen.
 """
 
-_REQUIRED_FIELDS_THERAPY_PLAN = [
-    "patient_pseudonym", "age_group", "diagnose_text", "hauptproblematik"
-]
+_REQUIRED_FIELDS_THERAPY_PLAN = ["patient_pseudonym", "age_group", "diagnose_text", "hauptproblematik"]
 
 _REQUIRED_FIELDS: dict[str, list[str]] = {
     "befundbericht": [
-        "patient_pseudonym", "age_group", "indikationsschluessel",
-        "anamnese_persoenlich", "diagnose_text",
+        "patient_pseudonym",
+        "age_group",
+        "indikationsschluessel",
+        "anamnese_persoenlich",
+        "diagnose_text",
     ],
     "therapiebericht_kurz": [
-        "patient_pseudonym", "age_group", "indikationsschluessel", "therapieziele",
+        "patient_pseudonym",
+        "age_group",
+        "indikationsschluessel",
+        "therapieziele",
     ],
     "therapiebericht_lang": [
-        "patient_pseudonym", "age_group", "indikationsschluessel",
-        "anamnese_persoenlich", "diagnose_text", "therapieinhalte", "fortschritte",
+        "patient_pseudonym",
+        "age_group",
+        "indikationsschluessel",
+        "anamnese_persoenlich",
+        "diagnose_text",
+        "therapieinhalte",
+        "fortschritte",
     ],
     "abschlussbericht": [
-        "patient_pseudonym", "age_group", "indikationsschluessel",
-        "therapieinhalte", "anzahl_sitzungen", "fortschritte", "kooperation",
+        "patient_pseudonym",
+        "age_group",
+        "indikationsschluessel",
+        "therapieinhalte",
+        "anzahl_sitzungen",
+        "fortschritte",
+        "kooperation",
     ],
 }
 
@@ -396,16 +410,13 @@ class AnamnesisEngine:
         extraction_messages = [
             {
                 "role": "user",
-                "content": "Gespräch:\n"
-                + "\n".join(f"{m['role']}: {m['content']}" for m in messages),
+                "content": "Gespräch:\n" + "\n".join(f"{m['role']}: {m['content']}" for m in messages),
             }
         ]
 
         try:
             if session.therapy_plan_mode:
-                data = await self._groq.json_completion(
-                    extraction_messages, _THERAPY_PLAN_EXTRACTION_PROMPT
-                )
+                data = await self._groq.json_completion(extraction_messages, _THERAPY_PLAN_EXTRACTION_PROMPT)
                 if data.get("collected_fields"):
                     session.collected_data["collected_fields"] = data["collected_fields"]
                 if data.get("is_complete"):

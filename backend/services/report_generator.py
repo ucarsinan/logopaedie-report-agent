@@ -37,7 +37,9 @@ logopädischen Bericht auf Deutsch.
 """
 
 # ── Report-type-specific prompts ────────────────────────────────────────────
-_BEFUNDBERICHT_PROMPT = _BASE_PROMPT + """
+_BEFUNDBERICHT_PROMPT = (
+    _BASE_PROMPT
+    + """
 ## Berichtstyp: Befundbericht (Erstbefund nach Diagnostik)
 
 Erstelle einen Befundbericht mit exakt dieser JSON-Struktur:
@@ -50,8 +52,11 @@ Erstelle einen Befundbericht mit exakt dieser JSON-Struktur:
   "empfehlung": "<Empfehlung bezüglich Therapiefrequenz, -dauer und weiterem Vorgehen>"
 }}
 """
+)
 
-_THERAPIEBERICHT_KURZ_PROMPT = _BASE_PROMPT + """
+_THERAPIEBERICHT_KURZ_PROMPT = (
+    _BASE_PROMPT
+    + """
 ## Berichtstyp: Therapiebericht kurz (Verordnungsbericht, Anhang A zu Anlage 1)
 
 Dies ist ein kurzer Verordnungsbericht mit Empfehlungen gemäß dem offiziellen
@@ -60,8 +65,11 @@ Formularvordruck. Erstelle den Bericht mit exakt dieser JSON-Struktur:
   "empfehlungen": "<Kurze, prägnante Empfehlungen zum weiteren therapeutischen Vorgehen. Beinhaltet: Einschätzung ob Fortführung der Therapie empfohlen wird, empfohlene Therapiefrequenz, ggf. Änderung des Therapieansatzes, Hinweise für den verordnenden Arzt. Max. 3-5 Sätze.>"
 }}
 """
+)
 
-_THERAPIEBERICHT_LANG_PROMPT = _BASE_PROMPT + """
+_THERAPIEBERICHT_LANG_PROMPT = (
+    _BASE_PROMPT
+    + """
 ## Berichtstyp: Therapiebericht lang (Bericht auf besondere Anforderung, Anhang C)
 
 Dies ist ein ausführlicher Therapiebericht gemäß §16 Abs. 7 HeilM-RL.
@@ -73,8 +81,11 @@ Erstelle den Bericht mit exakt dieser JSON-Struktur:
   "weiteres_vorgehen": "<Geplantes weiteres therapeutisches Vorgehen: neue Therapieziele, geplante Methoden, empfohlene Frequenz, Prognose.>"
 }}
 """
+)
 
-_ABSCHLUSSBERICHT_PROMPT = _BASE_PROMPT + """
+_ABSCHLUSSBERICHT_PROMPT = (
+    _BASE_PROMPT
+    + """
 ## Berichtstyp: Abschlussbericht (Ende einer Verordnungsreihe)
 
 Erstelle einen Abschlussbericht mit exakt dieser JSON-Struktur:
@@ -84,6 +95,7 @@ Erstelle einen Abschlussbericht mit exakt dieser JSON-Struktur:
   "empfehlung": "<Empfehlung: Entlassung aus der Therapie ODER Weiterführung mit neuer Verordnung. Begründung der Empfehlung. Ggf. Hinweise für den Alltag/Eigenübungen.>"
 }}
 """
+)
 
 _PROMPT_MAP = {
     "befundbericht": _BEFUNDBERICHT_PROMPT,

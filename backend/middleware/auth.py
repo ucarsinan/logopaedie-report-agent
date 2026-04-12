@@ -22,9 +22,7 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
     - When API_KEY is not configured (local dev)
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         api_key = os.environ.get("API_KEY")
 
         # Auth disabled if no API_KEY configured
@@ -37,13 +35,16 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
 
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            logger.warning("Missing or malformed Authorization header from %s", request.client.host if request.client else "unknown")
+            logger.warning(
+                "Missing or malformed Authorization header from %s",
+                request.client.host if request.client else "unknown",
+            )
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Authorization header required. Format: 'Bearer <API_KEY>'"},
             )
 
-        token = auth_header[len("Bearer "):]
+        token = auth_header[len("Bearer ") :]
         if token != api_key:
             logger.warning("Invalid API key from %s", request.client.host if request.client else "unknown")
             return JSONResponse(
