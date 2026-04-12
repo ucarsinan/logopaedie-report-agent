@@ -280,26 +280,25 @@ export function TherapyPlanModule({ sessionId: _sessionId }: TherapyPlanModulePr
             <div ref={tpChatEndRef} />
           </div>
 
-          {!tpIsComplete ? (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={tpInput}
-                onChange={(e) => setTpInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendTpMessage()}
-                placeholder="Ihre Antwort…"
-                disabled={tpIsSending}
-                className="flex-1 rounded-lg border border-border bg-surface px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
-              />
-              <button
-                onClick={sendTpMessage}
-                disabled={tpIsSending || !tpInput.trim()}
-                className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
-              >
-                Senden
-              </button>
-            </div>
-          ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={tpInput}
+              onChange={(e) => setTpInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendTpMessage()}
+              placeholder="Ihre Antwort…"
+              disabled={tpIsSending}
+              className="flex-1 rounded-lg border border-border bg-surface px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
+            />
+            <button
+              onClick={sendTpMessage}
+              disabled={tpIsSending || !tpInput.trim()}
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
+            >
+              Senden
+            </button>
+          </div>
+          {tpIsComplete && (
             <button
               onClick={() => tpSessionId && generateFromSession(tpSessionId)}
               className="self-start px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors"

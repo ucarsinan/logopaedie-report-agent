@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { UploadedFile } from "@/types";
-import { UploadIcon, FileIcon } from "@/components/icons";
+import { FileIcon } from "@/components/icons";
 
 interface PreUploadViewProps {
   uploadedFiles: UploadedFile[];
@@ -13,48 +13,6 @@ interface PreUploadViewProps {
   onProceed: () => void;
 }
 
-function DropZone({ onFiles }: { onFiles: (files: FileList) => void }) {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setIsDragOver(true);
-      }}
-      onDragLeave={() => setIsDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragOver(false);
-        if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
-      }}
-      onClick={() => inputRef.current?.click()}
-      className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-8 py-12 cursor-pointer transition-colors ${
-        isDragOver
-          ? "border-accent bg-accent-muted"
-          : "border-border-strong bg-surface/50 hover:bg-surface"
-      }`}
-    >
-      <UploadIcon />
-      <p className="text-sm text-muted-foreground">
-        Dateien hierher ziehen oder <span className="text-accent-text">durchsuchen</span>
-      </p>
-      <p className="text-xs text-muted">PDF, DOCX oder TXT &middot; Max. 10 MB</p>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept=".pdf,.docx,.txt"
-        onChange={(e) => {
-          if (e.target.files?.length) onFiles(e.target.files);
-        }}
-        className="hidden"
-      />
-    </div>
-  );
-}
-
 export function PreUploadView({
   uploadedFiles,
   consentChecked,
@@ -63,66 +21,110 @@ export function PreUploadView({
   onSkip,
   onProceed,
 }: PreUploadViewProps) {
-  return (
-    <>
-      {/* Drop zone */}
-      <DropZone onFiles={onFiles} />
+  const [isDragOver, setIsDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-      {/* File list */}
+  return (
+    <div className="mx-auto w-full max-w-lg space-y-4">
+      {/* Compact header */}
+      <div className="text-center">
+        <h2 className="text-base font-semibold text-foreground">
+          Vorhandene Unterlagen
+        </h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Laden Sie frühere Berichte oder Diagnostik hoch — der Assistent berücksichtigt diese im Gespräch.
+        </p>
+      </div>
+
+      {/* Compact drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={[
+          "flex items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 cursor-pointer transition-colors",
+          isDragOver
+            ? "border-accent bg-accent/5"
+            : "border-border-strong bg-surface/50 hover:bg-surface hover:border-border-strong/80",
+        ].join(" ")}
+      >
+        <svg className="size-6 shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+        </svg>
+        <div>
+          <p className="text-sm text-foreground">
+            Dateien hierher ziehen oder <span className="text-accent font-medium">durchsuchen</span>
+          </p>
+          <p className="text-xs text-muted-foreground">PDF, DOCX oder TXT · Max. 10 MB</p>
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept=".pdf,.docx,.txt"
+          onChange={(e) => {
+            if (e.target.files?.length) onFiles(e.target.files);
+          }}
+          className="hidden"
+        />
+      </div>
+
+      {/* Uploaded files */}
       {uploadedFiles.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
-            Hochgeladene Dateien
-          </h2>
+        <div className="space-y-1.5">
           {uploadedFiles.map((f, i) => (
             <div
               key={i}
-              className="flex items-center gap-3 rounded-lg bg-surface border border-border px-4 py-3 text-sm"
+              className="flex items-center gap-2.5 rounded-lg bg-surface border border-border px-3 py-2 text-sm"
             >
               <FileIcon />
-              <span className="text-foreground">{f.filename}</span>
-              <span className="text-xs text-muted ml-auto">
-                {f.extracted_text.length} Zeichen extrahiert
+              <span className="flex-1 truncate text-foreground">{f.filename}</span>
+              <span className="text-xs text-muted-foreground shrink-0">
+                {f.extracted_text.length} Zeichen
               </span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Consent checkbox */}
+      {/* Consent + actions */}
       {uploadedFiles.length > 0 && (
-        <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-border px-4 py-3 bg-surface hover:border-accent transition-colors">
+        <label className="flex items-start gap-2.5 cursor-pointer rounded-lg border border-border px-3 py-2.5 bg-surface hover:border-accent/50 transition-colors">
           <input
             type="checkbox"
             checked={consentChecked}
             onChange={(e) => onConsentChange(e.target.checked)}
-            className="mt-0.5 accent-accent h-4 w-4 shrink-0"
+            className="mt-0.5 accent-accent size-4 shrink-0"
           />
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground leading-relaxed">
             Ich erteile die Einwilligung, dass die hochgeladenen Unterlagen
             für die Gesprächsführung und Berichterstellung verwendet werden.
           </span>
         </label>
       )}
 
-      {/* Action buttons */}
-      <div className="flex gap-3">
+      <div className="flex gap-2.5 justify-center">
         <button
           onClick={onSkip}
-          className="px-5 py-2.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
+          className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Ohne Unterlagen starten
+          Ohne Unterlagen fortfahren
         </button>
         {uploadedFiles.length > 0 && (
           <button
             onClick={onProceed}
             disabled={!consentChecked}
-            className="px-5 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors btn-accent-glow disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Mit Einwilligung fortfahren {"\u2192"}
+            Weiter
           </button>
         )}
       </div>
-    </>
+    </div>
   );
 }

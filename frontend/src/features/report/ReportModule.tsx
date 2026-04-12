@@ -72,7 +72,6 @@ export function ReportModule({
   setSessionId,
   messages,
   setMessages,
-  error,
   setError,
   isSending,
   setIsSending,
@@ -84,13 +83,10 @@ export function ReportModule({
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState("greeting");
   const [inputMode, setInputMode] = useState<"select" | "free" | "guided">("select");
-  const [freeText, setFreeText] = useState("");
-  const [freeTextReportType, setFreeTextReportType] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [report, setReport] = useState<ReportData | null>(null);
   const [savedReportId, setSavedReportId] = useState<number | null>(null);
   const [consentChecked, setConsentChecked] = useState(false);
-  const [materialsConsent, setMaterialsConsent] = useState(false);
 
   // Restore session on mount
   useEffect(() => {
@@ -116,8 +112,10 @@ export function ReportModule({
             if (data.collected_data?.collected_fields) {
               setCollectedFields(data.collected_data.collected_fields);
             }
+            if (data.collected_data?.missing_fields) {
+              setMissingFields(data.collected_data.missing_fields);
+            }
             if (data.materials_consent) {
-              setMaterialsConsent(true);
               setConsentChecked(true);
             }
             setPhase("chat");
@@ -160,7 +158,6 @@ export function ReportModule({
     if (!sessionId) return;
     try {
       await api.sessions.consent(sessionId, true);
-      setMaterialsConsent(true);
     } catch {
       // Proceed even if consent request fails
     }
@@ -194,11 +191,8 @@ export function ReportModule({
     setMissingFields([]);
     setCurrentPhase("greeting");
     setInputMode("select");
-    setFreeText("");
-    setFreeTextReportType("");
     setUploadedFiles([]);
     setConsentChecked(false);
-    setMaterialsConsent(false);
     setReport(null);
     setSavedReportId(null);
   }, []);
@@ -251,13 +245,9 @@ export function ReportModule({
           setCurrentPhase={setCurrentPhase}
           inputMode={inputMode}
           setInputMode={setInputMode}
-          freeText={freeText}
-          setFreeText={setFreeText}
-          freeTextReportType={freeTextReportType}
-          setFreeTextReportType={setFreeTextReportType}
-          error={error}
           setError={setError}
           onGenerateReport={generateReport}
+          onRequestReset={onRequestReset}
         />
       )}
 
@@ -290,14 +280,14 @@ export function ReportModule({
             <div className="flex gap-4">
               {savedReportId && (
                 <Link
-                  href={`/berichte/${savedReportId}`}
+                  href="/module/history"
                   className="text-sm text-muted-foreground hover:underline"
                 >
                   Bericht dauerhaft ansehen {"\u2192"}
                 </Link>
               )}
               <Link
-                href="/berichte"
+                href="/module/history"
                 className="text-sm text-muted-foreground hover:underline"
               >
                 Alle Berichte

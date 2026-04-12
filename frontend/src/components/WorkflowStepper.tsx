@@ -1,7 +1,4 @@
-// frontend/src/components/WorkflowStepper.tsx
 "use client";
-
-import React, { useState, useEffect } from "react";
 
 export interface StepConfig {
   label: string;
@@ -17,125 +14,46 @@ interface WorkflowStepperProps {
 }
 
 export function WorkflowStepper({ steps, currentStep, onStepClick }: WorkflowStepperProps) {
-  const [infoDismissed, setInfoDismissed] = useState(false);
-
-  // Re-show info box whenever the step changes
-  useEffect(() => {
-    setInfoDismissed(false);
-  }, [currentStep]);
-
   return (
-    <div style={{ marginBottom: "16px" }}>
-      {/* Step-Reihe */}
-      <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
-        {steps.map((step, i) => {
-          const isDone = i < currentStep;
-          const isActive = i === currentStep;
+    <nav className="flex items-center gap-1.5 text-xs font-medium select-none">
+      {steps.map((step, i) => {
+        const isDone = i < currentStep;
+        const isActive = i === currentStep;
+        const clickable = isDone && !!onStepClick;
 
-          return (
-            <React.Fragment key={i}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                <button
-                  onClick={() => isDone && onStepClick?.(i)}
-                  disabled={!isDone || !onStepClick}
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "11px",
-                    fontWeight: "700",
-                    border: isDone
-                      ? "2px solid var(--accent)"
-                      : isActive
-                      ? "none"
-                      : "2px solid var(--border)",
-                    background: isActive ? "var(--accent)" : "transparent",
-                    color: isDone ? "var(--accent)" : isActive ? "white" : "var(--muted-foreground)",
-                    opacity: !isDone && !isActive ? 0.4 : 1,
-                    cursor: isDone && onStepClick ? "pointer" : "default",
-                    transition: "all 0.15s ease",
-                  }}
-                  title={isDone && onStepClick ? `Zurück zu: ${step.label}` : undefined}
-                >
-                  {isDone ? "✓" : i + 1}
-                </button>
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: isActive ? "600" : "400",
-                    color: isActive ? "var(--accent)" : "var(--muted-foreground)",
-                    opacity: !isDone && !isActive ? 0.4 : 1,
-                    textDecoration: isDone ? "line-through" : "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {step.label}
-                </span>
-              </div>
-              {i < steps.length - 1 && (
-                <div
-                  style={{
-                    flex: 1,
-                    height: "2px",
-                    background: i < currentStep ? "var(--accent)" : "var(--border)",
-                    margin: "0 6px",
-                    marginBottom: "14px",
-                    opacity: i >= currentStep ? 0.3 : 1,
-                    transition: "background 0.2s ease",
-                  }}
-                />
+        return (
+          <div key={i} className="flex items-center gap-1.5">
+            {i > 0 && (
+              <span className={`text-[10px] ${isDone ? "text-accent" : "text-border-strong"}`}>
+                /
+              </span>
+            )}
+            <button
+              onClick={() => clickable && onStepClick?.(i)}
+              disabled={!clickable}
+              className={[
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 transition-all duration-150",
+                isActive && "bg-accent text-white",
+                isDone && "text-accent hover:bg-accent/10 cursor-pointer",
+                !isDone && !isActive && "text-muted-foreground/40 cursor-default",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {isDone && (
+                <svg className="size-3" viewBox="0 0 16 16" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
               )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-
-      {/* Info-Box */}
-      {!infoDismissed && (
-        <div
-          style={{
-            borderLeft: `3px solid ${steps[currentStep]?.infoVariant === "success" ? "#4ade80" : "var(--accent)"}`,
-            border: "1px solid var(--border)",
-            borderLeftWidth: "3px",
-            borderRadius: "0 6px 6px 0",
-            padding: "8px 12px",
-            background: "var(--surface)",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "8px",
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: "13px", fontWeight: "600", margin: "0 0 2px 0", color: "var(--foreground)" }}>
-              {steps[currentStep]?.infoTitle}
-            </p>
-            <p style={{ fontSize: "11px", color: "var(--muted-foreground)", margin: 0, lineHeight: "1.5" }}>
-              {steps[currentStep]?.infoText}
-            </p>
+              {step.label}
+            </button>
           </div>
-          <button
-            onClick={() => setInfoDismissed(true)}
-            style={{
-              flexShrink: 0,
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--muted-foreground)",
-              fontSize: "14px",
-              lineHeight: 1,
-              padding: "0 2px",
-              marginTop: "1px",
-            }}
-            title="Hinweis ausblenden"
-            aria-label="Hinweis ausblenden"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-    </div>
+        );
+      })}
+    </nav>
   );
 }

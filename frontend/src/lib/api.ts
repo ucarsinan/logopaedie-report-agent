@@ -61,6 +61,7 @@ export const api = {
           greeting?: string;
           current_phase?: string;
           collected_fields?: string[];
+          missing_fields?: string[];
         };
         materials_consent?: boolean;
       }>(`/sessions/${id}`),
