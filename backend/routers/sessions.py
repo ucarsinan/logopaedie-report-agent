@@ -87,11 +87,13 @@ async def get_session(session_id: str) -> SessionInfo:
     session = store.get(session_id)
     if not session:
         raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
+    data = dict(session.collected_data)
+    data["missing_fields"] = anamnesis_engine._compute_missing_fields(session)
     return SessionInfo(
         session_id=session.session_id,
         status=session.status,
         report_type=session.report_type,
-        collected_data=session.collected_data,
+        collected_data=data,
         chat_history=session.chat_history,
     )
 
