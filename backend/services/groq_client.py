@@ -93,7 +93,7 @@ class GroqService:
                     },
                 ],
             )
-            raw = response.choices[0].message.content
+            raw = response.choices[0].message.content or ""
             data = json.loads(raw)
             return MedicalReport(**data)
         except GroqRateLimitError as e:
@@ -156,6 +156,7 @@ class GroqService:
             temperature=0,
         )
         try:
-            return json.loads(raw)
+            data: dict = json.loads(raw)
+            return data
         except json.JSONDecodeError as e:
             raise ReportGenerationError(f"LLM hat kein gültiges JSON zurückgegeben: {e}") from e

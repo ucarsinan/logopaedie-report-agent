@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from models.schemas import ReportComparison
+from models.schemas import ComparisonItem, ReportComparison
 from services.file_processor import extract_text
 from services.groq_client import GroqService
 
@@ -80,13 +80,13 @@ class ReportComparator:
 
         return ReportComparison(
             items=[
-                {
-                    "category": item.get("category", ""),
-                    "initial_finding": item.get("initial_finding", ""),
-                    "current_finding": item.get("current_finding", ""),
-                    "change": item.get("change", "unverändert"),
-                    "details": item.get("details", ""),
-                }
+                ComparisonItem(
+                    category=item.get("category", ""),
+                    initial_finding=item.get("initial_finding", ""),
+                    current_finding=item.get("current_finding", ""),
+                    change=item.get("change", "unverändert"),
+                    details=item.get("details", ""),
+                )
                 for item in data.get("items", [])
             ],
             overall_progress=data.get("overall_progress", ""),

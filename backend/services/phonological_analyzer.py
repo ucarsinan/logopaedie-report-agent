@@ -6,7 +6,7 @@ phonological processes (Vorverlagerung, Rückverlagerung, etc.).
 
 from __future__ import annotations
 
-from models.schemas import PhonologicalAnalysis
+from models.schemas import PhonologicalAnalysis, PhonologicalProcess
 from services.groq_client import GroqService
 
 _SYSTEM_PROMPT = """\
@@ -90,10 +90,7 @@ class PhonologicalAnalyzer:
         child_age: str | None = None,
     ) -> PhonologicalAnalysis:
         """Analyze phonological processes from target/production word pairs."""
-        pairs_text = "\n".join(
-            f"- Zielwort: \"{p['target']}\" → Produktion: \"{p['production']}\""
-            for p in word_pairs
-        )
+        pairs_text = "\n".join(f'- Zielwort: "{p["target"]}" → Produktion: "{p["production"]}"' for p in word_pairs)
 
         age_info = f"\nAlter des Kindes: {child_age}" if child_age else ""
 
@@ -111,12 +108,12 @@ class PhonologicalAnalyzer:
 
         return PhonologicalAnalysis(
             items=[
-                {
-                    "target_word": item.get("target_word", ""),
-                    "production": item.get("production", ""),
-                    "processes": item.get("processes", []),
-                    "severity": item.get("severity", "leicht"),
-                }
+                PhonologicalProcess(
+                    target_word=item.get("target_word", ""),
+                    production=item.get("production", ""),
+                    processes=item.get("processes", []),
+                    severity=item.get("severity", "leicht"),
+                )
                 for item in data.get("items", [])
             ],
             summary=data.get("summary", ""),

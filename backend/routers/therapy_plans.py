@@ -5,7 +5,7 @@ import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from database import get_db
 from dependencies import therapy_planner
@@ -61,6 +61,7 @@ async def save_therapy_plan(req: TherapyPlanSaveRequest, db: Session = Depends(g
     db.add(record)
     db.commit()
     db.refresh(record)
+    assert record.id is not None
 
     return TherapyPlanSummary(
         id=record.id,
@@ -72,7 +73,7 @@ async def save_therapy_plan(req: TherapyPlanSaveRequest, db: Session = Depends(g
 
 @router.get("/therapy-plans")
 async def list_therapy_plans(db: Session = Depends(get_db)) -> list[TherapyPlanSummary]:
-    records = db.exec(select(TherapyPlanRecord).order_by(TherapyPlanRecord.created_at.desc())).all()
+    records = db.exec(select(TherapyPlanRecord).order_by(col(TherapyPlanRecord.created_at).desc())).all()
     return [
         TherapyPlanSummary(
             id=r.id,
@@ -81,6 +82,7 @@ async def list_therapy_plans(db: Session = Depends(get_db)) -> list[TherapyPlanS
             report_id=r.report_id,
         )
         for r in records
+        if r.id is not None
     ]
 
 
@@ -89,7 +91,7 @@ async def get_therapy_plan(plan_id: int, db: Session = Depends(get_db)) -> dict:
     record = db.get(TherapyPlanRecord, plan_id)
     if not record:
         raise HTTPException(status_code=404, detail="Therapieplan nicht gefunden.")
-    plan = json.loads(record.plan_data)
+    plan: dict = json.loads(record.plan_data)
     plan["_db_id"] = record.id
     plan["created_at"] = record.created_at.isoformat()
     return plan
@@ -104,6 +106,7 @@ async def update_therapy_plan(plan_id: int, plan: dict, db: Session = Depends(ge
     db.add(record)
     db.commit()
     db.refresh(record)
+    assert record.id is not None
     return TherapyPlanSummary(
         id=record.id,
         created_at=record.created_at.isoformat(),

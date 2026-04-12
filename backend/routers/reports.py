@@ -46,11 +46,7 @@ async def list_reports(
     total = db.exec(count_query).one()
 
     # Apply pagination
-    records = db.exec(
-        query.order_by(col(ReportRecord.created_at).desc())
-        .offset((page - 1) * limit)
-        .limit(limit)
-    ).all()
+    records = db.exec(query.order_by(col(ReportRecord.created_at).desc()).offset((page - 1) * limit).limit(limit)).all()
 
     return {
         "items": [
@@ -72,10 +68,7 @@ async def list_reports(
 async def report_stats(db: Session = Depends(get_db)) -> dict:
     total = db.exec(select(func.count()).select_from(ReportRecord)).one()
 
-    type_counts_raw = db.exec(
-        select(ReportRecord.report_type, func.count())
-        .group_by(ReportRecord.report_type)
-    ).all()
+    type_counts_raw = db.exec(select(ReportRecord.report_type, func.count()).group_by(ReportRecord.report_type)).all()
     by_type = {row[0]: row[1] for row in type_counts_raw}
 
     latest = db.exec(select(func.max(ReportRecord.created_at))).one()
@@ -92,7 +85,7 @@ async def get_persisted_report(report_id: int, db: Session = Depends(get_db)) ->
     record = db.get(ReportRecord, report_id)
     if not record:
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden.")
-    content = json.loads(record.content_json)
+    content: dict = json.loads(record.content_json)
     content["_db_id"] = record.id
     content["created_at"] = record.created_at.isoformat()
     return content

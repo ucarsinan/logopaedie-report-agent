@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from models.schemas import TherapyPlan
+from models.schemas import TherapyGoal, TherapyPhase, TherapyPlan
 from services.groq_client import GroqService
 from services.session_store import Session
 
@@ -144,20 +144,20 @@ class TherapyPlanner:
             patient_pseudonym=result.get("patient_pseudonym", data.get("patient_pseudonym", "Patient")),
             diagnose_text=result.get("diagnose_text", ""),
             plan_phases=[
-                {
-                    "phase_name": phase.get("phase_name", ""),
-                    "duration": phase.get("duration", ""),
-                    "goals": [
-                        {
-                            "icf_code": g.get("icf_code", ""),
-                            "goal_text": g.get("goal_text", ""),
-                            "methods": g.get("methods", []),
-                            "milestones": g.get("milestones", []),
-                            "timeframe": g.get("timeframe", ""),
-                        }
+                TherapyPhase(
+                    phase_name=phase.get("phase_name", ""),
+                    duration=phase.get("duration", ""),
+                    goals=[
+                        TherapyGoal(
+                            icf_code=g.get("icf_code", ""),
+                            goal_text=g.get("goal_text", ""),
+                            methods=g.get("methods", []),
+                            milestones=g.get("milestones", []),
+                            timeframe=g.get("timeframe", ""),
+                        )
                         for g in phase.get("goals", [])
                     ],
-                }
+                )
                 for phase in result.get("plan_phases", [])
             ],
             frequency=result.get("frequency", ""),

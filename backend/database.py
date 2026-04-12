@@ -9,7 +9,7 @@ import models.report_record
 import models.soap_record
 import models.therapy_plan_record  # noqa: F401
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL", "sqlite:///./reports.db")
+DATABASE_URL: str = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "sqlite:///./reports.db"
 
 # Neon uses postgres:// — SQLAlchemy requires postgresql://
 if DATABASE_URL.startswith("postgres://"):

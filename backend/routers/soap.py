@@ -26,12 +26,12 @@ async def generate_soap_from_session(
     soap_gen: SOAPGenerator = Depends(get_soap_generator),
     db: Session = Depends(get_db),
 ):
-    session = await _store.get(session_id)
+    session = _store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session nicht gefunden.")
 
-    collected_data = session.get("collected_data", {})
-    report = session.get("generated_report")
+    collected_data = session.collected_data
+    report = session.generated_report
 
     result = await soap_gen.generate_from_data(collected_data, report)
 
