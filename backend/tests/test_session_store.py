@@ -2,7 +2,7 @@
 
 import json
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from services.session_store import Session, SessionStore
 
@@ -36,7 +36,7 @@ def _make_store():
 
 
 def test_create_and_get():
-    store, fake, patcher = _make_store()
+    store, _fake, patcher = _make_store()
     try:
         session = store.create()
         assert isinstance(session, Session)
@@ -48,7 +48,7 @@ def test_create_and_get():
 
 
 def test_get_nonexistent():
-    store, fake, patcher = _make_store()
+    store, _fake, patcher = _make_store()
     try:
         assert store.get("does-not-exist") is None
     finally:

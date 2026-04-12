@@ -10,13 +10,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from database import get_db
+from dependencies import anamnesis_engine, groq_service, report_generator
 from exceptions import (
     FileTooLargeError,
-    RateLimitError,
     SessionNotFoundError,
-    UnsupportedFileTypeError,
 )
-from middleware.rate_limiter import limiter, CHAT_LIMIT, AUDIO_LIMIT, GENERATE_LIMIT
+from middleware.rate_limiter import AUDIO_LIMIT, CHAT_LIMIT, GENERATE_LIMIT, limiter
+from models.report_record import ReportRecord
 from models.schemas import (
     ChatMessage,
     ChatRequest,
@@ -24,11 +25,8 @@ from models.schemas import (
     SessionInfo,
     UploadedMaterial,
 )
-from services.session_store import store
 from services.file_processor import extract_text
-from database import get_db
-from models.report_record import ReportRecord
-from dependencies import anamnesis_engine, groq_service, report_generator
+from services.session_store import store
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +65,7 @@ async def create_session(req: CreateSessionRequest | None = None) -> SessionInfo
             "Willkommen! Ich bin bereit, Ihnen bei der Erstellung des Therapieplans zu helfen. "
             "Bitte nennen Sie das Pseudonym des Patienten."
             if (req and req.mode == "therapy_plan")
-            else
-            "Willkommen! Ich bin bereit, Ihnen bei der Dokumentation zu helfen. "
+            else "Willkommen! Ich bin bereit, Ihnen bei der Dokumentation zu helfen. "
             "Bitte beschreiben Sie den Patienten und den Therapiebereich."
         )
     store.save(session)
@@ -118,9 +115,7 @@ async def new_conversation(session_id: str) -> SessionInfo:
     try:
         greeting = await anamnesis_engine.get_contextual_greeting(session)
     except Exception:
-        greeting = (
-            "Willkommen zurück! Bitte beschreiben Sie den Berichtstyp für diese Sitzung."
-        )
+        greeting = "Willkommen zurück! Bitte beschreiben Sie den Berichtstyp für diese Sitzung."
         session.chat_history.append(ChatMessage(role="assistant", content=greeting))
 
     store.save(session)
@@ -270,7 +265,7 @@ async def generate_report(request: Request, session_id: str, db: Session = Depen
         session.generated_report["_db_id"] = record.id
 
         return session.generated_report
-    except Exception as e:
+    except Exception:
         session.status = "materials"  # Allow retry
         store.save(session)
         raise

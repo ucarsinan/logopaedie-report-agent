@@ -6,9 +6,9 @@ import tempfile
 
 from fastapi import APIRouter, File, Request, UploadFile
 
-from middleware.rate_limiter import limiter, ANALYSIS_LIMIT
-from models.schemas import PhonologicalAnalysis, ReportComparison
 from dependencies import phonological_analyzer, report_comparator
+from middleware.rate_limiter import ANALYSIS_LIMIT, limiter
+from models.schemas import PhonologicalAnalysis, ReportComparison
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,7 @@ async def analyze_phonological(
             tmp.write(production_content)
             production_path = tmp.name
 
-        return await phonological_analyzer.analyze_audio(
-            target_path, production_path, child_age
-        )
+        return await phonological_analyzer.analyze_audio(target_path, production_path, child_age)
     finally:
         for p in (target_path, production_path):
             if p and os.path.exists(p):

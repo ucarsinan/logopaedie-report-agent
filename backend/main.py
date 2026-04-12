@@ -12,13 +12,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from database import create_db_and_tables
 from exceptions import (
     AIServiceError,
-    AppError,
     FileTooLargeError,
     ModelExhaustedError,
     RateLimitError,
@@ -50,10 +48,12 @@ app = FastAPI(title="Logopädie Report Agent API", lifespan=lifespan)
 # Attach rate limiter state
 app.state.limiter = limiter
 
-_allowed_origins = list({
-    *os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
-    "http://localhost:3000",
-})
+_allowed_origins = list(
+    {
+        *os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+        "http://localhost:3000",
+    }
+)
 
 # Auth middleware (must be added before CORS to process requests)
 app.add_middleware(APIKeyAuthMiddleware)
@@ -104,7 +104,9 @@ async def transcription_error_handler(request: Request, exc: TranscriptionError)
 @app.exception_handler(AIServiceError)
 async def ai_service_error_handler(request: Request, exc: AIServiceError) -> JSONResponse:
     logger.error("AI service error: %s", exc)
-    return JSONResponse(status_code=500, content={"detail": "KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut."})
+    return JSONResponse(
+        status_code=500, content={"detail": "KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut."}
+    )
 
 
 @app.exception_handler(FileTooLargeError)

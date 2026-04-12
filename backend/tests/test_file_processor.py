@@ -2,13 +2,13 @@
 
 import pytest
 
-from services.file_processor import extract_text
 from exceptions import FileTooLargeError, UnsupportedFileTypeError
+from services.file_processor import extract_text
 
 
 @pytest.mark.asyncio
 async def test_extract_txt():
-    content = "Dies ist ein Testbericht.".encode("utf-8")
+    content = b"Dies ist ein Testbericht."
     result = await extract_text(content, "test.txt", "text/plain")
     assert result == "Dies ist ein Testbericht."
 

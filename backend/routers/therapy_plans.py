@@ -7,12 +7,12 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
+from database import get_db
+from dependencies import therapy_planner
 from exceptions import SessionNotFoundError
 from models.schemas import TherapyPlan, TherapyPlanSaveRequest, TherapyPlanSummary
-from services.session_store import store
-from database import get_db
 from models.therapy_plan_record import TherapyPlanRecord
-from dependencies import therapy_planner
+from services.session_store import store
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,7 @@ async def generate_therapy_plan(session_id: str) -> TherapyPlan:
 
 
 @router.post("/therapy-plans", status_code=201)
-async def save_therapy_plan(
-    req: TherapyPlanSaveRequest, db: Session = Depends(get_db)
-) -> TherapyPlanSummary:
+async def save_therapy_plan(req: TherapyPlanSaveRequest, db: Session = Depends(get_db)) -> TherapyPlanSummary:
     _validate_session_id(req.session_id)
     session = store.get(req.session_id)
     if not session:
@@ -47,9 +45,8 @@ async def save_therapy_plan(
 
     if req.plan_data:
         plan_json = json.dumps(req.plan_data, ensure_ascii=False)
-        patient_pseudonym = (
-            req.plan_data.get("patient_pseudonym")
-            or session.collected_data.get("patient_pseudonym", "Unbekannt")
+        patient_pseudonym = req.plan_data.get("patient_pseudonym") or session.collected_data.get(
+            "patient_pseudonym", "Unbekannt"
         )
     else:
         plan = await therapy_planner.generate_plan(session)
@@ -75,9 +72,7 @@ async def save_therapy_plan(
 
 @router.get("/therapy-plans")
 async def list_therapy_plans(db: Session = Depends(get_db)) -> list[TherapyPlanSummary]:
-    records = db.exec(
-        select(TherapyPlanRecord).order_by(TherapyPlanRecord.created_at.desc())
-    ).all()
+    records = db.exec(select(TherapyPlanRecord).order_by(TherapyPlanRecord.created_at.desc())).all()
     return [
         TherapyPlanSummary(
             id=r.id,
@@ -101,9 +96,7 @@ async def get_therapy_plan(plan_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/therapy-plans/{plan_id}")
-async def update_therapy_plan(
-    plan_id: int, plan: dict, db: Session = Depends(get_db)
-) -> TherapyPlanSummary:
+async def update_therapy_plan(plan_id: int, plan: dict, db: Session = Depends(get_db)) -> TherapyPlanSummary:
     record = db.get(TherapyPlanRecord, plan_id)
     if not record:
         raise HTTPException(status_code=404, detail="Therapieplan nicht gefunden.")

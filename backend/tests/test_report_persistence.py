@@ -1,11 +1,13 @@
 """Tests for ReportRecord persistence layer."""
+
 from __future__ import annotations
 
 import json
 import sys
+
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
 TEST_DB_URL = "sqlite:///:memory:"
 test_engine = create_engine(
@@ -21,7 +23,7 @@ from models.report_record import ReportRecord  # noqa: E402 — must be imported
 # Ensure short-name imports resolve to the same modules
 for _key in list(sys.modules):
     if _key.startswith("backend."):
-        _short = _key[len("backend."):]
+        _short = _key[len("backend.") :]
         if _short not in sys.modules:
             sys.modules[_short] = sys.modules[_key]
 
@@ -34,7 +36,6 @@ def setup_tables():
 
 
 def test_report_record_can_be_created():
-
     with Session(test_engine) as db:
         record = ReportRecord(
             pseudonym="Max M.",
@@ -52,15 +53,17 @@ def test_report_record_can_be_created():
 
 
 def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
-    import json as _json
     import sys
-    from fastapi.testclient import TestClient
     from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fastapi.testclient import TestClient
+
     from main import app
 
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
     get_db = database_mod.get_db
     from sqlmodel import Session, select
+
     from models.report_record import ReportRecord
 
     def override_get_db():
@@ -73,8 +76,11 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
         "report_type": "befundbericht",
         "patient": {"pseudonym": "Anna B.", "age_group": "kind", "gender": None},
         "diagnose": {"icd_10_codes": [], "indikationsschluessel": "", "diagnose_text": ""},
-        "anamnese": "Test", "befund": "", "therapieindikation": "",
-        "therapieziele": [], "empfehlung": "",
+        "anamnese": "Test",
+        "befund": "",
+        "therapieindikation": "",
+        "therapieziele": [],
+        "empfehlung": "",
     }
 
     # Set up fake Redis storage for session persistence
@@ -94,6 +100,7 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
         session_id = res.json()["session_id"]
 
         from services.session_store import store
+
         session = store.get(session_id)
         session.status = "materials"
         store.save(session)
@@ -113,9 +120,11 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
 
 def test_list_reports_returns_saved_records():
     import sys
+
     from fastapi.testclient import TestClient
-    from main import app
     from sqlmodel import Session
+
+    from main import app
     from models.report_record import ReportRecord
 
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
@@ -148,9 +157,11 @@ def test_list_reports_returns_saved_records():
 def test_get_single_report_returns_full_content():
     import json
     import sys
+
     from fastapi.testclient import TestClient
-    from main import app
     from sqlmodel import Session
+
+    from main import app
     from models.report_record import ReportRecord
 
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
@@ -183,9 +194,11 @@ def test_get_single_report_returns_full_content():
 
 def test_get_nonexistent_report_returns_404():
     import sys
+
     from fastapi.testclient import TestClient
-    from main import app
     from sqlmodel import Session
+
+    from main import app
 
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
     get_db = database_mod.get_db

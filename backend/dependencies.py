@@ -1,13 +1,13 @@
 """Singleton service instances and FastAPI dependency providers."""
 
-from services.groq_client import GroqService
 from services.anamnesis_engine import AnamnesisEngine
-from services.report_generator import ReportGenerator
+from services.groq_client import GroqService
 from services.phonological_analyzer import PhonologicalAnalyzer
-from services.therapy_planner import TherapyPlanner
 from services.report_comparator import ReportComparator
-from services.text_suggester import TextSuggester
+from services.report_generator import ReportGenerator
 from services.soap_generator import SOAPGenerator
+from services.text_suggester import TextSuggester
+from services.therapy_planner import TherapyPlanner
 
 # ── Singletons (instantiated once at import time) ─────────────────────────
 groq_service = GroqService()

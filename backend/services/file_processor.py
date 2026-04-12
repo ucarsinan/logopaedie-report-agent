@@ -35,8 +35,8 @@ async def extract_text(content: bytes, filename: str, content_type: str) -> str:
 def _extract_pdf(content: bytes) -> str:
     try:
         from PyPDF2 import PdfReader
-    except ImportError:
-        raise RuntimeError("PyPDF2 ist nicht installiert. Bitte installieren: pip install PyPDF2")
+    except ImportError as err:
+        raise RuntimeError("PyPDF2 ist nicht installiert. Bitte installieren: pip install PyPDF2") from err
 
     reader = PdfReader(io.BytesIO(content))
     pages: list[str] = []
@@ -50,8 +50,8 @@ def _extract_pdf(content: bytes) -> str:
 def _extract_docx(content: bytes) -> str:
     try:
         from docx import Document
-    except ImportError:
-        raise RuntimeError("python-docx ist nicht installiert. Bitte installieren: pip install python-docx")
+    except ImportError as err:
+        raise RuntimeError("python-docx ist nicht installiert. Bitte installieren: pip install python-docx") from err
 
     doc = Document(io.BytesIO(content))
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]

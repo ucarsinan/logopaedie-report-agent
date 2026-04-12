@@ -1,9 +1,8 @@
 """Generate professional PDF reports using reportlab."""
 
 import io
-import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -13,8 +12,6 @@ from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
     Spacer,
-    Table,
-    TableStyle,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,7 +39,13 @@ SECTION_LABELS = {
 }
 
 SKIP_KEYS = {
-    "report_type", "patient", "diagnose", "_db_id", "created_at", "id", "pseudonym",
+    "report_type",
+    "patient",
+    "diagnose",
+    "_db_id",
+    "created_at",
+    "id",
+    "pseudonym",
 }
 
 
@@ -50,27 +53,47 @@ def _build_styles() -> dict:
     base = getSampleStyleSheet()
     return {
         "title": ParagraphStyle(
-            "ReportTitle", parent=base["Title"], fontSize=16, spaceAfter=6,
+            "ReportTitle",
+            parent=base["Title"],
+            fontSize=16,
+            spaceAfter=6,
         ),
         "subtitle": ParagraphStyle(
-            "ReportSubtitle", parent=base["Normal"], fontSize=10,
-            textColor=colors.grey, spaceAfter=12,
+            "ReportSubtitle",
+            parent=base["Normal"],
+            fontSize=10,
+            textColor=colors.grey,
+            spaceAfter=12,
         ),
         "heading": ParagraphStyle(
-            "SectionHeading", parent=base["Heading2"], fontSize=12,
-            spaceBefore=14, spaceAfter=6, textColor=colors.HexColor("#1a1a2e"),
+            "SectionHeading",
+            parent=base["Heading2"],
+            fontSize=12,
+            spaceBefore=14,
+            spaceAfter=6,
+            textColor=colors.HexColor("#1a1a2e"),
         ),
         "body": ParagraphStyle(
-            "BodyText", parent=base["Normal"], fontSize=10,
-            leading=14, spaceAfter=4,
+            "BodyText",
+            parent=base["Normal"],
+            fontSize=10,
+            leading=14,
+            spaceAfter=4,
         ),
         "bullet": ParagraphStyle(
-            "BulletItem", parent=base["Normal"], fontSize=10,
-            leading=14, leftIndent=20, bulletIndent=10,
+            "BulletItem",
+            parent=base["Normal"],
+            fontSize=10,
+            leading=14,
+            leftIndent=20,
+            bulletIndent=10,
         ),
         "footer": ParagraphStyle(
-            "Footer", parent=base["Normal"], fontSize=8,
-            textColor=colors.grey, alignment=1,
+            "Footer",
+            parent=base["Normal"],
+            fontSize=8,
+            textColor=colors.grey,
+            alignment=1,
         ),
     }
 
@@ -79,9 +102,12 @@ def generate_pdf(content: dict) -> bytes:
     """Generate a PDF from a report content dict. Returns PDF bytes."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=2 * cm, rightMargin=2 * cm,
-        topMargin=2 * cm, bottomMargin=2.5 * cm,
+        buf,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2.5 * cm,
     )
     styles = _build_styles()
     story: list = []
@@ -112,15 +138,19 @@ def generate_pdf(content: dict) -> bytes:
         if diagnose.get("diagnose_text"):
             story.append(Paragraph(diagnose["diagnose_text"], styles["body"]))
         if diagnose.get("indikationsschluessel"):
-            story.append(Paragraph(
-                f"Indikationsschlüssel: {diagnose['indikationsschluessel']}",
-                styles["body"],
-            ))
+            story.append(
+                Paragraph(
+                    f"Indikationsschlüssel: {diagnose['indikationsschluessel']}",
+                    styles["body"],
+                )
+            )
         if diagnose.get("icd_10_codes"):
-            story.append(Paragraph(
-                f"ICD-10: {', '.join(diagnose['icd_10_codes'])}",
-                styles["body"],
-            ))
+            story.append(
+                Paragraph(
+                    f"ICD-10: {', '.join(diagnose['icd_10_codes'])}",
+                    styles["body"],
+                )
+            )
 
     # Content sections
     for key, value in content.items():
@@ -144,11 +174,13 @@ def generate_pdf(content: dict) -> bytes:
 
     # Footer with date
     story.append(Spacer(1, 20))
-    now = datetime.now(timezone.utc).strftime("%d.%m.%Y")
-    story.append(Paragraph(
-        f"Erstellt am {now} | Generiert mit Logopädie Report Agent",
-        styles["footer"],
-    ))
+    now = datetime.now(UTC).strftime("%d.%m.%Y")
+    story.append(
+        Paragraph(
+            f"Erstellt am {now} | Generiert mit Logopädie Report Agent",
+            styles["footer"],
+        )
+    )
 
     doc.build(story)
     return buf.getvalue()

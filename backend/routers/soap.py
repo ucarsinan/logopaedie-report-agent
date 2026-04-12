@@ -4,14 +4,14 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from database import get_db
+from dependencies import get_soap_generator
 from models.report_record import ReportRecord
 from models.soap_record import SOAPRecord
 from services.session_store import SessionStore
 from services.soap_generator import SOAPGenerator
-from dependencies import get_soap_generator
 
 logger = logging.getLogger(__name__)
 

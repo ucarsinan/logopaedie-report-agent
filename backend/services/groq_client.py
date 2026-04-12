@@ -6,7 +6,8 @@ import json
 import logging
 import os
 
-from groq import AsyncGroq, APIStatusError, RateLimitError as GroqRateLimitError
+from groq import APIStatusError, AsyncGroq
+from groq import RateLimitError as GroqRateLimitError
 
 from exceptions import (
     AIServiceError,
@@ -137,9 +138,7 @@ class GroqService:
                     continue
                 raise AIServiceError(f"Chat-Anfrage fehlgeschlagen: {e}") from e
 
-        raise ModelExhaustedError(
-            f"Alle Modelle erschöpft. Bitte morgen erneut versuchen. ({last_exc})"
-        )
+        raise ModelExhaustedError(f"Alle Modelle erschöpft. Bitte morgen erneut versuchen. ({last_exc})")
 
     # ── JSON chat completion with model rotation ─────────────────────────
     async def json_completion(

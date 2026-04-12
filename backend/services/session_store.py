@@ -10,7 +10,7 @@ import uuid
 
 from upstash_redis import Redis
 
-from exceptions import SessionExpiredError, SessionNotFoundError
+from exceptions import SessionNotFoundError
 from models.schemas import ChatMessage, UploadedMaterial
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ _encryption_key = os.environ.get("SESSION_ENCRYPTION_KEY")
 if _encryption_key:
     try:
         from cryptography.fernet import Fernet
+
         _fernet = Fernet(_encryption_key.encode() if isinstance(_encryption_key, str) else _encryption_key)
         logger.info("Session encryption enabled.")
     except Exception as e:
@@ -48,9 +49,7 @@ def _get_redis() -> Redis:
     url = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")
     token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
     if not url or not token:
-        raise RuntimeError(
-            "KV_REST_API_URL and KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL/TOKEN) must be set."
-        )
+        raise RuntimeError("KV_REST_API_URL and KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL/TOKEN) must be set.")
     return Redis(url=url, token=token)
 
 
