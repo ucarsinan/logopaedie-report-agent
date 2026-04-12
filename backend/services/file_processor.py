@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
+import logging
+
+from exceptions import FileTooLargeError, UnsupportedFileTypeError
+
+logger = logging.getLogger(__name__)
 
 _MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -10,20 +16,20 @@ _MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
 async def extract_text(content: bytes, filename: str, content_type: str) -> str:
     """Return plain text extracted from the uploaded file."""
     if len(content) > _MAX_FILE_BYTES:
-        raise ValueError("Datei zu groß. Maximum: 10 MB.")
+        raise FileTooLargeError("Datei zu groß. Maximum: 10 MB.")
 
     lower = filename.lower()
 
     if lower.endswith(".pdf") or content_type == "application/pdf":
-        return _extract_pdf(content)
+        return await asyncio.to_thread(_extract_pdf, content)
     if lower.endswith(".docx") or content_type in (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ):
-        return _extract_docx(content)
+        return await asyncio.to_thread(_extract_docx, content)
     if lower.endswith(".txt") or content_type.startswith("text/"):
         return content.decode("utf-8", errors="replace")
 
-    raise ValueError(f"Dateityp nicht unterstützt: {filename}")
+    raise UnsupportedFileTypeError(f"Dateityp nicht unterstützt: {filename}")
 
 
 def _extract_pdf(content: bytes) -> str:

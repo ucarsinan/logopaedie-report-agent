@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -24,13 +26,13 @@ class SessionInfo(BaseModel):
 
 # ── Chat ────────────────────────────────────────────────────────────────────
 class ChatMessage(BaseModel):
-    role: str  # "user" | "assistant"
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1)
 
 
 class ChatRequest(BaseModel):
-    message: str | None = None
-    mode: str = "guided"  # "guided" | "quick_input"
+    message: str | None = Field(default=None, max_length=5000)
+    mode: Literal["guided", "quick_input"] = "guided"
 
 
 class ChatResponse(BaseModel):
@@ -184,10 +186,10 @@ class ReportComparison(BaseModel):
 
 # ── Feature 4: Intelligent Text Suggestions ────────────────────────────────
 class SuggestRequest(BaseModel):
-    text: str
-    report_type: str = "befundbericht"
-    disorder: str = ""
-    section: str = ""  # z.B. "anamnese", "befund", "therapieindikation"
+    text: str = Field(min_length=1, max_length=5000)
+    report_type: str = Field(default="befundbericht", max_length=100)
+    disorder: str = Field(default="", max_length=200)
+    section: str = Field(default="", max_length=100)  # z.B. "anamnese", "befund", "therapieindikation"
 
 
 class TextSuggestion(BaseModel):

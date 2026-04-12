@@ -6,9 +6,13 @@ information needed for generating a professional report.
 
 from __future__ import annotations
 
+import logging
+
 from models.schemas import ChatMessage
 from services.groq_client import GroqService
 from services.session_store import Session
+
+logger = logging.getLogger(__name__)
 
 _ANAMNESIS_SYSTEM_PROMPT = """\
 Du bist ein logopädischer Dokumentationsassistent. Du führst strukturierte
@@ -420,5 +424,5 @@ class AnamnesisEngine:
                     validated = _validate_extracted_data(data["data"])
                     session.collected_data.update(validated)
 
-        except RuntimeError as e:
-            print(f"[WARN] _extract_data failed: {e}")
+        except Exception as e:
+            logger.warning("_extract_data failed: %s", e)

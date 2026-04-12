@@ -1,38 +1,49 @@
 """Therapy plan generation and persistence endpoints."""
 
 import json
+import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
+from exceptions import SessionNotFoundError
 from models.schemas import TherapyPlan, TherapyPlanSaveRequest, TherapyPlanSummary
 from services.session_store import store
 from database import get_db
 from models.therapy_plan_record import TherapyPlanRecord
 from dependencies import therapy_planner
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["therapy-plans"])
+
+_SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
+
+
+def _validate_session_id(session_id: str) -> None:
+    if not _SESSION_ID_PATTERN.match(session_id):
+        raise HTTPException(status_code=400, detail="Ungültige Session-ID.")
 
 
 @router.post("/sessions/{session_id}/therapy-plan")
 async def generate_therapy_plan(session_id: str) -> TherapyPlan:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
-    try:
-        return await therapy_planner.generate_plan(session)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await therapy_planner.generate_plan(session)
 
 
 @router.post("/therapy-plans", status_code=201)
 async def save_therapy_plan(
     req: TherapyPlanSaveRequest, db: Session = Depends(get_db)
 ) -> TherapyPlanSummary:
+    _validate_session_id(req.session_id)
     session = store.get(req.session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     if req.plan_data:
         plan_json = json.dumps(req.plan_data, ensure_ascii=False)
@@ -41,10 +52,7 @@ async def save_therapy_plan(
             or session.collected_data.get("patient_pseudonym", "Unbekannt")
         )
     else:
-        try:
-            plan = await therapy_planner.generate_plan(session)
-        except RuntimeError as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        plan = await therapy_planner.generate_plan(session)
         plan_json = json.dumps(plan.model_dump(), ensure_ascii=False)
         patient_pseudonym = plan.patient_pseudonym or session.collected_data.get("patient_pseudonym", "Unbekannt")
 

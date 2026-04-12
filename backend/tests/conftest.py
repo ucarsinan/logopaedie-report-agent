@@ -12,6 +12,8 @@ import pytest
 def _set_groq_key(monkeypatch):
     """Ensure GROQ_API_KEY is set so GroqService can be instantiated."""
     monkeypatch.setenv("GROQ_API_KEY", "test-key-not-real")
+    # Ensure API_KEY auth is disabled in tests
+    monkeypatch.delenv("API_KEY", raising=False)
 
 
 @pytest.fixture()

@@ -1,18 +1,24 @@
 """Phonological analysis and report comparison endpoints."""
 
+import logging
 import os
 import tempfile
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Request, UploadFile
 
+from middleware.rate_limiter import limiter, ANALYSIS_LIMIT
 from models.schemas import PhonologicalAnalysis, ReportComparison
 from dependencies import phonological_analyzer, report_comparator
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 
 @router.post("/phonological")
+@limiter.limit(ANALYSIS_LIMIT)
 async def analyze_phonological(
+    request: Request,
     target_audio: UploadFile = File(...),
     production_audio: UploadFile = File(...),
     child_age: str | None = None,
@@ -38,8 +44,6 @@ async def analyze_phonological(
         return await phonological_analyzer.analyze_audio(
             target_path, production_path, child_age
         )
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
     finally:
         for p in (target_path, production_path):
             if p and os.path.exists(p):
@@ -47,35 +51,31 @@ async def analyze_phonological(
 
 
 @router.post("/phonological-text")
+@limiter.limit(ANALYSIS_LIMIT)
 async def analyze_phonological_text(
+    request: Request,
     word_pairs: list[dict[str, str]],
     child_age: str | None = None,
 ) -> PhonologicalAnalysis:
     """Analyze phonological processes from text word pairs (no audio needed)."""
-    try:
-        return await phonological_analyzer.analyze(word_pairs, child_age)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await phonological_analyzer.analyze(word_pairs, child_age)
 
 
 @router.post("/compare")
+@limiter.limit(ANALYSIS_LIMIT)
 async def compare_reports(
+    request: Request,
     initial_report: UploadFile = File(...),
     current_report: UploadFile = File(...),
 ) -> ReportComparison:
-    try:
-        initial_content = await initial_report.read()
-        current_content = await current_report.read()
+    initial_content = await initial_report.read()
+    current_content = await current_report.read()
 
-        return await report_comparator.compare_files(
-            initial_content,
-            initial_report.filename or "initial",
-            initial_report.content_type or "",
-            current_content,
-            current_report.filename or "current",
-            current_report.content_type or "",
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await report_comparator.compare_files(
+        initial_content,
+        initial_report.filename or "initial",
+        initial_report.content_type or "",
+        current_content,
+        current_report.filename or "current",
+        current_report.content_type or "",
+    )

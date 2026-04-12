@@ -1,13 +1,22 @@
 """Session management, chat, audio, upload, consent, report generation endpoints."""
 
 import json
+import logging
 import os
+import re
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from exceptions import (
+    FileTooLargeError,
+    RateLimitError,
+    SessionNotFoundError,
+    UnsupportedFileTypeError,
+)
+from middleware.rate_limiter import limiter, CHAT_LIMIT, AUDIO_LIMIT, GENERATE_LIMIT
 from models.schemas import (
     ChatMessage,
     ChatRequest,
@@ -21,11 +30,20 @@ from database import get_db
 from models.report_record import ReportRecord
 from dependencies import anamnesis_engine, groq_service, report_generator
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["sessions"])
 
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 _MAX_MATERIALS = 5
 _MAX_MATERIAL_BYTES = 10 * 1024 * 1024  # 10 MB
+_SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
+
+
+def _validate_session_id(session_id: str) -> None:
+    """Validate session_id format (12-char hex string)."""
+    if not _SESSION_ID_PATTERN.match(session_id):
+        raise HTTPException(status_code=400, detail="Ungültige Session-ID.")
 
 
 class CreateSessionRequest(BaseModel):
@@ -65,9 +83,10 @@ async def create_session(req: CreateSessionRequest | None = None) -> SessionInfo
 
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str) -> SessionInfo:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
     return SessionInfo(
         session_id=session.session_id,
         status=session.status,
@@ -79,9 +98,10 @@ async def get_session(session_id: str) -> SessionInfo:
 
 @router.post("/sessions/{session_id}/new-conversation")
 async def new_conversation(session_id: str) -> SessionInfo:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     patient_name = session.collected_data.get("patient_pseudonym") or session.collected_data.get("patient_name")
 
@@ -112,23 +132,17 @@ async def new_conversation(session_id: str) -> SessionInfo:
 
 # ── Chat (text) ────────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/chat")
-async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
+@limiter.limit(CHAT_LIMIT)
+async def chat(request: Request, session_id: str, req: ChatRequest) -> ChatResponse:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     if not req.message:
         raise HTTPException(status_code=400, detail="Nachricht darf nicht leer sein.")
 
-    try:
-        response_text = await anamnesis_engine.process_message(session, req.message, req.mode)
-    except RuntimeError as e:
-        if "429" in str(e) or "rate_limit" in str(e):
-            raise HTTPException(
-                status_code=429,
-                detail="Das KI-Tageslimit ist leider erreicht. Bitte versuchen Sie es morgen erneut.",
-            )
-        raise HTTPException(status_code=500, detail="KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut.")
+    response_text = await anamnesis_engine.process_message(session, req.message, req.mode)
 
     store.save(session)
     return ChatResponse(
@@ -142,10 +156,12 @@ async def chat(session_id: str, req: ChatRequest) -> ChatResponse:
 
 # ── Chat via audio ─────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/audio")
-async def chat_audio(session_id: str, audio_file: UploadFile = File(...)) -> ChatResponse:
+@limiter.limit(AUDIO_LIMIT)
+async def chat_audio(request: Request, session_id: str, audio_file: UploadFile = File(...)) -> ChatResponse:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     suffix = os.path.splitext(audio_file.filename or "audio")[1] or ".wav"
     tmp_path: str | None = None
@@ -153,7 +169,7 @@ async def chat_audio(session_id: str, audio_file: UploadFile = File(...)) -> Cha
     try:
         content = await audio_file.read()
         if len(content) > _MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="Datei zu groß. Maximum: 25 MB.")
+            raise FileTooLargeError("Datei zu groß. Maximum: 25 MB.")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(content)
@@ -171,13 +187,6 @@ async def chat_audio(session_id: str, audio_file: UploadFile = File(...)) -> Cha
             missing_fields=anamnesis_engine._compute_missing_fields(session),
             transcript=transcript,
         )
-    except RuntimeError as e:
-        if "429" in str(e) or "rate_limit" in str(e):
-            raise HTTPException(
-                status_code=429,
-                detail="Das KI-Tageslimit ist leider erreicht. Bitte versuchen Sie es morgen erneut.",
-            )
-        raise HTTPException(status_code=500, detail="KI-Anfrage fehlgeschlagen. Bitte versuchen Sie es erneut.")
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -190,20 +199,16 @@ async def upload_material(
     file: UploadFile = File(...),
     material_type: str = "sonstiges",
 ) -> UploadedMaterial:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     if len(session.materials) >= _MAX_MATERIALS:
         raise HTTPException(status_code=400, detail=f"Maximum {_MAX_MATERIALS} Dateien pro Session.")
 
-    try:
-        content = await file.read()
-        extracted = await extract_text(content, file.filename or "file", file.content_type or "")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    content = await file.read()
+    extracted = await extract_text(content, file.filename or "file", file.content_type or "")
 
     material = UploadedMaterial(
         filename=file.filename or "unbekannt",
@@ -219,9 +224,10 @@ async def upload_material(
 # ── Materials consent ────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/materials-consent")
 async def set_materials_consent(session_id: str, req: ConsentRequest) -> SessionInfo:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
     session.materials_consent = req.consent
     store.save(session)
     return SessionInfo(
@@ -235,10 +241,12 @@ async def set_materials_consent(session_id: str, req: ConsentRequest) -> Session
 
 # ── Report generation ───────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/generate")
-async def generate_report(session_id: str, db: Session = Depends(get_db)) -> dict:
+@limiter.limit(GENERATE_LIMIT)
+async def generate_report(request: Request, session_id: str, db: Session = Depends(get_db)) -> dict:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     session.status = "generating"
     store.save(session)
@@ -260,17 +268,18 @@ async def generate_report(session_id: str, db: Session = Depends(get_db)) -> dic
         session.generated_report["_db_id"] = record.id
 
         return session.generated_report
-    except RuntimeError as e:
+    except Exception as e:
         session.status = "materials"  # Allow retry
         store.save(session)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.get("/sessions/{session_id}/report")
 async def get_report(session_id: str) -> dict:
+    _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden oder abgelaufen.")
+        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
     if not session.generated_report:
         raise HTTPException(status_code=404, detail="Noch kein Bericht generiert.")

@@ -6,8 +6,15 @@ import json
 import logging
 import os
 
-from groq import AsyncGroq
+from groq import AsyncGroq, APIStatusError, RateLimitError as GroqRateLimitError
 
+from exceptions import (
+    AIServiceError,
+    ModelExhaustedError,
+    RateLimitError,
+    ReportGenerationError,
+    TranscriptionError,
+)
 from models.schemas import MedicalReport
 
 logger = logging.getLogger(__name__)
@@ -43,16 +50,14 @@ _LEGACY_SCHEMA = """Return a JSON object with exactly these fields:
 """
 
 
-def _should_try_next_model(exc: Exception) -> bool:
+def _is_rate_limit_or_decommissioned(exc: Exception) -> bool:
     """True for errors where switching to another model makes sense."""
+    if isinstance(exc, GroqRateLimitError):
+        return True
+    if isinstance(exc, APIStatusError) and exc.status_code == 429:
+        return True
     msg = str(exc)
-    return (
-        "429" in msg
-        or "rate_limit" in msg
-        or "Rate limit" in msg
-        or "model_decommissioned" in msg
-        or "decommissioned" in msg
-    )
+    return "model_decommissioned" in msg or "decommissioned" in msg
 
 
 class GroqService:
@@ -68,8 +73,10 @@ class GroqService:
                     model="whisper-large-v3",
                 )
             return transcription.text
+        except GroqRateLimitError as e:
+            raise RateLimitError(f"Transkription Rate-Limit erreicht: {e}") from e
         except Exception as e:
-            raise RuntimeError(f"Transkription fehlgeschlagen: {e}") from e
+            raise TranscriptionError(f"Transkription fehlgeschlagen: {e}") from e
 
     # ── Legacy report generation (for /process-audio) ───────────────────
     async def generate_structured_report(self, transcript: str) -> MedicalReport:
@@ -88,12 +95,14 @@ class GroqService:
             raw = response.choices[0].message.content
             data = json.loads(raw)
             return MedicalReport(**data)
+        except GroqRateLimitError as e:
+            raise RateLimitError(f"Rate-Limit erreicht: {e}") from e
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"LLM hat kein gültiges JSON zurückgegeben: {e}") from e
+            raise ReportGenerationError(f"LLM hat kein gültiges JSON zurückgegeben: {e}") from e
         except (ValueError, TypeError) as e:
-            raise RuntimeError(f"Bericht-Validierung fehlgeschlagen: {e}") from e
+            raise ReportGenerationError(f"Bericht-Validierung fehlgeschlagen: {e}") from e
         except Exception as e:
-            raise RuntimeError(f"Berichtgenerierung fehlgeschlagen: {e}") from e
+            raise AIServiceError(f"Berichtgenerierung fehlgeschlagen: {e}") from e
 
     # ── Chat completion with model rotation ─────────────────────────────
     async def chat_completion(
@@ -122,13 +131,13 @@ class GroqService:
                     logger.info("Model fallback succeeded with: %s", model)
                 return response.choices[0].message.content or ""
             except Exception as e:
-                if _should_try_next_model(e):
+                if _is_rate_limit_or_decommissioned(e):
                     logger.warning("Rate limit on %s, trying next model.", model)
                     last_exc = e
                     continue
-                raise RuntimeError(f"Chat-Anfrage fehlgeschlagen: {e}") from e
+                raise AIServiceError(f"Chat-Anfrage fehlgeschlagen: {e}") from e
 
-        raise RuntimeError(
+        raise ModelExhaustedError(
             f"Alle Modelle erschöpft. Bitte morgen erneut versuchen. ({last_exc})"
         )
 
@@ -150,4 +159,4 @@ class GroqService:
         try:
             return json.loads(raw)
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"LLM hat kein gültiges JSON zurückgegeben: {e}") from e
+            raise ReportGenerationError(f"LLM hat kein gültiges JSON zurückgegeben: {e}") from e

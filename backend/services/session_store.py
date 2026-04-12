@@ -3,16 +3,45 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import uuid
 
 from upstash_redis import Redis
 
+from exceptions import SessionExpiredError, SessionNotFoundError
 from models.schemas import ChatMessage, UploadedMaterial
 
-_SESSION_TIMEOUT_SECONDS = 2 * 60 * 60  # 2 hours
+logger = logging.getLogger(__name__)
+
+_SESSION_TIMEOUT_SECONDS = 24 * 60 * 60  # 24 hours
 _KEY_PREFIX = "session:"
+
+# ── Optional Fernet encryption ───────────────────────────────────────────────
+_fernet = None
+_encryption_key = os.environ.get("SESSION_ENCRYPTION_KEY")
+if _encryption_key:
+    try:
+        from cryptography.fernet import Fernet
+        _fernet = Fernet(_encryption_key.encode() if isinstance(_encryption_key, str) else _encryption_key)
+        logger.info("Session encryption enabled.")
+    except Exception as e:
+        logger.warning("SESSION_ENCRYPTION_KEY set but encryption init failed: %s. Continuing without encryption.", e)
+
+
+def _encrypt(data: str) -> str:
+    """Encrypt data if Fernet is configured, otherwise return as-is."""
+    if _fernet is not None:
+        return _fernet.encrypt(data.encode()).decode()
+    return data
+
+
+def _decrypt(data: str) -> str:
+    """Decrypt data if Fernet is configured, otherwise return as-is."""
+    if _fernet is not None:
+        return _fernet.decrypt(data.encode()).decode()
+    return data
 
 
 def _get_redis() -> Redis:
@@ -37,6 +66,7 @@ class Session:
         self.generated_report: dict | None = None
         self.therapy_plan_mode: bool = False
         self.created_at: float = time.time()
+        self._version: int = 0
 
     @property
     def is_expired(self) -> bool:
@@ -54,6 +84,7 @@ class Session:
             "generated_report": self.generated_report,
             "therapy_plan_mode": self.therapy_plan_mode,
             "created_at": self.created_at,
+            "_version": self._version,
         }
 
     @classmethod
@@ -69,6 +100,7 @@ class Session:
         s.generated_report = data.get("generated_report")
         s.therapy_plan_mode = data.get("therapy_plan_mode", False)
         s.created_at = data.get("created_at", time.time())
+        s._version = data.get("_version", 0)
         return s
 
 
@@ -84,21 +116,32 @@ class SessionStore:
         raw = redis.get(f"{_KEY_PREFIX}{session_id}")
         if raw is None:
             return None
-        data = json.loads(raw) if isinstance(raw, str) else raw
+        decrypted = _decrypt(raw) if isinstance(raw, str) else json.dumps(raw)
+        data = json.loads(decrypted) if isinstance(decrypted, str) else decrypted
         session = Session.from_dict(data)
         if session.is_expired:
             redis.delete(f"{_KEY_PREFIX}{session_id}")
             return None
         return session
 
+    def get_or_raise(self, session_id: str) -> Session:
+        """Get a session or raise SessionNotFoundError."""
+        session = self.get(session_id)
+        if session is None:
+            raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
+        return session
+
     def save(self, session: Session) -> None:
+        session._version += 1
         self._save(session)
 
     def _save(self, session: Session) -> None:
         redis = _get_redis()
+        serialized = json.dumps(session.to_dict())
+        encrypted = _encrypt(serialized)
         redis.set(
             f"{_KEY_PREFIX}{session.session_id}",
-            json.dumps(session.to_dict()),
+            encrypted,
             ex=_SESSION_TIMEOUT_SECONDS,
         )
 

@@ -1,21 +1,24 @@
 """Text suggestion endpoint."""
 
-from fastapi import APIRouter, HTTPException
+import logging
 
+from fastapi import APIRouter, HTTPException, Request
+
+from middleware.rate_limiter import limiter, SUGGEST_LIMIT
 from models.schemas import SuggestRequest, TextSuggestion
 from dependencies import text_suggester
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["suggestions"])
 
 
 @router.post("/suggest")
-async def suggest_text(req: SuggestRequest) -> TextSuggestion:
+@limiter.limit(SUGGEST_LIMIT)
+async def suggest_text(request: Request, req: SuggestRequest) -> TextSuggestion:
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text darf nicht leer sein.")
 
-    try:
-        return await text_suggester.suggest(
-            req.text, req.report_type, req.disorder, req.section
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return await text_suggester.suggest(
+        req.text, req.report_type, req.disorder, req.section
+    )
