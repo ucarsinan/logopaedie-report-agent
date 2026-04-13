@@ -54,7 +54,14 @@ class User(SQLModel, table=True):
     failed_login_count: int = Field(default=0)
     locked_until: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     created_at: datetime = Field(default_factory=_utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
-    updated_at: datetime = Field(default_factory=_utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(
+        default_factory=_utcnow,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=_utcnow,
+        ),
+    )
 
 
 class UserSession(SQLModel, table=True):

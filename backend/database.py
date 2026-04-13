@@ -5,6 +5,7 @@ import os
 from sqlmodel import Session, SQLModel, create_engine
 
 # Import all models so SQLModel registers their tables
+import models.auth
 import models.report_record
 import models.soap_record
 import models.therapy_plan_record  # noqa: F401
