@@ -6,6 +6,7 @@ from sqlmodel import Field, SQLModel
 
 
 class ReportRecord(SQLModel, table=True):
+    __tablename__ = "reports"
     __table_args__ = {"extend_existing": True}
 
     id: int | None = Field(default=None, primary_key=True)
