@@ -42,3 +42,28 @@ def test_alembic_downgrade_baseline(alembic_cfg):
     command.downgrade(cfg, "base")
     insp = inspect(create_engine(url))
     assert "reports" not in insp.get_table_names()
+
+
+def test_alembic_upgrade_head_fresh_db(alembic_cfg):
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, "head")
+    insp = inspect(create_engine(url))
+    tables = set(insp.get_table_names())
+    assert {"reports", "users", "user_sessions", "email_tokens", "audit_log"} <= tables
+    user_indexes = {ix["name"] for ix in insp.get_indexes("users")}
+    sess_indexes = {ix["name"] for ix in insp.get_indexes("user_sessions")}
+    assert any("email" in n for n in user_indexes)
+    assert any("refresh_token_hash" in n for n in sess_indexes)
+
+
+def test_alembic_downgrade_0002(alembic_cfg):
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0001")
+    insp = inspect(create_engine(url))
+    tables = set(insp.get_table_names())
+    assert "users" not in tables
+    assert "user_sessions" not in tables
+    assert "email_tokens" not in tables
+    assert "audit_log" not in tables
+    assert "reports" in tables
