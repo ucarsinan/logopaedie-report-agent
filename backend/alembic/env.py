@@ -2,7 +2,6 @@
 
 import os
 import sys
-from contextlib import suppress
 from logging.config import fileConfig
 from pathlib import Path
 
@@ -16,9 +15,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from sqlmodel import SQLModel  # noqa: E402
 
 import models.auth  # noqa: E402
-
-with suppress(ImportError):
-    import models.report  # noqa: F401
+import models.report_record  # noqa: E402, F401
 
 config = context.config
 if config.config_file_name is not None:

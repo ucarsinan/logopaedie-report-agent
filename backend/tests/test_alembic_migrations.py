@@ -5,10 +5,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
 from alembic import command
+from alembic.config import Config
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -30,3 +30,15 @@ def test_alembic_upgrade_baseline(alembic_cfg):
     command.upgrade(cfg, "0001")
     insp = inspect(create_engine(url))
     assert "reports" in insp.get_table_names()
+    columns = {col["name"] for col in insp.get_columns("reports")}
+    assert columns == {"id", "pseudonym", "report_type", "created_at", "content_json"}
+    indexes = {idx["name"] for idx in insp.get_indexes("reports")}
+    assert "ix_reports_pseudonym" in indexes
+
+
+def test_alembic_downgrade_baseline(alembic_cfg):
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, "0001")
+    command.downgrade(cfg, "base")
+    insp = inspect(create_engine(url))
+    assert "reports" not in insp.get_table_names()

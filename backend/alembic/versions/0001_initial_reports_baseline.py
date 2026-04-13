@@ -20,15 +20,15 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "reports",
-        sa.Column("id", sa.String(length=36), primary_key=True),
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("pseudonym", sa.String(), nullable=False),
         sa.Column("report_type", sa.String(), nullable=False),
-        sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("patient_name", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("content_json", sa.Text(), nullable=False),
     )
-    op.create_index("ix_reports_created_at", "reports", ["created_at"])
+    op.create_index("ix_reports_pseudonym", "reports", ["pseudonym"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_reports_created_at", table_name="reports")
+    op.drop_index("ix_reports_pseudonym", table_name="reports")
     op.drop_table("reports")
