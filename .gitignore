@@ -33,3 +33,6 @@ docs/superpowers/
 *.db-journal
 *.db-shm
 *.db-wal
+
+# Git worktrees
+.worktrees/
