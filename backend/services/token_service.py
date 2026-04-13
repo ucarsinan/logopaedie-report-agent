@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import jwt
+from jwt import InvalidTokenError
 
 
 class TokenService:
@@ -19,6 +20,7 @@ class TokenService:
         self._secret = secret
         self._alg = "HS256"
         self._access_ttl = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "15")))
+        self._leeway = int(os.getenv("JWT_LEEWAY_SECONDS", "0"))
 
     def encode_access(self, user_id: UUID) -> str:
         now = datetime.now(UTC)
@@ -36,9 +38,17 @@ class TokenService:
             self._secret,
             algorithms=[self._alg],
             options={"require": ["exp", "iat", "sub"]},
+            leeway=self._leeway,
         )
         if payload.get("type") != "access":
-            raise jwt.InvalidTokenError("Token type mismatch")
+            raise InvalidTokenError("Token type mismatch")
+        sub = payload.get("sub")
+        if not isinstance(sub, str) or not sub:
+            raise InvalidTokenError("Missing or invalid 'sub' claim")
+        try:
+            UUID(sub)
+        except (TypeError, ValueError) as exc:
+            raise InvalidTokenError("'sub' is not a valid UUID") from exc
         return payload
 
     def encode_refresh(self) -> tuple[str, str]:
