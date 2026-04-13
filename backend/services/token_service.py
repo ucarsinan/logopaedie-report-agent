@@ -31,12 +31,15 @@ class TokenService:
         return jwt.encode(payload, self._secret, algorithm=self._alg)
 
     def decode_access(self, token: str) -> dict:
-        return jwt.decode(
+        payload = jwt.decode(
             token,
             self._secret,
             algorithms=[self._alg],
             options={"require": ["exp", "iat", "sub"]},
         )
+        if payload.get("type") != "access":
+            raise jwt.InvalidTokenError("Token type mismatch")
+        return payload
 
     def encode_refresh(self) -> tuple[str, str]:
         plain = secrets.token_urlsafe(32)
