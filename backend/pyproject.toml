@@ -21,6 +21,8 @@ dependencies = [
   "passlib[argon2]>=1.7.4",
   "pyjwt>=2.9",
   "pyotp>=2.9,<3",
+  "resend>=2.0,<3",
+  "user-agents>=2.2,<3",
 ]
 
 [tool.ruff]
