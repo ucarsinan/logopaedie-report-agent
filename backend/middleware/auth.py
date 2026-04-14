@@ -84,7 +84,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             )
             if payload.get("type") != "access":
                 return await call_next(request)
-            request.state.user = {"id": payload["sub"], "role": payload.get("role", "user")}
+            request.state.user = {
+                "id": payload["sub"],
+                "role": payload.get("role", "user"),
+                "sid": payload.get("sid"),
+            }
         except _jwt.InvalidTokenError:
             request.state.user = None
         return await call_next(request)

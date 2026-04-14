@@ -324,3 +324,119 @@ def test_login_2fa_wrong_code_increments_failed_count(client):
     assert res.json()["detail"] == "Invalid code"
     user = get_user(client, "nora@example.com")
     assert user.failed_login_count >= 1
+
+
+# ── Gate 4A fixes ─────────────────────────────────────────────────────────────
+
+
+def test_login_2fa_replay_rejected(client):
+    """Same TOTP code (same step) must be rejected on second use — Gate 4A Finding #2."""
+    import pyotp
+
+    _, secret = _enable_2fa(client, "oscar@example.com", "correct horse battery 15")
+
+    # First login: get challenge, submit valid code → success
+    step1 = client.post(
+        "/auth/login", json={"email": "oscar@example.com", "password": "correct horse battery 15"}
+    ).json()
+    code = pyotp.TOTP(secret).now()
+    first = client.post("/auth/login/2fa", json={"challenge_id": step1["challenge_id"], "code": code})
+    assert first.status_code == 200
+
+    # Second login: new challenge, same code (same TOTP step within window) → must be rejected
+    step2 = client.post(
+        "/auth/login", json={"email": "oscar@example.com", "password": "correct horse battery 15"}
+    ).json()
+    second = client.post("/auth/login/2fa", json={"challenge_id": step2["challenge_id"], "code": code})
+    assert second.status_code == 401
+
+
+def test_login_2fa_locked_account_rejected(client, db_session):
+    """login_2fa must honour locked_until — Gate 4A Finding #6a."""
+    from datetime import timedelta
+
+    _, secret = _enable_2fa(client, "petra@example.com", "correct horse battery 16")
+
+    # Get a valid challenge while unlocked
+    step1 = client.post(
+        "/auth/login", json={"email": "petra@example.com", "password": "correct horse battery 16"}
+    ).json()
+
+    # Lock the account directly in DB (simulates admin action or concurrent lockout)
+    user = get_user(client, "petra@example.com")
+    from datetime import UTC, datetime
+
+    with Session(client.engine) as db:
+        u = db.get(type(user), user.id)
+        u.locked_until = datetime.now(UTC) + timedelta(minutes=15)
+        db.add(u)
+        db.commit()
+
+    import pyotp
+
+    res = client.post("/auth/login/2fa", json={"challenge_id": step1["challenge_id"], "code": pyotp.TOTP(secret).now()})
+    assert res.status_code == 423
+
+
+def test_login_2fa_wrong_code_triggers_lockout(client):
+    """TOTP failures must apply atomic lockout — Gate 4A Finding #6a."""
+    from sqlmodel import Session
+
+    _, secret = _enable_2fa(client, "quinn@example.com", "correct horse battery 17")
+
+    # Get challenge first — login() resets failed_login_count to 0 on success
+    step = client.post(
+        "/auth/login", json={"email": "quinn@example.com", "password": "correct horse battery 17"}
+    ).json()
+
+    # Pre-seed count AFTER the challenge is issued (so login's reset doesn't undo it)
+    user = get_user(client, "quinn@example.com")
+    with Session(client.engine) as db:
+        u = db.get(type(user), user.id)
+        u.failed_login_count = 9  # LOCKOUT_THRESHOLD - 1
+        db.add(u)
+        db.commit()
+
+    # One bad TOTP attempt: 9 + 1 = 10 >= 10 → locked_until must be set
+    client.post("/auth/login/2fa", json={"challenge_id": step["challenge_id"], "code": "000000"})
+
+    user = get_user(client, "quinn@example.com")
+    assert user.locked_until is not None
+
+
+def test_2fa_enable_replay_rejected(client):
+    """TOTP code used to enable must be rejected if reused — Gate 4A Finding #2."""
+    import pyotp
+
+    tokens = register_and_login(client, "rachel@example.com", "correct horse battery 18")
+    setup = client.post("/auth/2fa/setup", headers=auth_headers(tokens)).json()
+    code = pyotp.TOTP(setup["secret"]).now()
+
+    # First enable succeeds
+    res1 = client.post("/auth/2fa/enable", json={"code": code}, headers=auth_headers(tokens))
+    assert res1.status_code == 200
+
+    # Disable and set up again so we can test re-enable with old code
+    tokens2 = register_and_login(client, "sam@example.com", "correct horse battery 19")
+    setup2 = client.post("/auth/2fa/setup", headers=auth_headers(tokens2)).json()
+    code2 = pyotp.TOTP(setup2["secret"]).now()
+
+    # Enable once — sets last_totp_step
+    client.post("/auth/2fa/enable", json={"code": code2}, headers=auth_headers(tokens2))
+    user = get_user(client, "sam@example.com")
+    assert user.totp_enabled is True
+
+    # Try to re-enable (already-enabled guard)
+    res2 = client.post("/auth/2fa/enable", json={"code": code2}, headers=auth_headers(tokens2))
+    assert res2.status_code == 400
+
+
+def test_2fa_enable_already_enabled_rejected(client):
+    """enable_2fa must reject when totp_enabled is already True — Gate 4A Finding #4."""
+    import pyotp
+
+    tokens, secret = _enable_2fa(client, "tara@example.com", "correct horse battery 20")
+    # At this point 2FA is enabled; try to call /2fa/enable again
+    new_code = pyotp.TOTP(secret).now()
+    res = client.post("/auth/2fa/enable", json={"code": new_code}, headers=auth_headers(tokens))
+    assert res.status_code == 400

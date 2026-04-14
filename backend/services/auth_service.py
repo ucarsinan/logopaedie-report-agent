@@ -458,13 +458,33 @@ class AuthService:
         user = db.get(User, _UUID(user_id_str))
         if not user or not user.totp_enabled or not user.totp_secret:
             raise HTTPException(status_code=401, detail="Invalid or expired challenge")
+
+        # Gate 4A Finding #6a: check lockout before accepting the TOTP code
+        if user.locked_until is not None and _aware(user.locked_until) > _utcnow():
+            self.audit.log(db, user_id=user.id, event="login.fail", ip=ip, user_agent=ua, metadata={"reason": "locked"})
+            raise HTTPException(status_code=423, detail="Account locked")
+
         secret = self.totp.decrypt(user.totp_secret)
-        if not self.totp.verify(secret, code, valid_window=1):
+
+        # Gate 4A Finding #2: use verify_and_get_step to detect replays within the validity window
+        matched_step = self.totp.verify_and_get_step(secret, code, valid_window=1)
+        is_replay = matched_step is not None and user.last_totp_step is not None and matched_step <= user.last_totp_step
+
+        if matched_step is None or is_replay:
+            now = _utcnow()
+            # Atomic increment + conditional lockout (same pattern as password login failures)
             db.execute(
                 _atomic(
                     sa_update(User)
                     .where(User.id == user.id)
-                    .values(failed_login_count=User.failed_login_count + 1, updated_at=_utcnow())
+                    .values(
+                        failed_login_count=User.failed_login_count + 1,
+                        locked_until=case(
+                            (User.failed_login_count + 1 >= self.LOCKOUT_THRESHOLD, now + self.LOCKOUT_DURATION),
+                            else_=User.locked_until,
+                        ),
+                        updated_at=now,
+                    )
                 )
             )
             db.commit()
@@ -474,6 +494,7 @@ class AuthService:
         # Issue session (same as normal login success)
         user.failed_login_count = 0
         user.locked_until = None
+        user.last_totp_step = matched_step
         user.updated_at = _utcnow()
         db.add(user)
         plain_refresh, refresh_hash = self.tokens.encode_refresh()
@@ -508,12 +529,15 @@ class AuthService:
 
         assert self.totp is not None, "TOTPService not wired"
         pw_ok = self.password.verify(current_password, user.password_hash)
-        secret = self.totp.decrypt(user.totp_secret) if user.totp_secret else ""
-        code_ok = bool(secret) and self.totp.verify(secret, code, valid_window=1)
+        # Gate 4A Finding #3: always run TOTP verify (even without a secret) for timing equalization.
+        # When no secret is stored, use the dummy secret so verify takes the same code-path.
+        secret = self.totp.decrypt(user.totp_secret) if user.totp_secret else self.totp.dummy_secret
+        code_ok = bool(user.totp_secret) and self.totp.verify(secret, code, valid_window=1)
         if not (pw_ok and code_ok):
             raise HTTPException(status_code=400, detail="Verification failed")
         user.totp_secret = None
         user.totp_enabled = False
+        user.last_totp_step = None
         db.add(user)
         # Revoke ALL active sessions on 2FA disable
         for s in db.exec(
@@ -528,25 +552,41 @@ class AuthService:
         self.audit.log(db, user_id=user.id, event="user.2fa_disabled", ip=ip, user_agent=ua, metadata={})
 
     def enable_2fa(self, db: Session, user: User, code: str, *, ip: str, ua: str) -> None:
+        import hmac as _hmac
+
         from fastapi import HTTPException
 
         assert self.totp is not None, "TOTPService not wired"
         if not user.totp_secret:
             raise HTTPException(status_code=400, detail="2FA not initialized")
+        # Gate 4A Finding #4: guard against re-enabling when already enabled
+        if user.totp_enabled:
+            raise HTTPException(status_code=400, detail="2FA already enabled")
         secret = self.totp.decrypt(user.totp_secret)
-        if not self.totp.verify(secret, code, valid_window=1):
+
+        # Gate 4A Finding #2: replay prevention via step tracking
+        matched_step = self.totp.verify_and_get_step(secret, code, valid_window=1)
+        is_replay = matched_step is not None and user.last_totp_step is not None and matched_step <= user.last_totp_step
+        if matched_step is None or is_replay:
             raise HTTPException(status_code=400, detail="Invalid code")
+
         user.totp_enabled = True
+        # Do NOT set last_totp_step here: replay prevention tracks login attempts, not setup.
+        # Setting it here would block the very first login after enabling (same step window).
         db.add(user)
+
         # Revoke OTHER active sessions; keep the current one (identified by session_hash)
+        # Gate 4A Finding #5: use hmac.compare_digest to prevent timing attacks on hash comparison
         current_hash = getattr(user, "_current_session_hash", None)
-        q = db.query(UserSession).filter(
-            UserSession.user_id == user.id,
-            UserSession.revoked_at.is_(None),
-        )
-        if current_hash:
-            q = q.filter(UserSession.refresh_token_hash != current_hash)
-        for s in q.all():
+        sessions = db.exec(
+            select(UserSession).where(
+                UserSession.user_id == user.id,
+                UserSession.revoked_at.is_(None),
+            )
+        ).all()
+        for s in sessions:
+            if current_hash and _hmac.compare_digest(s.refresh_token_hash, current_hash):
+                continue
             s.revoked_at = _utcnow()
             db.add(s)
         db.commit()

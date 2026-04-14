@@ -51,6 +51,7 @@ class User(SQLModel, table=True):
     email_verified_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     totp_secret: str | None = Field(default=None)
     totp_enabled: bool = Field(default=False)
+    last_totp_step: int | None = Field(default=None)  # replay-prevention: last accepted TOTP step counter
     failed_login_count: int = Field(default=0)
     locked_until: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     created_at: datetime = Field(default_factory=_utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
