@@ -262,3 +262,21 @@ def test_login_with_2fa_returns_challenge_no_tokens(client):
     assert "challenge_id" in body
     assert "access_token" not in body
     assert "refresh_token" not in body
+
+
+# ── Task 4.13 ─────────────────────────────────────────────────────────────────
+
+
+def test_login_2fa_success_creates_session(client):
+    import pyotp
+
+    _, secret = _enable_2fa(client, "kim@example.com", "correct horse battery 11")
+    step1 = client.post("/auth/login", json={"email": "kim@example.com", "password": "correct horse battery 11"}).json()
+    res = client.post(
+        "/auth/login/2fa",
+        json={"challenge_id": step1["challenge_id"], "code": pyotp.TOTP(secret).now()},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert "access_token" in body and "refresh_token" in body
+    assert body["user"]["email"] == "kim@example.com"

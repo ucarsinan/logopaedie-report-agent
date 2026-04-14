@@ -134,6 +134,23 @@ def login(
         return _err(e, response)
 
 
+class Login2faBody(BaseModel):
+    challenge_id: str
+    code: str
+
+
+@router.post("/login/2fa")
+@limiter.limit("5/minute")
+def login_2fa(
+    body: Login2faBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    svc: AuthService = Depends(get_auth_service),
+) -> dict:
+    ip, ua = _client(request)
+    return svc.login_2fa(db, challenge_id=body.challenge_id, code=body.code, ip=ip, ua=ua)
+
+
 @router.post("/refresh")
 @limiter.limit("30/minute")
 def refresh(

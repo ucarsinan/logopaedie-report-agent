@@ -446,6 +446,54 @@ class AuthService:
             "provisioning_uri": self.totp.provisioning_uri(secret, user.email),
         }
 
+    def login_2fa(self, db: Session, *, challenge_id: str, code: str, ip: str | None, ua: str | None) -> dict:
+        from uuid import UUID as _UUID
+
+        from fastapi import HTTPException
+
+        assert self.totp is not None and self.challenges is not None, "2FA services not wired"
+        user_id_str = self.challenges.consume(challenge_id)
+        if not user_id_str:
+            raise HTTPException(status_code=401, detail="Invalid or expired challenge")
+        user = db.get(User, _UUID(user_id_str))
+        if not user or not user.totp_enabled or not user.totp_secret:
+            raise HTTPException(status_code=401, detail="Invalid or expired challenge")
+        secret = self.totp.decrypt(user.totp_secret)
+        if not self.totp.verify(secret, code, valid_window=1):
+            db.execute(
+                _atomic(
+                    sa_update(User)
+                    .where(User.id == user.id)
+                    .values(failed_login_count=User.failed_login_count + 1, updated_at=_utcnow())
+                )
+            )
+            db.commit()
+            self.audit.log(db, user_id=user.id, event="user.2fa_login_failed", ip=ip, user_agent=ua, metadata={})
+            raise HTTPException(status_code=401, detail="Invalid code")
+
+        # Issue session (same as normal login success)
+        user.failed_login_count = 0
+        user.locked_until = None
+        user.updated_at = _utcnow()
+        db.add(user)
+        plain_refresh, refresh_hash = self.tokens.encode_refresh()
+        sess = UserSession(
+            user_id=user.id,
+            refresh_token_hash=refresh_hash,
+            user_agent=ua,
+            ip_address=ip,
+            expires_at=_utcnow() + self.REFRESH_TTL,
+        )
+        db.add(sess)
+        db.commit()
+        db.refresh(sess)
+        self.audit.log(db, user_id=user.id, event="login.success", ip=ip, user_agent=ua, metadata={"via": "2fa"})
+        return {
+            "access_token": self.tokens.encode_access(user.id, session_id=sess.id),
+            "refresh_token": plain_refresh,
+            "user": self._user_view(user),
+        }
+
     def disable_2fa(
         self,
         db: Session,
