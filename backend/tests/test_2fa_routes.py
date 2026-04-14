@@ -115,6 +115,18 @@ def test_get_challenge_store_dependency_resolves():
 # ── Task 4.4 ──────────────────────────────────────────────────────────────────
 
 
+# ── Task 4.5 ──────────────────────────────────────────────────────────────────
+
+
+def test_2fa_setup_persists_encrypted_secret(client, totp_service):
+    tokens = register_and_login(client, "bob@example.com", "correct horse battery 2")
+    res = client.post("/auth/2fa/setup", headers=auth_headers(tokens))
+    secret_plain = res.json()["secret"]
+    user = get_user(client, "bob@example.com")
+    assert user.totp_secret != secret_plain  # must be encrypted
+    assert totp_service.decrypt(user.totp_secret) == secret_plain
+
+
 def test_2fa_setup_returns_secret_and_uri_but_not_enabled(client):
     tokens = register_and_login(client, "alice@example.com", "correct horse battery 1")
     res = client.post("/auth/2fa/setup", headers=auth_headers(tokens))
