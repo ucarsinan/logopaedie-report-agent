@@ -117,7 +117,7 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User |
         return None
     try:
         uid = UUID(state_user["id"])
-    except (KeyError, ValueError):
+    except (KeyError, TypeError, ValueError):
         return None
     return db.exec(select(User).where(User.id == uid)).first()
 
