@@ -280,3 +280,47 @@ def test_login_2fa_success_creates_session(client):
     body = res.json()
     assert "access_token" in body and "refresh_token" in body
     assert body["user"]["email"] == "kim@example.com"
+
+
+# ── Task 4.14 ─────────────────────────────────────────────────────────────────
+
+
+def test_login_2fa_challenge_single_use(client):
+    import pyotp
+
+    _, secret = _enable_2fa(client, "leo@example.com", "correct horse battery 12")
+    step1 = client.post("/auth/login", json={"email": "leo@example.com", "password": "correct horse battery 12"}).json()
+    code = pyotp.TOTP(secret).now()
+    first = client.post("/auth/login/2fa", json={"challenge_id": step1["challenge_id"], "code": code})
+    second = client.post("/auth/login/2fa", json={"challenge_id": step1["challenge_id"], "code": code})
+    assert first.status_code == 200
+    assert second.status_code == 401
+
+
+def test_login_2fa_challenge_expires(client):
+    import time
+
+    import pyotp
+
+    _, secret = _enable_2fa(client, "max@example.com", "correct horse battery 13")
+    step1 = client.post("/auth/login", json={"email": "max@example.com", "password": "correct horse battery 13"}).json()
+    # Overwrite the challenge with a 1-second TTL to simulate expiry
+    client.challenge_store._client.set(f"auth:2fa:challenge:{step1['challenge_id']}", "nobody", ex=1)
+    time.sleep(1.1)
+    res = client.post(
+        "/auth/login/2fa",
+        json={"challenge_id": step1["challenge_id"], "code": pyotp.TOTP(secret).now()},
+    )
+    assert res.status_code == 401
+
+
+def test_login_2fa_wrong_code_increments_failed_count(client):
+    _, secret = _enable_2fa(client, "nora@example.com", "correct horse battery 14")
+    step1 = client.post(
+        "/auth/login", json={"email": "nora@example.com", "password": "correct horse battery 14"}
+    ).json()
+    res = client.post("/auth/login/2fa", json={"challenge_id": step1["challenge_id"], "code": "000000"})
+    assert res.status_code == 401
+    assert res.json()["detail"] == "Invalid code"
+    user = get_user(client, "nora@example.com")
+    assert user.failed_login_count >= 1
