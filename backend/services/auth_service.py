@@ -6,6 +6,8 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import case
+from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
 from exceptions import (
@@ -32,6 +34,17 @@ def _aware(dt: datetime) -> datetime:
 
 def _sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def _atomic(stmt):
+    """Add synchronize_session=False to skip ORM Python-side re-evaluation.
+
+    SQLAlchemy's default 'evaluate' mode tries to apply WHERE conditions against
+    in-memory objects. SQLite returns naive datetimes, but our helpers produce
+    UTC-aware datetimes, causing TypeError. Setting False marks affected objects
+    as expired; they are re-fetched from DB on next access (correct behaviour).
+    """
+    return stmt.execution_options(synchronize_session=False)
 
 
 class AuthService:
@@ -97,20 +110,29 @@ class AuthService:
 
     def verify_email(self, db: Session, *, token: str, ip: str | None, ua: str | None) -> None:
         token_hash = _sha256(token)
-        row = db.exec(
-            select(EmailToken).where(
-                EmailToken.token_hash == token_hash,
-                EmailToken.purpose == "verify_email",
+        now = _utcnow()
+
+        # Gate 3A Finding 4: atomic mark-as-used — prevents replay under concurrency
+        result = db.execute(
+            _atomic(
+                sa_update(EmailToken)
+                .where(
+                    EmailToken.token_hash == token_hash,
+                    EmailToken.purpose == "verify_email",
+                    EmailToken.used_at.is_(None),
+                    EmailToken.expires_at > now,
+                )
+                .values(used_at=now)
             )
-        ).first()
-        if row is None or row.used_at is not None or _aware(row.expires_at) < _utcnow():
+        )
+        if result.rowcount == 0:
             raise TokenInvalidError()
-        row.used_at = _utcnow()
+
+        row = db.exec(select(EmailToken).where(EmailToken.token_hash == token_hash)).one()
         user = db.exec(select(User).where(User.id == row.user_id)).one()
         user.email_verified = True
-        user.email_verified_at = _utcnow()
-        user.updated_at = _utcnow()
-        db.add(row)
+        user.email_verified_at = now
+        user.updated_at = now
         db.add(user)
         db.commit()
         self.audit.log(db, user_id=user.id, event="user.email_verified", ip=ip, user_agent=ua, metadata={})
@@ -134,12 +156,24 @@ class AuthService:
             raise AccountLockedError(locked_until=user.locked_until.isoformat())
 
         if not self.password.verify(password, user.password_hash):
-            user.failed_login_count += 1
-            if user.failed_login_count >= self.LOCKOUT_THRESHOLD:
-                user.locked_until = _utcnow() + self.LOCKOUT_DURATION
-            user.updated_at = _utcnow()
-            db.add(user)
+            now = _utcnow()
+            # Gate 3A Finding 3: atomic increment + conditional lockout — single UPDATE, no TOCTOU
+            db.execute(
+                _atomic(
+                    sa_update(User)
+                    .where(User.id == user.id)
+                    .values(
+                        failed_login_count=User.failed_login_count + 1,
+                        locked_until=case(
+                            (User.failed_login_count + 1 >= self.LOCKOUT_THRESHOLD, now + self.LOCKOUT_DURATION),
+                            else_=User.locked_until,
+                        ),
+                        updated_at=now,
+                    )
+                )
+            )
             db.commit()
+            db.refresh(user)
             self.audit.log(
                 db,
                 user_id=user.id,
@@ -182,38 +216,57 @@ class AuthService:
 
     def refresh(self, db: Session, *, refresh_token: str, ip: str | None, ua: str | None) -> dict:
         token_hash = self.tokens.hash_refresh(refresh_token)
-        row = db.exec(select(UserSession).where(UserSession.refresh_token_hash == token_hash)).first()
-        if row is None:
-            raise TokenInvalidError()
-        if row.revoked_at is not None:
-            for s in db.exec(select(UserSession).where(UserSession.user_id == row.user_id)).all():
-                if s.revoked_at is None:
-                    s.revoked_at = _utcnow()
-                    db.add(s)
-            db.commit()
-            self.audit.log(
-                db,
-                user_id=row.user_id,
-                event="session.refresh_reuse_detected",
-                ip=ip,
-                user_agent=ua,
-                metadata={"session_id": str(row.id)},
+        now = _utcnow()
+
+        # Gate 3A Finding 1: atomic revoke — single UPDATE prevents the TOCTOU race
+        # where two concurrent requests both see revoked_at IS NULL and both succeed.
+        result = db.execute(
+            _atomic(
+                sa_update(UserSession)
+                .where(
+                    UserSession.refresh_token_hash == token_hash,
+                    UserSession.revoked_at.is_(None),
+                    UserSession.expires_at > now,
+                )
+                .values(revoked_at=now)
             )
-            raise TokenInvalidError()
-        if _aware(row.expires_at) < _utcnow():
+        )
+
+        if result.rowcount == 0:
+            # Token not claimed — determine why: reuse, expired, or nonexistent
+            existing = db.exec(select(UserSession).where(UserSession.refresh_token_hash == token_hash)).first()
+            if existing is not None and existing.revoked_at is not None:
+                # Revoked token reused — burn all active sessions for this user
+                db.execute(
+                    _atomic(
+                        sa_update(UserSession)
+                        .where(UserSession.user_id == existing.user_id, UserSession.revoked_at.is_(None))
+                        .values(revoked_at=now)
+                    )
+                )
+                db.commit()
+                self.audit.log(
+                    db,
+                    user_id=existing.user_id,
+                    event="session.refresh_reuse_detected",
+                    ip=ip,
+                    user_agent=ua,
+                    metadata={"session_id": str(existing.id)},
+                )
             raise TokenInvalidError()
 
-        row.revoked_at = _utcnow()
-        db.add(row)
+        # Token was valid and atomically revoked — fetch user and issue new token
+        row = db.exec(select(UserSession).where(UserSession.refresh_token_hash == token_hash)).first()
         new_plain, new_hash = self.tokens.encode_refresh()
-        new_row = UserSession(
-            user_id=row.user_id,
-            refresh_token_hash=new_hash,
-            user_agent=ua,
-            ip_address=ip,
-            expires_at=_utcnow() + self.REFRESH_TTL,
+        db.add(
+            UserSession(
+                user_id=row.user_id,
+                refresh_token_hash=new_hash,
+                user_agent=ua,
+                ip_address=ip,
+                expires_at=now + self.REFRESH_TTL,
+            )
         )
-        db.add(new_row)
         db.commit()
         user = db.exec(select(User).where(User.id == row.user_id)).one()
         return {
@@ -268,27 +321,38 @@ class AuthService:
         if len(new_password) < 12:
             raise TokenInvalidError()
         token_hash = _sha256(token)
-        row = db.exec(
-            select(EmailToken).where(
-                EmailToken.token_hash == token_hash,
-                EmailToken.purpose == "reset_password",
+        now = _utcnow()
+
+        # Gate 3A Finding 4: atomic mark-as-used — prevents replay under concurrency
+        result = db.execute(
+            _atomic(
+                sa_update(EmailToken)
+                .where(
+                    EmailToken.token_hash == token_hash,
+                    EmailToken.purpose == "reset_password",
+                    EmailToken.used_at.is_(None),
+                    EmailToken.expires_at > now,
+                )
+                .values(used_at=now)
             )
-        ).first()
-        if row is None or row.used_at is not None or _aware(row.expires_at) < _utcnow():
+        )
+        if result.rowcount == 0:
             raise TokenInvalidError()
-        row.used_at = _utcnow()
+
+        row = db.exec(select(EmailToken).where(EmailToken.token_hash == token_hash)).one()
         user = db.exec(select(User).where(User.id == row.user_id)).one()
         user.password_hash = self.password.hash(new_password)
         user.failed_login_count = 0
         user.locked_until = None
-        user.updated_at = _utcnow()
-        db.add(row)
+        user.updated_at = now
         db.add(user)
-        for s in db.exec(
-            select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
-        ).all():
-            s.revoked_at = _utcnow()
-            db.add(s)
+        db.execute(
+            _atomic(
+                sa_update(UserSession)
+                .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+        )
         db.commit()
         self.audit.log(db, user_id=user.id, event="password.reset_completed", ip=ip, user_agent=ua, metadata={})
 
