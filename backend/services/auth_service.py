@@ -432,3 +432,28 @@ class AuthService:
             "secret": secret,
             "provisioning_uri": self.totp.provisioning_uri(secret, user.email),
         }
+
+    def enable_2fa(self, db: Session, user: User, code: str, *, ip: str, ua: str) -> None:
+        from fastapi import HTTPException
+
+        assert self.totp is not None, "TOTPService not wired"
+        if not user.totp_secret:
+            raise HTTPException(status_code=400, detail="2FA not initialized")
+        secret = self.totp.decrypt(user.totp_secret)
+        if not self.totp.verify(secret, code, valid_window=1):
+            raise HTTPException(status_code=400, detail="Invalid code")
+        user.totp_enabled = True
+        db.add(user)
+        # Revoke OTHER active sessions; keep the current one (identified by session_hash)
+        current_hash = getattr(user, "_current_session_hash", None)
+        q = db.query(UserSession).filter(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        if current_hash:
+            q = q.filter(UserSession.refresh_token_hash != current_hash)
+        for s in q.all():
+            s.revoked_at = _utcnow()
+            db.add(s)
+        db.commit()
+        self.audit.log(db, user_id=user.id, event="user.2fa_enabled", ip=ip, user_agent=ua, metadata={})

@@ -249,3 +249,21 @@ def twofa_setup(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     return svc.start_2fa_setup(db, current_user)
+
+
+class TwoFaEnableBody(BaseModel):
+    code: str
+
+
+@router.post("/2fa/enable")
+def twofa_enable(
+    body: TwoFaEnableBody,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    svc: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    current_user._current_session_hash = getattr(request.state, "session_hash", None)  # type: ignore[attr-defined]
+    ip, ua = _client(request)
+    svc.enable_2fa(db, current_user, body.code, ip=ip, ua=ua)
+    return {"status": "ok"}

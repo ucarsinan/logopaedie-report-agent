@@ -137,3 +137,30 @@ def test_2fa_setup_returns_secret_and_uri_but_not_enabled(client):
     user = get_user(client, "alice@example.com")
     assert user.totp_enabled is False
     assert user.totp_secret is not None
+
+
+# ── Task 4.6 ──────────────────────────────────────────────────────────────────
+
+
+def test_2fa_enable_rejects_wrong_code(client):
+    tokens = register_and_login(client, "carol@example.com", "correct horse battery 3")
+    client.post("/auth/2fa/setup", headers=auth_headers(tokens))
+    res = client.post("/auth/2fa/enable", json={"code": "000000"}, headers=auth_headers(tokens))
+    assert res.status_code == 400
+    user = get_user(client, "carol@example.com")
+    assert user.totp_enabled is False
+
+
+# ── Task 4.7 ──────────────────────────────────────────────────────────────────
+
+
+def test_2fa_enable_success_flips_flag(client):
+    import pyotp
+
+    tokens = register_and_login(client, "dave@example.com", "correct horse battery 4")
+    setup = client.post("/auth/2fa/setup", headers=auth_headers(tokens)).json()
+    code = pyotp.TOTP(setup["secret"]).now()
+    res = client.post("/auth/2fa/enable", json={"code": code}, headers=auth_headers(tokens))
+    assert res.status_code == 200
+    user = get_user(client, "dave@example.com")
+    assert user.totp_enabled is True
