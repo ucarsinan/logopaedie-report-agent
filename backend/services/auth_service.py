@@ -211,9 +211,10 @@ class AuthService:
         )
         db.add(sess)
         db.commit()
+        db.refresh(sess)  # ensure sess.id is populated
         self.audit.log(db, user_id=user.id, event="login.success", ip=ip, user_agent=ua, metadata={})
         return {
-            "access_token": self.tokens.encode_access(user.id),
+            "access_token": self.tokens.encode_access(user.id, session_id=sess.id),
             "refresh_token": plain_refresh,
             "user": self._user_view(user),
         }
@@ -226,6 +227,8 @@ class AuthService:
 
         # Gate 3A Finding 1: atomic revoke — single UPDATE prevents the TOCTOU race
         # where two concurrent requests both see revoked_at IS NULL and both succeed.
+        # rotated=True marks this session as "revoked via rotation" so the reuse-detection
+        # path below can distinguish rotation reuse from explicit revocations (e.g. 2FA enable).
         result = db.execute(
             _atomic(
                 sa_update(UserSession)
@@ -234,15 +237,15 @@ class AuthService:
                     UserSession.revoked_at.is_(None),
                     UserSession.expires_at > now,
                 )
-                .values(revoked_at=now)
+                .values(revoked_at=now, rotated=True)
             )
         )
 
         if result.rowcount == 0:
             # Token not claimed — determine why: reuse, expired, or nonexistent
             existing = db.exec(select(UserSession).where(UserSession.refresh_token_hash == token_hash)).first()
-            if existing is not None and existing.revoked_at is not None:
-                # Revoked token reused — burn all active sessions for this user
+            if existing is not None and existing.revoked_at is not None and existing.rotated:
+                # Rotated token reused — potential theft; burn all active sessions for this user
                 db.execute(
                     _atomic(
                         sa_update(UserSession)

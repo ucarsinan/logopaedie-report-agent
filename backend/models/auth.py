@@ -83,6 +83,7 @@ class UserSession(SQLModel, table=True):
     last_used_at: datetime = Field(default_factory=_utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
     expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     revoked_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    rotated: bool = Field(default=False)  # True only when revoked via token rotation (enables reuse detection)
 
 
 class EmailToken(SQLModel, table=True):

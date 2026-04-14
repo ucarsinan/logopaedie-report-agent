@@ -164,3 +164,25 @@ def test_2fa_enable_success_flips_flag(client):
     assert res.status_code == 200
     user = get_user(client, "dave@example.com")
     assert user.totp_enabled is True
+
+
+# ── Task 4.8 ──────────────────────────────────────────────────────────────────
+
+
+def test_2fa_enable_revokes_other_sessions_keeps_current(client, db_session):
+    import pyotp
+
+    # Register + verify + login twice → two sessions
+    register_and_login(client, "eve@example.com", "correct horse battery 5")
+    first = client.post("/auth/login", json={"email": "eve@example.com", "password": "correct horse battery 5"}).json()
+    second = client.post("/auth/login", json={"email": "eve@example.com", "password": "correct horse battery 5"}).json()
+    # Setup + enable using the SECOND session
+    setup = client.post("/auth/2fa/setup", headers=auth_headers(second)).json()
+    code = pyotp.TOTP(setup["secret"]).now()
+    client.post("/auth/2fa/enable", json={"code": code}, headers=auth_headers(second))
+    # Refresh with the FIRST session → must be revoked
+    res = client.post("/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert res.status_code == 401
+    # Refresh with the SECOND → still alive
+    res2 = client.post("/auth/refresh", json={"refresh_token": second["refresh_token"]})
+    assert res2.status_code == 200
