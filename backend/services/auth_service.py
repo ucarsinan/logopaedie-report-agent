@@ -436,6 +436,39 @@ class AuthService:
             "provisioning_uri": self.totp.provisioning_uri(secret, user.email),
         }
 
+    def disable_2fa(
+        self,
+        db: Session,
+        user: User,
+        current_password: str,
+        code: str,
+        *,
+        ip: str,
+        ua: str,
+    ) -> None:
+        from fastapi import HTTPException
+
+        assert self.totp is not None, "TOTPService not wired"
+        pw_ok = self.password.verify(current_password, user.password_hash)
+        secret = self.totp.decrypt(user.totp_secret) if user.totp_secret else ""
+        code_ok = bool(secret) and self.totp.verify(secret, code, valid_window=1)
+        if not (pw_ok and code_ok):
+            raise HTTPException(status_code=400, detail="Verification failed")
+        user.totp_secret = None
+        user.totp_enabled = False
+        db.add(user)
+        # Revoke ALL active sessions on 2FA disable
+        for s in db.exec(
+            select(UserSession).where(
+                UserSession.user_id == user.id,
+                UserSession.revoked_at.is_(None),  # type: ignore[arg-type]
+            )
+        ).all():
+            s.revoked_at = _utcnow()
+            db.add(s)
+        db.commit()
+        self.audit.log(db, user_id=user.id, event="user.2fa_disabled", ip=ip, user_agent=ua, metadata={})
+
     def enable_2fa(self, db: Session, user: User, code: str, *, ip: str, ua: str) -> None:
         from fastapi import HTTPException
 

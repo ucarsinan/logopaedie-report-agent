@@ -255,6 +255,24 @@ class TwoFaEnableBody(BaseModel):
     code: str
 
 
+class TwoFaDisableBody(BaseModel):
+    current_password: str
+    code: str
+
+
+@router.post("/2fa/disable")
+def twofa_disable(
+    body: TwoFaDisableBody,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    svc: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    ip, ua = _client(request)
+    svc.disable_2fa(db, current_user, body.current_password, body.code, ip=ip, ua=ua)
+    return {"status": "ok"}
+
+
 @router.post("/2fa/enable")
 def twofa_enable(
     body: TwoFaEnableBody,
@@ -263,7 +281,20 @@ def twofa_enable(
     svc: AuthService = Depends(get_auth_service),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    current_user._current_session_hash = getattr(request.state, "session_hash", None)  # type: ignore[attr-defined]
+    # Identify the current session so enable_2fa can keep it and revoke others
+    from uuid import UUID as _UUID
+
+    from models.auth import UserSession
+
+    sid = (getattr(request.state, "user", None) or {}).get("sid")
+    if sid:
+        try:
+            sess = db.get(UserSession, _UUID(sid))
+            current_user._current_session_hash = sess.refresh_token_hash if sess else None  # type: ignore[attr-defined]
+        except (TypeError, ValueError):
+            current_user._current_session_hash = None  # type: ignore[attr-defined]
+    else:
+        current_user._current_session_hash = None  # type: ignore[attr-defined]
     ip, ua = _client(request)
     svc.enable_2fa(db, current_user, body.code, ip=ip, ua=ua)
     return {"status": "ok"}

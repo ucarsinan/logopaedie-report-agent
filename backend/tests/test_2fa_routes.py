@@ -186,3 +186,65 @@ def test_2fa_enable_revokes_other_sessions_keeps_current(client, db_session):
     # Refresh with the SECOND → still alive
     res2 = client.post("/auth/refresh", json={"refresh_token": second["refresh_token"]})
     assert res2.status_code == 200
+
+
+# ── Tasks 4.9 / 4.10 / 4.11 ──────────────────────────────────────────────────
+
+
+def _enable_2fa(client, email: str, password: str):
+    tokens = register_and_login(client, email, password)
+    setup = client.post("/auth/2fa/setup", headers=auth_headers(tokens)).json()
+    import pyotp
+
+    code = pyotp.TOTP(setup["secret"]).now()
+    client.post("/auth/2fa/enable", json={"code": code}, headers=auth_headers(tokens))
+    return tokens, setup["secret"]
+
+
+def test_2fa_disable_requires_password_and_code(client):
+    tokens, _ = _enable_2fa(client, "frank@example.com", "correct horse battery 6")
+    # missing code → 422
+    res = client.post(
+        "/auth/2fa/disable",
+        json={"current_password": "correct horse battery 6"},
+        headers=auth_headers(tokens),
+    )
+    assert res.status_code == 422
+
+
+def test_2fa_disable_wrong_password_rejected(client):
+    import pyotp
+
+    tokens, secret = _enable_2fa(client, "greta@example.com", "correct horse battery 7")
+    res = client.post(
+        "/auth/2fa/disable",
+        json={"current_password": "wrong", "code": pyotp.TOTP(secret).now()},
+        headers=auth_headers(tokens),
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"] == "Verification failed"
+
+
+def test_2fa_disable_wrong_code_rejected(client):
+    tokens, secret = _enable_2fa(client, "hank@example.com", "correct horse battery 8")
+    res = client.post(
+        "/auth/2fa/disable",
+        json={"current_password": "correct horse battery 8", "code": "000000"},
+        headers=auth_headers(tokens),
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"] == "Verification failed"
+
+
+def test_2fa_disable_success_revokes_all_sessions(client):
+    import pyotp
+
+    tokens, secret = _enable_2fa(client, "ivan@example.com", "correct horse battery 9")
+    res = client.post(
+        "/auth/2fa/disable",
+        json={"current_password": "correct horse battery 9", "code": pyotp.TOTP(secret).now()},
+        headers=auth_headers(tokens),
+    )
+    assert res.status_code == 200
+    refresh = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    assert refresh.status_code == 401
