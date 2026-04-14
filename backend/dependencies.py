@@ -87,6 +87,15 @@ def get_audit_service() -> AuditService:
     return AuditService()
 
 
+@lru_cache(maxsize=1)
+def get_challenge_store():  # type: ignore[return]
+    """Return a ChallengeStore backed by the standard Redis client."""
+    from redis_client import get_redis
+    from services.challenge_store import ChallengeStore
+
+    return ChallengeStore(get_redis())
+
+
 # ── Auth service wiring ────────────────────────────────────────────────────────
 
 from fastapi import Depends, HTTPException, Request, status  # noqa: E402
