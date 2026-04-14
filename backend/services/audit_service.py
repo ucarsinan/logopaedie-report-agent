@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from models.auth import AuditLog
 
@@ -29,3 +29,22 @@ class AuditService:
         )
         db.add(entry)
         db.commit()
+
+    def query(
+        self,
+        db: Session,
+        *,
+        event: str | None = None,
+        user_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AuditLog]:
+        limit = max(1, min(200, limit))
+        stmt = select(AuditLog)
+        if event:
+            stmt = stmt.where(AuditLog.event == event)
+        if user_id:
+            stmt = stmt.where(AuditLog.user_id == user_id)
+        stmt = stmt.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)
+        results = db.execute(stmt)
+        return list(results.scalars().all())

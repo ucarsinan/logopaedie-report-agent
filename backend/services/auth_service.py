@@ -221,10 +221,9 @@ class AuthService:
         )
         db.add(sess)
         db.commit()
-        db.refresh(sess)  # ensure sess.id is populated
         self.audit.log(db, user_id=user.id, event="login.success", ip=ip, user_agent=ua, metadata={})
         return {
-            "access_token": self.tokens.encode_access(user.id, session_id=sess.id),
+            "access_token": self.tokens.encode_access(user.id, session_hash=refresh_hash),
             "refresh_token": plain_refresh,
             "user": self._user_view(user),
         }
@@ -289,7 +288,7 @@ class AuthService:
         db.commit()
         user = db.exec(select(User).where(User.id == row.user_id)).one()
         return {
-            "access_token": self.tokens.encode_access(user.id),
+            "access_token": self.tokens.encode_access(user.id, session_hash=new_hash),
             "refresh_token": new_plain,
             "user": self._user_view(user),
         }
@@ -498,19 +497,19 @@ class AuthService:
         user.updated_at = _utcnow()
         db.add(user)
         plain_refresh, refresh_hash = self.tokens.encode_refresh()
-        sess = UserSession(
-            user_id=user.id,
-            refresh_token_hash=refresh_hash,
-            user_agent=ua,
-            ip_address=ip,
-            expires_at=_utcnow() + self.REFRESH_TTL,
+        db.add(
+            UserSession(
+                user_id=user.id,
+                refresh_token_hash=refresh_hash,
+                user_agent=ua,
+                ip_address=ip,
+                expires_at=_utcnow() + self.REFRESH_TTL,
+            )
         )
-        db.add(sess)
         db.commit()
-        db.refresh(sess)
         self.audit.log(db, user_id=user.id, event="login.success", ip=ip, user_agent=ua, metadata={"via": "2fa"})
         return {
-            "access_token": self.tokens.encode_access(user.id, session_id=sess.id),
+            "access_token": self.tokens.encode_access(user.id, session_hash=refresh_hash),
             "refresh_token": plain_refresh,
             "user": self._user_view(user),
         }

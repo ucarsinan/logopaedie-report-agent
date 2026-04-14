@@ -40,6 +40,7 @@ from middleware.rate_limiter import limiter
 from middleware.service_token import ServiceTokenMiddleware
 from routers import (
     analysis,
+    auth_admin,
     exports,
     health,
     legacy,
@@ -179,6 +180,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 # ── Include routers ───────────────────────────────────────────────────────────
 app.include_router(auth_router.router)
+app.include_router(auth_admin.router)
 app.include_router(health.router)
 app.include_router(sessions.router)
 app.include_router(reports.router)

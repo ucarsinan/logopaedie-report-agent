@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import hmac
+from datetime import UTC, datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlmodel import Session
+from sqlalchemy import update as sa_update
+from sqlmodel import Session, select
 
 from database import get_db
 from dependencies import get_auth_service, get_current_user
@@ -17,7 +21,7 @@ from exceptions import (
     TokenInvalidError,
 )
 from middleware.rate_limiter import limiter
-from models.auth import User
+from models.auth import User, UserSession
 from services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -298,20 +302,71 @@ def twofa_enable(
     svc: AuthService = Depends(get_auth_service),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    # Identify the current session so enable_2fa can keep it and revoke others
-    from uuid import UUID as _UUID
-
-    from models.auth import UserSession
-
-    sid = (getattr(request.state, "user", None) or {}).get("sid")
-    if sid:
-        try:
-            sess = db.get(UserSession, _UUID(sid))
-            current_user._current_session_hash = sess.refresh_token_hash if sess else None  # type: ignore[attr-defined]
-        except (TypeError, ValueError):
-            current_user._current_session_hash = None  # type: ignore[attr-defined]
-    else:
-        current_user._current_session_hash = None  # type: ignore[attr-defined]
+    # session_hash is the refresh_token_hash embedded in the JWT sid claim by the middleware
+    current_user._current_session_hash = getattr(request.state, "session_hash", None)  # type: ignore[attr-defined]
     ip, ua = _client(request)
     svc.enable_2fa(db, current_user, body.code, ip=ip, ua=ua)
     return {"status": "ok"}
+
+
+# ── Sessions management ───────────────────────────────────────────────────────
+
+
+@router.get("/sessions")
+def list_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    now = datetime.now(UTC)
+    session_hash = getattr(request.state, "session_hash", None)
+    rows = db.exec(
+        select(UserSession)
+        .where(
+            UserSession.user_id == current_user.id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+        )
+        .order_by(UserSession.last_used_at.desc())
+    ).all()
+    return [
+        {
+            "id": str(s.id),
+            "user_agent": s.user_agent,
+            "ip_address": s.ip_address,
+            "created_at": s.created_at.isoformat(),
+            "last_used_at": s.last_used_at.isoformat(),
+            "expires_at": s.expires_at.isoformat(),
+            "is_current": bool(session_hash) and hmac.compare_digest(s.refresh_token_hash, session_hash),
+        }
+        for s in rows
+    ]
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    now = datetime.now(UTC)
+    result = db.execute(
+        sa_update(UserSession)
+        .where(
+            UserSession.id == session_id,
+            UserSession.user_id == current_user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.commit()
+    revoked = db.exec(select(UserSession).where(UserSession.id == session_id)).first()
+    session_hash = getattr(request.state, "session_hash", None)
+    current_revoked = (
+        bool(session_hash) and revoked is not None and hmac.compare_digest(revoked.refresh_token_hash, session_hash)
+    )
+    return {"status": "ok", "current_session_revoked": current_revoked}

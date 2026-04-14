@@ -22,7 +22,7 @@ class TokenService:
         self._access_ttl = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "15")))
         self._leeway = int(os.getenv("JWT_LEEWAY_SECONDS", "0"))
 
-    def encode_access(self, user_id: UUID, session_id: UUID | None = None) -> str:
+    def encode_access(self, user_id: UUID, session_hash: str | None = None) -> str:
         now = datetime.now(UTC)
         payload: dict = {
             "sub": str(user_id),
@@ -30,8 +30,8 @@ class TokenService:
             "iat": int(now.timestamp()),
             "exp": int((now + self._access_ttl).timestamp()),
         }
-        if session_id is not None:
-            payload["sid"] = str(session_id)
+        if session_hash is not None:
+            payload["sid"] = session_hash  # refresh_token_hash — identifies the issuing session
         return jwt.encode(payload, self._secret, algorithm=self._alg)
 
     def decode_access(self, token: str) -> dict:
