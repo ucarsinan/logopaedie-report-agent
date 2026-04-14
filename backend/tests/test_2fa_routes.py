@@ -248,3 +248,17 @@ def test_2fa_disable_success_revokes_all_sessions(client):
     assert res.status_code == 200
     refresh = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert refresh.status_code == 401
+
+
+# ── Task 4.12 ─────────────────────────────────────────────────────────────────
+
+
+def test_login_with_2fa_returns_challenge_no_tokens(client):
+    _enable_2fa(client, "jane@example.com", "correct horse battery 10")
+    res = client.post("/auth/login", json={"email": "jane@example.com", "password": "correct horse battery 10"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["step"] == "2fa_required"
+    assert "challenge_id" in body
+    assert "access_token" not in body
+    assert "refresh_token" not in body

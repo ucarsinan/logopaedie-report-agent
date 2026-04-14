@@ -201,6 +201,16 @@ class AuthService:
         user.updated_at = _utcnow()
         db.add(user)
 
+        # Branch: if TOTP is enabled, issue a short-lived challenge instead of tokens
+        if user.totp_enabled and self.challenges is not None:
+            import secrets as _secrets
+
+            challenge_id = _secrets.token_urlsafe(24)
+            self.challenges.put(challenge_id, str(user.id), ttl_seconds=300)
+            db.commit()
+            self.audit.log(db, user_id=user.id, event="login.2fa_challenge_issued", ip=ip, user_agent=ua, metadata={})
+            return {"step": "2fa_required", "challenge_id": challenge_id}
+
         plain_refresh, refresh_hash = self.tokens.encode_refresh()
         sess = UserSession(
             user_id=user.id,
