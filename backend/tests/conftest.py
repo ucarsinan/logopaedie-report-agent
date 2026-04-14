@@ -13,6 +13,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset in-memory rate limiter storage before each test."""
+    from middleware.rate_limiter import limiter
+
+    limiter._storage.reset()
+    yield
+    limiter._storage.reset()
+
+
+@pytest.fixture(autouse=True)
 def _set_env(monkeypatch):
     """Set required env vars for testing."""
     monkeypatch.setenv("GROQ_API_KEY", "test-key-not-real")

@@ -145,3 +145,14 @@ def test_password_reset_confirm_revokes_all_sessions(client):
     assert res.status_code == 200
     assert c.post("/auth/refresh", json={"refresh_token": t1["refresh_token"]}).status_code == 401
     assert c.post("/auth/refresh", json={"refresh_token": t2["refresh_token"]}).status_code == 401
+
+
+def test_rate_limit_login_5_per_min(client):
+    """slowapi limit 5/minute/IP on /auth/login — 6th call returns 429."""
+    c, email = client
+    c.post("/auth/register", json={"email": "rl@example.com", "password": "longpassword12"})
+    c.post("/auth/verify-email", json={"token": email.sent[-1][2]})
+    for _ in range(5):
+        c.post("/auth/login", json={"email": "rl@example.com", "password": "wrongpassword12"})
+    res = c.post("/auth/login", json={"email": "rl@example.com", "password": "wrongpassword12"})
+    assert res.status_code == 429

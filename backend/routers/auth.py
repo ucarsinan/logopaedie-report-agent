@@ -16,6 +16,7 @@ from exceptions import (
     InvalidCredentialsError,
     TokenInvalidError,
 )
+from middleware.rate_limiter import limiter
 from models.auth import User
 from services.auth_service import AuthService
 
@@ -88,9 +89,10 @@ def _err(exc: Exception, response: Response) -> dict:
 
 
 @router.post("/register")
+@limiter.limit("3/minute")
 def register(
-    body: RegisterIn,
     request: Request,
+    body: RegisterIn,
     db: Session = Depends(get_db),
     svc: AuthService = Depends(get_auth_service),
 ):
@@ -117,9 +119,10 @@ def verify_email(
 
 
 @router.post("/login")
+@limiter.limit("5/minute")
 def login(
-    body: LoginIn,
     request: Request,
+    body: LoginIn,
     response: Response,
     db: Session = Depends(get_db),
     svc: AuthService = Depends(get_auth_service),
@@ -132,9 +135,10 @@ def login(
 
 
 @router.post("/refresh")
+@limiter.limit("30/minute")
 def refresh(
-    body: RefreshIn,
     request: Request,
+    body: RefreshIn,
     response: Response,
     db: Session = Depends(get_db),
     svc: AuthService = Depends(get_auth_service),
@@ -170,9 +174,10 @@ def me(user: User = Depends(get_current_user)):
 
 
 @router.post("/password/reset/request")
+@limiter.limit("3/hour")
 def reset_request(
-    body: ResetRequestIn,
     request: Request,
+    body: ResetRequestIn,
     db: Session = Depends(get_db),
     svc: AuthService = Depends(get_auth_service),
 ):
