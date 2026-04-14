@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import logging
 import os
 import sys
@@ -14,13 +15,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
-from slowapi.errors import RateLimitExceeded  # noqa: E402
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
-from database import create_db_and_tables  # noqa: E402
-from exceptions import (  # noqa: E402
+from database import create_db_and_tables
+from exceptions import (
     AIServiceError,
     FileTooLargeError,
     ModelExhaustedError,
@@ -33,10 +34,11 @@ from exceptions import (  # noqa: E402
     UnsupportedFileTypeError,
     ValidationError,
 )
-from logging_config import setup_logging  # noqa: E402
-from middleware.auth import APIKeyAuthMiddleware  # noqa: E402
-from middleware.rate_limiter import limiter  # noqa: E402
-from routers import (  # noqa: E402
+from logging_config import setup_logging
+from middleware.auth import JWTAuthMiddleware
+from middleware.rate_limiter import limiter
+from middleware.service_token import ServiceTokenMiddleware
+from routers import (
     analysis,
     exports,
     health,
@@ -46,6 +48,9 @@ from routers import (  # noqa: E402
     soap,
     suggestions,
     therapy_plans,
+)
+from routers import (
+    auth as auth_router,
 )
 
 setup_logging()
@@ -69,8 +74,9 @@ _allowed_origins = list(
     }
 )
 
-# Auth middleware (must be added before CORS to process requests)
-app.add_middleware(APIKeyAuthMiddleware)
+# Middleware order (Starlette LIFO): CORS (outer) → ServiceToken → JWT (inner)
+app.add_middleware(JWTAuthMiddleware)
+app.add_middleware(ServiceTokenMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -172,6 +178,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 # ── Include routers ───────────────────────────────────────────────────────────
+app.include_router(auth_router.router)
 app.include_router(health.router)
 app.include_router(sessions.router)
 app.include_router(reports.router)

@@ -1,6 +1,7 @@
 """Singleton service instances and FastAPI dependency providers."""
 
 from functools import lru_cache
+from uuid import UUID
 
 from services.anamnesis_engine import AnamnesisEngine
 from services.audit_service import AuditService
@@ -84,3 +85,50 @@ def get_email_service() -> EmailService:
 @lru_cache(maxsize=1)
 def get_audit_service() -> AuditService:
     return AuditService()
+
+
+# ── Auth service wiring ────────────────────────────────────────────────────────
+
+from fastapi import Depends, HTTPException, Request, status  # noqa: E402
+from sqlmodel import Session, select  # noqa: E402
+
+from database import get_db  # noqa: E402
+from models.auth import User  # noqa: E402
+from services.auth_service import AuthService  # noqa: E402
+
+
+@lru_cache(maxsize=1)
+def _auth_service_singleton() -> AuthService:
+    return AuthService(
+        password=get_password_service(),
+        tokens=get_token_service(),
+        email=get_email_service(),
+        audit=get_audit_service(),
+    )
+
+
+def get_auth_service() -> AuthService:
+    return _auth_service_singleton()
+
+
+def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+    state_user = getattr(request.state, "user", None)
+    if not state_user:
+        return None
+    try:
+        uid = UUID(state_user["id"])
+    except (KeyError, ValueError):
+        return None
+    return db.exec(select(User).where(User.id == uid)).first()
+
+
+def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication_required")
+    return user
+
+
+def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin_only")
+    return user
