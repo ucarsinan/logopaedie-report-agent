@@ -237,3 +237,15 @@ def resend(
     ip, ua = _client(request)
     svc.resend_verification(db, email_addr=body.email, ip=ip, ua=ua)
     return {"message": GENERIC_REGISTER_MSG}
+
+
+# ── 2FA routes ────────────────────────────────────────────────────────────────
+
+
+@router.post("/2fa/setup")
+def twofa_setup(
+    current_user: User = Depends(get_current_user),
+    svc: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    return svc.start_2fa_setup(db, current_user)

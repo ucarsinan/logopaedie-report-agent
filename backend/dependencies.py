@@ -113,6 +113,8 @@ def _auth_service_singleton() -> AuthService:
         tokens=get_token_service(),
         email=get_email_service(),
         audit=get_audit_service(),
+        totp=get_totp_service(),
+        challenges=get_challenge_store(),
     )
 
 

@@ -1,4 +1,4 @@
-"""Business logic for register/verify/login/refresh/reset flows (no 2FA)."""
+"""Business logic for register/verify/login/refresh/reset and 2FA flows."""
 
 from __future__ import annotations
 
@@ -18,9 +18,11 @@ from exceptions import (
 )
 from models.auth import EmailToken, User, UserSession
 from services.audit_service import AuditService
+from services.challenge_store import ChallengeStore
 from services.email_service import EmailService, FakeEmailService
 from services.password_service import PasswordService
 from services.token_service import TokenService
+from services.totp_service import TOTPService
 
 
 def _utcnow() -> datetime:
@@ -60,11 +62,15 @@ class AuthService:
         tokens: TokenService,
         email: EmailService | FakeEmailService,
         audit: AuditService,
+        totp: TOTPService | None = None,
+        challenges: ChallengeStore | None = None,
     ) -> None:
         self.password = password
         self.tokens = tokens
         self.email = email
         self.audit = audit
+        self.totp = totp
+        self.challenges = challenges
 
     def _user_view(self, user: User) -> dict:
         return {
@@ -412,3 +418,17 @@ class AuthService:
         )
         db.commit()
         self.email.send_verify_email(normalized, plain)
+
+    # ---------- 2FA setup / enable / disable ----------
+
+    def start_2fa_setup(self, db: Session, user: User) -> dict[str, str]:
+        assert self.totp is not None, "TOTPService not wired"
+        secret = self.totp.generate_secret()
+        user.totp_secret = self.totp.encrypt(secret)
+        user.totp_enabled = False
+        db.add(user)
+        db.commit()
+        return {
+            "secret": secret,
+            "provisioning_uri": self.totp.provisioning_uri(secret, user.email),
+        }
