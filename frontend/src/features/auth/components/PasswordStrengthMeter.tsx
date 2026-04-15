@@ -40,7 +40,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
         aria-valuemin={0}
         aria-valuemax={4}
         aria-valuenow={score}
-        aria-label="Passwortstärke"
+        aria-label="Stärke-Anzeige"
         className="h-2 w-full bg-neutral-200 dark:bg-neutral-800 rounded"
       >
         <div
