@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 
+// Only forward known safe paths — prevents accidental exposure of future
+// privileged backend auth endpoints (e.g. /auth/users, /auth/admin/*).
+const ALLOWED_PREFIXES = [
+  "/verify-email",
+  "/resend-verification",
+  "/password/",
+  "/totp/",
+];
+
 function readCookie(header: string | null, name: string): string | null {
   if (!header) return null;
   const match = header.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -14,6 +23,13 @@ async function forward(
 ): Promise<Response> {
   const { rest } = await ctx.params;
   const path = "/" + rest.join("/");
+
+  if (!ALLOWED_PREFIXES.some((p) => path.startsWith(p))) {
+    return new Response(JSON.stringify({ detail: "not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const url = new URL(req.url);
   const target = `${BACKEND}/auth${path}${url.search}`;
   const access = readCookie(req.headers.get("cookie"), "access_token");

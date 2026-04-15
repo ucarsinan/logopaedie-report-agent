@@ -32,7 +32,7 @@ export async function POST(req: Request): Promise<Response> {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: "lax",
-    path: "/",
+    path: "/api/auth/refresh",
     maxAge: REFRESH_MAX_AGE,
   });
   res.cookies.set("user_role", payload.user.role, {

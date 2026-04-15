@@ -23,7 +23,8 @@ export async function POST(req: Request): Promise<Response> {
     maxAge: 0,
   };
   res.cookies.set("access_token", "", clearOpts);
-  res.cookies.set("refresh_token", "", clearOpts);
+  // refresh_token is scoped to /api/auth/refresh — clear with matching path
+  res.cookies.set("refresh_token", "", { ...clearOpts, path: "/api/auth/refresh" });
   res.cookies.set("user_role", "", {
     httpOnly: false,
     secure: IS_PROD,

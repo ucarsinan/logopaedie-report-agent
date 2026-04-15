@@ -37,6 +37,10 @@ export function middleware(req: NextRequest): NextResponse {
     return NextResponse.redirect(loginUrl);
   }
 
+  // NOTE: user_role cookie is a UI-only gate (not httpOnly, readable by JS).
+  // Backend enforces real authorization on every request via Bearer token.
+  // A tampered user_role=admin cookie only exposes the admin UI shell;
+  // all data fetches will still fail at the backend with 403.
   if (isAdmin(pathname) && role !== "admin") {
     return NextResponse.redirect(new URL("/", req.url));
   }
