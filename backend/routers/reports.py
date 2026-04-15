@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, col, func, select
 
 from database import get_db
+from dependencies import get_current_user
+from models.auth import User
 from models.report_record import ReportRecord
 
 router = APIRouter(tags=["reports"])
@@ -20,9 +22,10 @@ async def list_reports(
     to_date: str | None = Query(None, description="Filter to date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    query = select(ReportRecord)
+    query = select(ReportRecord).where(ReportRecord.user_id == current_user.id)
 
     if pseudonym:
         query = query.where(func.lower(ReportRecord.pseudonym).contains(pseudonym.lower()))
@@ -41,11 +44,9 @@ async def list_reports(
         except ValueError:
             pass
 
-    # Count total before pagination
     count_query = select(func.count()).select_from(query.subquery())
     total = db.exec(count_query).one()
 
-    # Apply pagination
     records = db.exec(query.order_by(col(ReportRecord.created_at).desc()).offset((page - 1) * limit).limit(limit)).all()
 
     return {
@@ -65,13 +66,21 @@ async def list_reports(
 
 
 @router.get("/reports/stats")
-async def report_stats(db: Session = Depends(get_db)) -> dict:
-    total = db.exec(select(func.count()).select_from(ReportRecord)).one()
+async def report_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    base = select(ReportRecord).where(ReportRecord.user_id == current_user.id)
+    total = db.exec(select(func.count()).select_from(base.subquery())).one()
 
-    type_counts_raw = db.exec(select(ReportRecord.report_type, func.count()).group_by(ReportRecord.report_type)).all()
+    type_counts_raw = db.exec(
+        select(ReportRecord.report_type, func.count())
+        .where(ReportRecord.user_id == current_user.id)
+        .group_by(ReportRecord.report_type)
+    ).all()
     by_type = {row[0]: row[1] for row in type_counts_raw}
 
-    latest = db.exec(select(func.max(ReportRecord.created_at))).one()
+    latest = db.exec(select(func.max(ReportRecord.created_at)).where(ReportRecord.user_id == current_user.id)).one()
 
     return {
         "total": total,
@@ -81,8 +90,14 @@ async def report_stats(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/reports/{report_id}")
-async def get_persisted_report(report_id: int, db: Session = Depends(get_db)) -> dict:
-    record = db.get(ReportRecord, report_id)
+async def get_persisted_report(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    record = db.exec(
+        select(ReportRecord).where(ReportRecord.id == report_id, ReportRecord.user_id == current_user.id)
+    ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden.")
     content: dict = json.loads(record.content_json)

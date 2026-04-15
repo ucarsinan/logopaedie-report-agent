@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -61,14 +62,26 @@ def mock_groq():
 
 
 @pytest.fixture()
-def client(mock_groq, mock_redis):
-    """Create a TestClient with mocked Groq service and Redis."""
+def fake_user():
+    """A minimal User object for dependency-override injection."""
+    from models.auth import User
+
+    return User(id=uuid4(), email="fixture@test.example", password_hash="irrelevant")
+
+
+@pytest.fixture()
+def client(mock_groq, mock_redis, fake_user):
+    """Create a TestClient with mocked Groq, Redis, and a fake authenticated user."""
     from fastapi.testclient import TestClient
 
+    from dependencies import get_current_user
     from main import app
 
+    app.dependency_overrides[get_current_user] = lambda: fake_user
     with TestClient(app) as c:
+        c.fake_user = fake_user  # accessible to tests that need the user object
         yield c
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture()
