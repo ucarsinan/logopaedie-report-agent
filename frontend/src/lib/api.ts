@@ -17,13 +17,49 @@ export type { ReportSummary, ReportDetail, TherapyPlanSummary } from "@/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
 
+/* ═══════════════════════════ Single-flight 401 refresh ═══════════════════════ */
+
+let refreshPromise: Promise<Response> | null = null;
+
+export function __resetRefreshForTest(): void {
+  refreshPromise = null;
+}
+
+export async function apiCall(
+  url: string,
+  opts: RequestInit = {},
+): Promise<Response> {
+  const res = await fetch(url, { credentials: "include", ...opts });
+  if (res.status !== 401 || url.includes("/api/auth/")) {
+    return res;
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+    }).finally(() => {
+      setTimeout(() => {
+        refreshPromise = null;
+      }, 0);
+    });
+  }
+
+  const refreshed = await refreshPromise;
+  if (refreshed.ok) {
+    return fetch(url, { credentials: "include", ...opts });
+  }
+  window.location.href = "/login";
+  return res;
+}
+
 /* ═══════════════════════════════ Shared fetch helper ═════════════════════════ */
 
 async function fetchApi<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${API}${path}`, init);
+  const res = await apiCall(`${API}${path}`, init);
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
     throw new Error(detail?.detail ?? res.statusText);
