@@ -33,7 +33,36 @@ describe("AuthProvider", () => {
     );
   });
 
-  it("marks unauthenticated when /api/auth/me returns 401", async () => {
+  it("retries with refresh token when me returns 401, then becomes authenticated", async () => {
+    const user = {
+      id: "u1",
+      email: "a@b.c",
+      role: "user",
+      totp_enabled: false,
+      created_at: "2026-04-13T00:00:00Z",
+    };
+    const fetchMock = vi.fn<typeof fetch>();
+    // First me() → 401 (expired access token)
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 401 }));
+    // refresh → 200
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    // Second me() → 200 with user
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(user), { status: 200 }),
+    );
+    vi.spyOn(global, "fetch").mockImplementation(fetchMock);
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("status").textContent).toBe("authenticated"),
+    );
+  });
+
+  it("marks unauthenticated when both me and refresh return 401", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue(
       new Response("{}", { status: 401 }),
     );

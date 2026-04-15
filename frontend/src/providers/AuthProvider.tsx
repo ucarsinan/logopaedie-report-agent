@@ -28,7 +28,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const user: User = await authApi.me();
       setState({ status: "authenticated", user });
     } catch {
-      setState({ status: "unauthenticated" });
+      // access_token may be expired — attempt rotation before giving up
+      try {
+        const refreshRes = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (!refreshRes.ok) throw new Error("refresh failed");
+        const user: User = await authApi.me();
+        setState({ status: "authenticated", user });
+      } catch {
+        setState({ status: "unauthenticated" });
+      }
     }
   }, []);
 
