@@ -27,7 +27,6 @@ def _reset_rate_limiter():
 def _set_env(monkeypatch):
     """Set required env vars for testing."""
     monkeypatch.setenv("GROQ_API_KEY", "test-key-not-real")
-    monkeypatch.delenv("API_KEY", raising=False)
     # Fake Redis credentials so session_store doesn't crash on import
     monkeypatch.setenv("KV_REST_API_URL", "https://fake-redis.test")
     monkeypatch.setenv("KV_REST_API_TOKEN", "fake-token")

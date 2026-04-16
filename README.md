@@ -85,7 +85,6 @@ cp .env.example .env
 # Required: GROQ_API_KEY
 # Optional: KV_REST_API_URL, KV_REST_API_TOKEN (Upstash Redis)
 #           DATABASE_URL (Neon PostgreSQL)
-#           API_KEY (optional auth)
 ```
 
 ### 3. Run
@@ -115,7 +114,7 @@ This project uses [Vercel Services](https://vercel.com/docs/services) to deploy 
 vercel deploy
 ```
 
-Environment variables in Vercel: `GROQ_API_KEY`, `ALLOWED_ORIGINS`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `DATABASE_URL`
+Environment variables in Vercel: `GROQ_API_KEY`, `ALLOWED_ORIGINS`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `DATABASE_URL`, `JWT_SECRET`, `SERVICE_TOKEN`, `SESSION_ENCRYPTION_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `BACKEND_URL`
 
 ## License
 
