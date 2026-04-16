@@ -43,6 +43,8 @@ export function TwoFactorSetup() {
         body: JSON.stringify({ code }),
       });
       if (!res.ok) throw new Error();
+      setSetup(null);
+      setCode("");
       setDone(true);
     } catch {
       setError("Code ist ungültig.");
