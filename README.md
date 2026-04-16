@@ -106,6 +106,31 @@ cd backend && python -m pytest          # 35 backend tests
 cd frontend && npm test                  # frontend component tests
 ```
 
+## Authentication
+
+The app uses a full multi-user auth system: email + password registration, email verification, optional TOTP 2FA, password reset, active sessions dashboard, and an admin audit log.
+
+### Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `JWT_SECRET` | HS256 signing secret for access tokens |
+| `SERVICE_TOKEN` | Internal service-to-service bearer token |
+| `SESSION_ENCRYPTION_KEY` | Fernet key for session data at rest |
+| `RESEND_API_KEY` | [Resend](https://resend.com) API key for transactional email |
+| `RESEND_FROM_EMAIL` | Sender address (e.g. `noreply@example.com`) |
+| `BACKEND_URL` | Backend URL as seen from the frontend service (e.g. `http://localhost:8001`) |
+
+> **Email:** Resend requires one-time domain verification at [resend.com/domains](https://resend.com/domains) before sending from a custom address.
+
+### Auth capabilities
+
+- Register → email verification → login
+- Optional TOTP 2FA (setup via QR code, enable/disable in `/settings/security`)
+- Password reset via email link
+- Active sessions dashboard with per-device revoke
+- Admin audit log at `/admin/audit`
+
 ## Deployment (Vercel)
 
 This project uses [Vercel Services](https://vercel.com/docs/services) to deploy the Next.js frontend and FastAPI backend as a single monorepo.
@@ -114,7 +139,13 @@ This project uses [Vercel Services](https://vercel.com/docs/services) to deploy 
 vercel deploy
 ```
 
-Environment variables in Vercel: `GROQ_API_KEY`, `ALLOWED_ORIGINS`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `DATABASE_URL`, `JWT_SECRET`, `SERVICE_TOKEN`, `SESSION_ENCRYPTION_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `BACKEND_URL`
+### Vercel deploy checklist
+
+1. Set `BACKEND_URL` in the **frontend** service env to the deployed FastAPI service URL.
+2. Set `JWT_SECRET`, `SERVICE_TOKEN`, `SESSION_ENCRYPTION_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `DATABASE_URL`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `GROQ_API_KEY` in the **backend** service env.
+3. Run Alembic migrations against Neon: `alembic upgrade head`.
+4. Verify `vercel.json` `experimentalServices` exposes both services and the `/api/*` rewrite carve-out is in place.
+5. Smoke-test: register a user, verify email, log in, enable 2FA, log in again with 2FA.
 
 ## License
 
