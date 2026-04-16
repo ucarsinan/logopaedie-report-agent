@@ -8,13 +8,12 @@ import { authApi } from "@/features/auth/api";
 export default function VerifyEmailPage() {
   const params = useSearchParams();
   const token = params.get("token");
-  const [state, setState] = useState<"pending" | "ok" | "error">("pending");
+  const [state, setState] = useState<"pending" | "ok" | "error">(() =>
+    token ? "pending" : "error",
+  );
 
   useEffect(() => {
-    if (!token) {
-      setState("error");
-      return;
-    }
+    if (!token) return;
     authApi
       .verifyEmail(token)
       .then(() => setState("ok"))

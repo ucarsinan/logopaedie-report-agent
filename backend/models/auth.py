@@ -46,7 +46,7 @@ class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, sa_column=Column(GUID, primary_key=True))
     email: str = Field(index=True, unique=True)
     password_hash: str
-    role: str = Field(default="user", sa_type=String(50))
+    role: str = Field(default="user", sa_type=String(50))  # type: ignore[call-overload]
     email_verified: bool = Field(default=False)
     email_verified_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     totp_secret: str | None = Field(default=None)
@@ -100,7 +100,7 @@ class EmailToken(SQLModel, table=True):
         )
     )
     token_hash: str = Field(index=True)
-    purpose: str = Field(sa_type=String(50))
+    purpose: str = Field(sa_type=String(50))  # type: ignore[call-overload]
     expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     used_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
 

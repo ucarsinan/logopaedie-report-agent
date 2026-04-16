@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { zxcvbn, zxcvbnOptions } from "@zxcvbn-ts/core";
 import * as zxcvbnCommon from "@zxcvbn-ts/language-common";
 
 zxcvbnOptions.setOptions({
-  translations: zxcvbnCommon.translations,
   graphs: zxcvbnCommon.adjacencyGraphs,
   dictionary: zxcvbnCommon.dictionary,
 });
@@ -20,18 +19,8 @@ const COLORS = [
 ];
 
 export function PasswordStrengthMeter({ password }: { password: string }) {
-  const [score, setScore] = useState(0);
-
-  useEffect(() => {
-    if (!password) {
-      setScore(0);
-      return;
-    }
-    const result = zxcvbn(password);
-    setScore(result.score);
-  }, [password]);
-
-  const label = useMemo(() => LABELS[score], [score]);
+  const score = useMemo(() => (password ? zxcvbn(password).score : 0), [password]);
+  const label = LABELS[score];
 
   return (
     <div className="mt-2">

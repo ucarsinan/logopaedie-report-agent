@@ -521,8 +521,8 @@ class AuthService:
         current_password: str,
         code: str,
         *,
-        ip: str,
-        ua: str,
+        ip: str | None,
+        ua: str | None,
     ) -> None:
         from fastapi import HTTPException
 
@@ -550,7 +550,7 @@ class AuthService:
         db.commit()
         self.audit.log(db, user_id=user.id, event="user.2fa_disabled", ip=ip, user_agent=ua, metadata={})
 
-    def enable_2fa(self, db: Session, user: User, code: str, *, ip: str, ua: str) -> None:
+    def enable_2fa(self, db: Session, user: User, code: str, *, ip: str | None, ua: str | None) -> None:
         import hmac as _hmac
 
         from fastapi import HTTPException

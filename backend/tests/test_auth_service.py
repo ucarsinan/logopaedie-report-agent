@@ -94,7 +94,7 @@ def _make_verified_user(svc: AuthService, db, email_svc, email: str, password: s
 
 
 def test_login_unverified_raises_email_not_verified(deps):
-    svc, db, email = deps
+    svc, db, _email = deps
     svc.register(db, email_addr="u@example.com", password="longpassword12", ip=None, ua=None)
     from exceptions import EmailNotVerifiedError
 
@@ -112,7 +112,7 @@ def test_login_wrong_password_generic(deps):
 
 
 def test_login_unknown_email_generic(deps):
-    svc, db, email = deps
+    svc, db, _email = deps
     from exceptions import InvalidCredentialsError
 
     with pytest.raises(InvalidCredentialsError):

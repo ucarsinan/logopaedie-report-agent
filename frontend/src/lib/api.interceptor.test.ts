@@ -46,7 +46,9 @@ describe("apiCall single-flight 401 interceptor", () => {
     const hrefSetter = vi.fn();
     Object.defineProperty(window, "location", {
       value: {
-        href: "",
+        get href() {
+          return "";
+        },
         set href(v: string) {
           hrefSetter(v);
         },

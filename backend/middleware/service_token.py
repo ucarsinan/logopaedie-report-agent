@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, Response
 class ServiceTokenMiddleware(BaseHTTPMiddleware):
     GUARDED_PREFIXES = ("/health", "/cron/")
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
         if not path.startswith(self.GUARDED_PREFIXES):
             return await call_next(request)

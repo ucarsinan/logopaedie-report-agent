@@ -226,7 +226,7 @@ def test_2fa_disable_wrong_password_rejected(client):
 
 
 def test_2fa_disable_wrong_code_rejected(client):
-    tokens, secret = _enable_2fa(client, "hank@example.com", "correct horse battery 8")
+    tokens, _secret = _enable_2fa(client, "hank@example.com", "correct horse battery 8")
     res = client.post(
         "/auth/2fa/disable",
         json={"current_password": "correct horse battery 8", "code": "000000"},
@@ -315,7 +315,7 @@ def test_login_2fa_challenge_expires(client):
 
 
 def test_login_2fa_wrong_code_increments_failed_count(client):
-    _, secret = _enable_2fa(client, "nora@example.com", "correct horse battery 14")
+    _, _secret = _enable_2fa(client, "nora@example.com", "correct horse battery 14")
     step1 = client.post(
         "/auth/login", json={"email": "nora@example.com", "password": "correct horse battery 14"}
     ).json()
@@ -382,7 +382,7 @@ def test_login_2fa_wrong_code_triggers_lockout(client):
     """TOTP failures must apply atomic lockout — Gate 4A Finding #6a."""
     from sqlmodel import Session
 
-    _, secret = _enable_2fa(client, "quinn@example.com", "correct horse battery 17")
+    _, _secret = _enable_2fa(client, "quinn@example.com", "correct horse battery 17")
 
     # Get challenge first — login() resets failed_login_count to 0 on success
     step = client.post(

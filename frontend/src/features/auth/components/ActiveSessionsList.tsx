@@ -8,7 +8,7 @@ export function ActiveSessionsList() {
   async function onRevoke(id: string) {
     const res = await revoke(id);
     if (res.current_session_revoked) {
-      window.location.href = "/login";
+      window.location.replace("/login");
     }
   }
 

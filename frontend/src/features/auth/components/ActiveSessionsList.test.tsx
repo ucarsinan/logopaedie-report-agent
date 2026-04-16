@@ -25,8 +25,9 @@ const sessions = [
 
 describe("ActiveSessionsList", () => {
   beforeEach(() => {
+    const replaceSpy = vi.fn();
     Object.defineProperty(window, "location", {
-      value: { href: "" },
+      value: { replace: replaceSpy },
       writable: true,
     });
   });
@@ -72,6 +73,8 @@ describe("ActiveSessionsList", () => {
     await screen.findByText("Chrome");
     const revokeBtns = screen.getAllByRole("button", { name: /widerrufen/i });
     fireEvent.click(revokeBtns[0]);
-    await waitFor(() => expect(window.location.href).toBe("/login"));
+    await waitFor(() =>
+      expect(window.location.replace).toHaveBeenCalledWith("/login"),
+    );
   });
 });
