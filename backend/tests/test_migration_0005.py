@@ -16,7 +16,10 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
-def alembic_cfg():
+def alembic_cfg(monkeypatch):
+    # Prevent env.py from overriding the SQLite test URL with the real DB URL
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("POSTGRES_URL", raising=False)
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         tmp_name = tmp.name
     url = f"sqlite:///{tmp_name}"

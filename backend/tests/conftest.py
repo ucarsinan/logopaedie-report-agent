@@ -30,6 +30,8 @@ def _set_env(monkeypatch):
     # Fake Redis credentials so session_store doesn't crash on import
     monkeypatch.setenv("KV_REST_API_URL", "https://fake-redis.test")
     monkeypatch.setenv("KV_REST_API_TOKEN", "fake-token")
+    # Remove token guard so /health is reachable without a service token
+    monkeypatch.delenv("SERVICE_TOKEN", raising=False)
 
 
 @pytest.fixture()
@@ -69,18 +71,53 @@ def fake_user():
 
 
 @pytest.fixture()
-def client(mock_groq, mock_redis, fake_user):
-    """Create a TestClient with mocked Groq, Redis, and a fake authenticated user."""
-    from fastapi.testclient import TestClient
+def test_db(fake_user):
+    """In-memory SQLite engine with all tables created and fake_user pre-inserted."""
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import Session, SQLModel, create_engine
 
+    import models.auth
+    import models.report_record
+    import models.soap_record
+    import models.therapy_plan_record  # noqa: F401
+
+    # StaticPool: all sessions share one connection → same in-memory DB instance
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add(fake_user)
+        session.commit()
+        session.refresh(fake_user)
+        session.expunge(fake_user)  # detach with all attributes loaded
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture()
+def client(mock_groq, mock_redis, fake_user, test_db):
+    """Create a TestClient with mocked Groq, Redis, a fake authenticated user, and in-memory DB."""
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session
+
+    from database import get_db
     from dependencies import get_current_user
     from main import app
 
+    def override_get_db():
+        with Session(test_db) as session:
+            yield session
+
     app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         c.fake_user = fake_user  # accessible to tests that need the user object
         yield c
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture()

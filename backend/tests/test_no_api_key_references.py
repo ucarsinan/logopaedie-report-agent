@@ -16,7 +16,7 @@ def test_no_api_key_references() -> None:
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in {".git", "node_modules", ".next", "dist", ".venv"} for part in path.parts):
+        if any(part in {".git", "node_modules", ".next", "dist", ".venv", ".worktrees"} for part in path.parts):
             continue
         rel = path.relative_to(root).as_posix()
         if rel in ALLOWED_FILES:

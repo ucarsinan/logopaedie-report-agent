@@ -28,15 +28,17 @@ class FakeRedis:
 
 
 def _make_store():
-    """Create a SessionStore with a fake Redis backend."""
+    """Create a SessionStore with a fake Redis backend and encryption disabled."""
     fake = FakeRedis()
-    patcher = patch("services.session_store._get_redis", return_value=fake)
-    patcher.start()
-    return SessionStore(), fake, patcher
+    redis_patcher = patch("services.session_store._get_redis", return_value=fake)
+    fernet_patcher = patch("services.session_store._fernet", None)
+    redis_patcher.start()
+    fernet_patcher.start()
+    return SessionStore(), fake, (redis_patcher, fernet_patcher)
 
 
 def test_create_and_get():
-    store, _fake, patcher = _make_store()
+    store, _fake, patchers = _make_store()
     try:
         session = store.create()
         assert isinstance(session, Session)
@@ -44,19 +46,21 @@ def test_create_and_get():
         assert loaded is not None
         assert loaded.session_id == session.session_id
     finally:
-        patcher.stop()
+        for p in patchers:
+            p.stop()
 
 
 def test_get_nonexistent():
-    store, _fake, patcher = _make_store()
+    store, _fake, patchers = _make_store()
     try:
         assert store.get("does-not-exist") is None
     finally:
-        patcher.stop()
+        for p in patchers:
+            p.stop()
 
 
 def test_expired_session():
-    store, fake, patcher = _make_store()
+    store, fake, patchers = _make_store()
     try:
         session = store.create()
         # Manipulate stored data to simulate expiration
@@ -66,7 +70,8 @@ def test_expired_session():
         fake.set(key, json.dumps(data))
         assert store.get(session.session_id) is None
     finally:
-        patcher.stop()
+        for p in patchers:
+            p.stop()
 
 
 def test_session_initial_state():
