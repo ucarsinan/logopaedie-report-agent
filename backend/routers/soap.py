@@ -4,10 +4,11 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from database import get_db
-from dependencies import get_soap_generator
+from dependencies import get_current_user, get_soap_generator
+from models.auth import User
 from models.report_record import ReportRecord
 from models.soap_record import SOAPRecord
 from services.session_store import SessionStore
@@ -23,6 +24,7 @@ _store = SessionStore()
 @router.post("/sessions/{session_id}/soap")
 async def generate_soap_from_session(
     session_id: str,
+    _: User = Depends(get_current_user),
     soap_gen: SOAPGenerator = Depends(get_soap_generator),
     db: Session = Depends(get_db),
 ):
@@ -62,10 +64,13 @@ async def generate_soap_from_session(
 @router.post("/reports/{report_id}/soap")
 async def generate_soap_from_report(
     report_id: int,
+    current_user: User = Depends(get_current_user),
     soap_gen: SOAPGenerator = Depends(get_soap_generator),
     db: Session = Depends(get_db),
 ):
-    record = db.get(ReportRecord, report_id)
+    record = db.exec(
+        select(ReportRecord).where(ReportRecord.id == report_id, ReportRecord.user_id == current_user.id)
+    ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden.")
 
@@ -96,7 +101,11 @@ async def generate_soap_from_report(
 
 
 @router.get("/soap/{soap_id}")
-async def get_soap_note(soap_id: int, db: Session = Depends(get_db)):
+async def get_soap_note(
+    soap_id: int,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     record = db.get(SOAPRecord, soap_id)
     if not record:
         raise HTTPException(status_code=404, detail="SOAP-Notiz nicht gefunden.")

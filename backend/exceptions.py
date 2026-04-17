@@ -59,3 +59,39 @@ class ReportNotFoundError(ReportError):
 
 class ReportGenerationError(ReportError):
     """Raised when report generation fails."""
+
+
+# ── Auth Errors ──────────────────────────────────────────────────────────────
+from fastapi import status  # noqa: E402
+
+
+class AuthError(Exception):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    error_code = "auth_error"
+    message = "Authentication required"
+
+
+class InvalidCredentialsError(AuthError):
+    error_code = "invalid_credentials"
+    message = "Email or password incorrect"
+
+
+class EmailNotVerifiedError(AuthError):
+    status_code = status.HTTP_403_FORBIDDEN
+    error_code = "email_not_verified"
+    message = "Email not verified"
+
+
+class AccountLockedError(AuthError):
+    status_code = status.HTTP_423_LOCKED
+    error_code = "account_locked"
+    message = "Account temporarily locked"
+
+    def __init__(self, locked_until: str | None = None) -> None:
+        super().__init__()
+        self.locked_until = locked_until
+
+
+class TokenInvalidError(AuthError):
+    error_code = "token_invalid"
+    message = "Token invalid or expired"

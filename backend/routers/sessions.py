@@ -11,12 +11,13 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from database import get_db
-from dependencies import anamnesis_engine, groq_service, report_generator
+from dependencies import anamnesis_engine, get_current_user, groq_service, report_generator
 from exceptions import (
     FileTooLargeError,
     SessionNotFoundError,
 )
 from middleware.rate_limiter import AUDIO_LIMIT, CHAT_LIMIT, GENERATE_LIMIT, limiter
+from models.auth import User
 from models.report_record import ReportRecord
 from models.schemas import (
     ChatMessage,
@@ -54,7 +55,10 @@ class ConsentRequest(BaseModel):
 
 # ── Session management ──────────────────────────────────────────────────────
 @router.post("/sessions")
-async def create_session(req: CreateSessionRequest | None = None) -> SessionInfo:
+async def create_session(
+    req: CreateSessionRequest | None = None,
+    _: User = Depends(get_current_user),
+) -> SessionInfo:
     session = store.create()
     if req and req.mode == "therapy_plan":
         session.therapy_plan_mode = True
@@ -79,7 +83,10 @@ async def create_session(req: CreateSessionRequest | None = None) -> SessionInfo
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str) -> SessionInfo:
+async def get_session(
+    session_id: str,
+    _: User = Depends(get_current_user),
+) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
@@ -96,7 +103,10 @@ async def get_session(session_id: str) -> SessionInfo:
 
 
 @router.post("/sessions/{session_id}/new-conversation")
-async def new_conversation(session_id: str) -> SessionInfo:
+async def new_conversation(
+    session_id: str,
+    _: User = Depends(get_current_user),
+) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
@@ -130,7 +140,12 @@ async def new_conversation(session_id: str) -> SessionInfo:
 # ── Chat (text) ────────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/chat")
 @limiter.limit(CHAT_LIMIT)
-async def chat(request: Request, session_id: str, req: ChatRequest) -> ChatResponse:
+async def chat(
+    request: Request,
+    session_id: str,
+    req: ChatRequest,
+    _: User = Depends(get_current_user),
+) -> ChatResponse:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
@@ -154,7 +169,12 @@ async def chat(request: Request, session_id: str, req: ChatRequest) -> ChatRespo
 # ── Chat via audio ─────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/audio")
 @limiter.limit(AUDIO_LIMIT)
-async def chat_audio(request: Request, session_id: str, audio_file: UploadFile = File(...)) -> ChatResponse:
+async def chat_audio(
+    request: Request,
+    session_id: str,
+    audio_file: UploadFile = File(...),
+    _: User = Depends(get_current_user),
+) -> ChatResponse:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
@@ -195,6 +215,7 @@ async def upload_material(
     session_id: str,
     file: UploadFile = File(...),
     material_type: str = "sonstiges",
+    _: User = Depends(get_current_user),
 ) -> UploadedMaterial:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -220,7 +241,11 @@ async def upload_material(
 
 # ── Materials consent ────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/materials-consent")
-async def set_materials_consent(session_id: str, req: ConsentRequest) -> SessionInfo:
+async def set_materials_consent(
+    session_id: str,
+    req: ConsentRequest,
+    _: User = Depends(get_current_user),
+) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
@@ -239,7 +264,12 @@ async def set_materials_consent(session_id: str, req: ConsentRequest) -> Session
 # ── Report generation ───────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/generate")
 @limiter.limit(GENERATE_LIMIT)
-async def generate_report(request: Request, session_id: str, db: Session = Depends(get_db)) -> dict:
+async def generate_report(
+    request: Request,
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:
@@ -258,6 +288,7 @@ async def generate_report(request: Request, session_id: str, db: Session = Depen
             pseudonym=session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
             report_type=session.generated_report.get("report_type", "unbekannt"),
             content_json=json.dumps(session.generated_report, ensure_ascii=False),
+            user_id=current_user.id,
         )
         db.add(record)
         db.commit()
@@ -272,7 +303,10 @@ async def generate_report(request: Request, session_id: str, db: Session = Depen
 
 
 @router.get("/sessions/{session_id}/report")
-async def get_report(session_id: str) -> dict:
+async def get_report(
+    session_id: str,
+    _: User = Depends(get_current_user),
+) -> dict:
     _validate_session_id(session_id)
     session = store.get(session_id)
     if not session:

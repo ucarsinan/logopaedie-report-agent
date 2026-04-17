@@ -12,5 +12,5 @@ class TherapyPlanRecord(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     patient_pseudonym: str = Field(index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    report_id: int | None = Field(default=None, foreign_key="reportrecord.id")
+    report_id: int | None = Field(default=None, foreign_key="reports.id")
     plan_data: str  # full TherapyPlan as JSON string

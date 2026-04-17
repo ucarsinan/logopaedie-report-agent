@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/:path*",
-        destination: "http://localhost:8001/:path*",
+        source: "/api/:path((?!auth).*)",
+        destination: `${process.env.BACKEND_URL ?? "http://localhost:8001"}/:path*`,
       },
     ];
   },

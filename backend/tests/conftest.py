@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -13,10 +14,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset in-memory rate limiter storage before each test."""
+    from middleware.rate_limiter import limiter
+
+    limiter._storage.reset()
+    yield
+    limiter._storage.reset()
+
+
+@pytest.fixture(autouse=True)
 def _set_env(monkeypatch):
     """Set required env vars for testing."""
     monkeypatch.setenv("GROQ_API_KEY", "test-key-not-real")
-    monkeypatch.delenv("API_KEY", raising=False)
     # Fake Redis credentials so session_store doesn't crash on import
     monkeypatch.setenv("KV_REST_API_URL", "https://fake-redis.test")
     monkeypatch.setenv("KV_REST_API_TOKEN", "fake-token")
@@ -51,14 +61,26 @@ def mock_groq():
 
 
 @pytest.fixture()
-def client(mock_groq, mock_redis):
-    """Create a TestClient with mocked Groq service and Redis."""
+def fake_user():
+    """A minimal User object for dependency-override injection."""
+    from models.auth import User
+
+    return User(id=uuid4(), email="fixture@test.example", password_hash="irrelevant")
+
+
+@pytest.fixture()
+def client(mock_groq, mock_redis, fake_user):
+    """Create a TestClient with mocked Groq, Redis, and a fake authenticated user."""
     from fastapi.testclient import TestClient
 
+    from dependencies import get_current_user
     from main import app
 
+    app.dependency_overrides[get_current_user] = lambda: fake_user
     with TestClient(app) as c:
+        c.fake_user = fake_user  # accessible to tests that need the user object
         yield c
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture()

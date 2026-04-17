@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.pool import StaticPool
@@ -16,16 +17,18 @@ test_engine = create_engine(
     poolclass=StaticPool,  # share a single in-memory connection across sessions
 )
 
+from models.auth import GUID, User  # noqa: E402, F401 — registers User in SQLModel metadata
 from models.report_record import ReportRecord  # noqa: E402 — must be imported before create_all
 
 # Pre-register short-name aliases so that main.py's sys.path-based imports (`from models.X import …`)
 # resolve to the SAME module objects as `backend.models.X` — prevents duplicate SQLModel registrations.
-# Ensure short-name imports resolve to the same modules
 for _key in list(sys.modules):
     if _key.startswith("backend."):
         _short = _key[len("backend.") :]
         if _short not in sys.modules:
             sys.modules[_short] = sys.modules[_key]
+
+TEST_USER_ID = uuid4()
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +44,7 @@ def test_report_record_can_be_created():
             pseudonym="Max M.",
             report_type="befundbericht",
             content_json=json.dumps({"report_type": "befundbericht", "patient": {"pseudonym": "Max M."}}),
+            user_id=TEST_USER_ID,
         )
         db.add(record)
         db.commit()
@@ -64,13 +68,17 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
     get_db = database_mod.get_db
     from sqlmodel import Session, select
 
+    from dependencies import get_current_user
     from models.report_record import ReportRecord
+
+    fake_user = User(id=TEST_USER_ID, email="gen@test.example", password_hash="x")
 
     def override_get_db():
         with Session(test_engine) as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: fake_user
 
     fake_report = {
         "report_type": "befundbericht",
@@ -114,6 +122,7 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
     assert len(records) == 1
     assert records[0].pseudonym == "Anna B."
     assert records[0].report_type == "befundbericht"
+    assert str(records[0].user_id) == str(TEST_USER_ID)
 
     app.dependency_overrides.clear()
 
@@ -130,15 +139,20 @@ def test_list_reports_returns_saved_records():
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
     get_db = database_mod.get_db
 
+    from dependencies import get_current_user
+
+    fake_user = User(id=TEST_USER_ID, email="list@test.example", password_hash="x")
+
     def override_get_db():
         with Session(test_engine) as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: fake_user
 
     with Session(test_engine) as db:
-        db.add(ReportRecord(pseudonym="A", report_type="befundbericht", content_json="{}"))
-        db.add(ReportRecord(pseudonym="B", report_type="abschlussbericht", content_json="{}"))
+        db.add(ReportRecord(pseudonym="A", report_type="befundbericht", content_json="{}", user_id=TEST_USER_ID))
+        db.add(ReportRecord(pseudonym="B", report_type="abschlussbericht", content_json="{}", user_id=TEST_USER_ID))
         db.commit()
 
     client = TestClient(app)
@@ -167,15 +181,25 @@ def test_get_single_report_returns_full_content():
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
     get_db = database_mod.get_db
 
+    from dependencies import get_current_user
+
+    fake_user = User(id=TEST_USER_ID, email="get@test.example", password_hash="x")
+
     def override_get_db():
         with Session(test_engine) as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: fake_user
 
     content = {"report_type": "befundbericht", "patient": {"pseudonym": "X"}}
     with Session(test_engine) as db:
-        record = ReportRecord(pseudonym="X", report_type="befundbericht", content_json=json.dumps(content))
+        record = ReportRecord(
+            pseudonym="X",
+            report_type="befundbericht",
+            content_json=json.dumps(content),
+            user_id=TEST_USER_ID,
+        )
         db.add(record)
         db.commit()
         db.refresh(record)
@@ -203,11 +227,16 @@ def test_get_nonexistent_report_returns_404():
     database_mod = sys.modules.get("database") or sys.modules["backend.database"]
     get_db = database_mod.get_db
 
+    from dependencies import get_current_user
+
+    fake_user = User(id=TEST_USER_ID, email="notfound@test.example", password_hash="x")
+
     def override_get_db():
         with Session(test_engine) as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: fake_user
 
     client = TestClient(app)
     res = client.get("/reports/99999")

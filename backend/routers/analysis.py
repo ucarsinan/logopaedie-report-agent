@@ -4,10 +4,11 @@ import logging
 import os
 import tempfile
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 
-from dependencies import phonological_analyzer, report_comparator
+from dependencies import get_current_user, phonological_analyzer, report_comparator
 from middleware.rate_limiter import ANALYSIS_LIMIT, limiter
+from models.auth import User
 from models.schemas import PhonologicalAnalysis, ReportComparison
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ async def analyze_phonological(
     target_audio: UploadFile = File(...),
     production_audio: UploadFile = File(...),
     child_age: str | None = None,
+    _: User = Depends(get_current_user),
 ) -> PhonologicalAnalysis:
     target_path: str | None = None
     production_path: str | None = None
@@ -54,6 +56,7 @@ async def analyze_phonological_text(
     request: Request,
     word_pairs: list[dict[str, str]],
     child_age: str | None = None,
+    _: User = Depends(get_current_user),
 ) -> PhonologicalAnalysis:
     """Analyze phonological processes from text word pairs (no audio needed)."""
     return await phonological_analyzer.analyze(word_pairs, child_age)
@@ -65,6 +68,7 @@ async def compare_reports(
     request: Request,
     initial_report: UploadFile = File(...),
     current_report: UploadFile = File(...),
+    _: User = Depends(get_current_user),
 ) -> ReportComparison:
     initial_content = await initial_report.read()
     current_content = await current_report.read()
