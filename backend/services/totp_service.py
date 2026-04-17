@@ -25,15 +25,15 @@ class TOTPService:
         return self._DUMMY_SECRET
 
     def generate_secret(self) -> str:
-        return pyotp.random_base32()
+        return pyotp.random_base32()  # type: ignore[no-any-return]
 
     def provisioning_uri(self, secret: str, email: str) -> str:
-        return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=self._ISSUER)
+        return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=self._ISSUER)  # type: ignore[no-any-return]
 
     def verify(self, secret: str, code: str, valid_window: int = 1) -> bool:
         if not code or not code.isdigit() or len(code) != 6:
             return False
-        return pyotp.TOTP(secret).verify(code, valid_window=valid_window)
+        return pyotp.TOTP(secret).verify(code, valid_window=valid_window)  # type: ignore[no-any-return]
 
     def verify_and_get_step(self, secret: str, code: str, valid_window: int = 1) -> int | None:
         """Verify a TOTP code and return the matched step counter, or None if invalid.
