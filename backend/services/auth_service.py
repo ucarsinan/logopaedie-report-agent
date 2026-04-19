@@ -64,6 +64,7 @@ class AuthService:
         audit: AuditService,
         totp: TOTPService | None = None,
         challenges: ChallengeStore | None = None,
+        auto_verify: bool = False,
     ) -> None:
         self.password = password
         self.tokens = tokens
@@ -71,6 +72,7 @@ class AuthService:
         self.audit = audit
         self.totp = totp
         self.challenges = challenges
+        self.auto_verify = auto_verify
 
     def _user_view(self, user: User) -> dict:
         return {
@@ -98,10 +100,19 @@ class AuthService:
         )
         if existing is not None:
             return
-        user = User(email=normalized, password_hash=self.password.hash(password))
+        now = _utcnow()
+        user = User(
+            email=normalized,
+            password_hash=self.password.hash(password),
+            email_verified=self.auto_verify,
+            email_verified_at=now if self.auto_verify else None,
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
+        if self.auto_verify:
+            self.audit.log(db, user_id=user.id, event="user.email_auto_verified", ip=ip, user_agent=ua, metadata={})
+            return
         plain = secrets.token_urlsafe(32)
         db.add(
             EmailToken(

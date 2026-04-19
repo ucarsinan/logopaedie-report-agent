@@ -103,7 +103,7 @@ def register(
     ip, ua = _client(request)
     with contextlib.suppress(ValueError):
         svc.register(db, email_addr=body.email, password=body.password, ip=ip, ua=ua)
-    return {"message": GENERIC_REGISTER_MSG}
+    return {"message": GENERIC_REGISTER_MSG, "auto_verified": svc.auto_verify}
 
 
 @router.post("/verify-email")

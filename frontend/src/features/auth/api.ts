@@ -15,7 +15,7 @@ async function jsonFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 
 export const authApi = {
   register: (email: string, password: string) =>
-    jsonFetch<{ message: string }>("/api/auth/register", {
+    jsonFetch<{ message: string; auto_verified: boolean }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),

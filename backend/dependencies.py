@@ -108,6 +108,8 @@ from services.auth_service import AuthService  # noqa: E402
 
 @lru_cache(maxsize=1)
 def _auth_service_singleton() -> AuthService:
+    import os
+
     return AuthService(
         password=get_password_service(),
         tokens=get_token_service(),
@@ -115,6 +117,7 @@ def _auth_service_singleton() -> AuthService:
         audit=get_audit_service(),
         totp=get_totp_service(),
         challenges=get_challenge_store(),
+        auto_verify=not bool(os.getenv("RESEND_API_KEY")),
     )
 
 
