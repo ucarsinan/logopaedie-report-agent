@@ -8,6 +8,8 @@ const ALLOWED_PREFIXES = [
   "/verify-email",
   "/resend-verification",
   "/password/",
+  "/2fa/",
+  "/sessions",
   "/totp/",
 ];
 
