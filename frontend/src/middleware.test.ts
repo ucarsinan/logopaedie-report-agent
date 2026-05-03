@@ -18,9 +18,9 @@ describe("middleware", () => {
     expect(res.headers.get("location")).toContain("/login?next=%2Freports");
   });
 
-  it("redirects authenticated users away from /login to /", () => {
+  it("redirects authenticated users away from /login to /module/report", () => {
     const res = middleware(makeReq("/login", { access_token: "AT" }));
-    expect(res.headers.get("location")).toBe("http://localhost:3000/");
+    expect(res.headers.get("location")).toBe("http://localhost:3000/module/report");
   });
 
   it("redirects /admin/* to / when user_role != admin", () => {
