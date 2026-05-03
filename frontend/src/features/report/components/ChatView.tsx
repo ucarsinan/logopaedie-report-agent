@@ -8,6 +8,61 @@ import { ChatInput } from "@/features/chat/components/ChatInput";
 import { AnamnesisProgress } from "@/features/chat/components/AnamnesisProgress";
 import { WelcomeScreen } from "@/features/chat/components/WelcomeScreen";
 
+const DASH = /[–-]/; // en-dash or hyphen
+
+// Detect option lists in two formats:
+//   one-line: "– Option1 – Option2 – Option3"
+//   multi-line: consecutive lines each starting with "– Option"
+function parseOptions(content: string): string[] {
+  const lines = content.split("\n");
+
+  // One-line format (preferred after prompt change)
+  for (const line of [...lines].reverse()) {
+    const t = line.trim();
+    if (new RegExp(`^${DASH.source}\\s+.+(\\s+${DASH.source}\\s+.+)+$`).test(t)) {
+      const parts = t.split(/\s*[–-]\s*/).filter(Boolean);
+      if (parts.length >= 2 && parts.every((p) => p.length < 80)) return parts;
+    }
+  }
+
+  // Multi-line format: find the largest consecutive block of "– X" lines
+  let best: string[] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (new RegExp(`^${DASH.source}\\s+\\S`).test(t)) {
+      const opt = t.replace(/^[–-]\s+/, "").trim();
+      if (opt.length < 80) { current.push(opt); continue; }
+    }
+    if (current.length > best.length) best = current;
+    current = [];
+  }
+  if (current.length > best.length) best = current;
+  return best.length >= 2 ? best : [];
+}
+
+function stripOptionsLine(content: string): string {
+  const lines = content.split("\n");
+  const result: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    // Strip one-line format
+    if (new RegExp(`^${DASH.source}\\s+.+(\\s+${DASH.source}\\s+.+)+$`).test(t)) {
+      i++; continue;
+    }
+    // Strip consecutive multi-line block (≥2 lines)
+    if (new RegExp(`^${DASH.source}\\s+\\S`).test(t)) {
+      let j = i;
+      while (j < lines.length && new RegExp(`^${DASH.source}\\s+\\S`).test(lines[j].trim())) j++;
+      if (j - i >= 2) { i = j; continue; }
+    }
+    result.push(lines[i]);
+    i++;
+  }
+  return result.join("\n").trimEnd();
+}
+
 interface ChatViewProps {
   sessionId: string | null;
   messages: ChatMsg[];
@@ -54,6 +109,19 @@ export function ChatView({
 
   // Show welcome screen only when greeting phase + no user messages yet
   const showWelcome = currentPhase === "greeting" && inputMode === "select" && !hasStarted;
+
+  // Derive quick-reply chips from the last assistant message
+  const lastAssistantIdx = messages.reduce<number>(
+    (last, m, i) => (m.role === "assistant" ? i : last),
+    -1,
+  );
+  const lastAssistantMsg = lastAssistantIdx >= 0 ? messages[lastAssistantIdx] : null;
+  const quickReplies =
+    !isSending && lastAssistantMsg ? parseOptions(lastAssistantMsg.content) : [];
+  const cleanedLastContent =
+    quickReplies.length > 0 && lastAssistantMsg
+      ? stripOptionsLine(lastAssistantMsg.content)
+      : null;
 
   // Auto-scroll chat
   useEffect(() => {
@@ -149,8 +217,29 @@ export function ChatView({
       ) : (
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto max-h-[60vh] rounded-xl bg-surface/30 p-4">
           {messages.map((msg, i) => (
-            <ChatBubble key={i} role={msg.role} content={msg.content} />
+            <ChatBubble
+              key={i}
+              role={msg.role}
+              content={
+                i === lastAssistantIdx && cleanedLastContent
+                  ? cleanedLastContent
+                  : msg.content
+              }
+            />
           ))}
+          {quickReplies.length > 0 && (
+            <div className="flex flex-wrap gap-2 pl-10 -mt-1">
+              {quickReplies.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => handleFreeTextSend(opt)}
+                  className="rounded-full border border-accent/40 bg-accent-muted px-3.5 py-1.5 text-sm text-accent-text transition-colors hover:bg-accent/15 active:scale-95"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
           {isSending && <TypingIndicator />}
           <div ref={chatEndRef} />
         </div>
