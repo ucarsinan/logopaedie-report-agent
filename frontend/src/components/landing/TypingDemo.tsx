@@ -8,21 +8,14 @@ const DEMO_TEXT =
 export function TypingDemo() {
   const [displayed, setDisplayed] = useState("");
   const [index, setIndex] = useState(0);
-  const [pausing, setPausing] = useState(false);
 
   useEffect(() => {
-    if (pausing) {
+    if (index >= DEMO_TEXT.length) {
       const id = setTimeout(() => {
         setDisplayed("");
         setIndex(0);
-        setPausing(false);
       }, 2000);
       return () => clearTimeout(id);
-    }
-
-    if (index >= DEMO_TEXT.length) {
-      setPausing(true);
-      return;
     }
 
     const id = setTimeout(() => {
@@ -31,7 +24,7 @@ export function TypingDemo() {
     }, 25);
 
     return () => clearTimeout(id);
-  }, [index, pausing]);
+  }, [index]);
 
   return (
     <div className="rounded-lg border border-ai-text/20 bg-ai-muted p-4 text-left">
