@@ -15,7 +15,9 @@ sys.path.insert(0, str(BACKEND_DIR))
 from sqlmodel import SQLModel  # noqa: E402
 
 import models.auth  # noqa: E402
-import models.report_record  # noqa: E402, F401
+import models.report_record  # noqa: E402
+import models.soap_record  # noqa: E402
+import models.therapy_plan_record  # noqa: E402, F401
 
 config = context.config
 if config.config_file_name is not None:

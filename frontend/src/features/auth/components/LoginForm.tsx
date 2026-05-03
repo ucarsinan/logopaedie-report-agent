@@ -51,7 +51,7 @@ export function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded border border-neutral-300 dark:border-neutral-700 px-3 py-2 bg-white dark:bg-neutral-900"
+          className="mt-1 block w-full rounded border border-border bg-input px-3 py-2 outline-none transition-colors focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-muted)]"
         />
       </label>
       <label className="block">
@@ -62,7 +62,7 @@ export function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded border border-neutral-300 dark:border-neutral-700 px-3 py-2 bg-white dark:bg-neutral-900"
+          className="mt-1 block w-full rounded border border-border bg-input px-3 py-2 outline-none transition-colors focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-muted)]"
         />
       </label>
       {error && (
@@ -73,17 +73,17 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded bg-blue-600 text-white py-2 disabled:opacity-50"
+        className="w-full rounded bg-[var(--accent)] py-2 font-medium text-white transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50"
       >
         Anmelden
       </button>
       <div className="flex justify-between text-sm">
-        <Link href="/register" className="text-blue-600 hover:underline">
+        <Link href="/register" className="text-[var(--accent-text)] hover:underline">
           Registrieren
         </Link>
         <Link
           href="/forgot-password"
-          className="text-blue-600 hover:underline"
+          className="text-[var(--accent-text)] hover:underline"
         >
           Passwort vergessen?
         </Link>

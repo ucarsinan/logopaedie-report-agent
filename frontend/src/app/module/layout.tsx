@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ResetConfirmDialog } from "@/components/ResetConfirmDialog";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { BrandLogo } from "@/components/BrandLogo";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { UserAccountBar } from "@/features/auth/components/UserAccountBar";
 
@@ -29,15 +30,20 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
   const activeSlug = pathname.split("/").pop() ?? "report";
   const { isSending, error, handleSoftReset, handleFullReset } = useSession();
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !localStorage.getItem("logopaedie_onboarding_done");
-  });
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     const handler = () => setIsResetDialogOpen(true);
     window.addEventListener("request-reset", handler);
     return () => window.removeEventListener("request-reset", handler);
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowOnboarding(!localStorage.getItem("logopaedie_onboarding_done"));
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   return (
@@ -46,13 +52,17 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
       <header className="border-b border-border print:hidden">
         <div className="max-w-5xl mx-auto px-6">
           <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 py-2">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-extrabold tracking-tight text-foreground">Logopädie</span>
+            <Link
+              href="/module/report"
+              aria-label="Praxis für Logopädie Şimşek"
+              className="flex min-w-0 items-center gap-3 text-sm"
+            >
+              <BrandLogo compact showSubtitle={false} className="min-w-0" />
               <span className="text-border-strong font-light">/</span>
               <span className="font-semibold" style={{ color: "var(--accent-text)" }}>
                 {MODULE_LABELS[activeSlug] ?? "Modul"}
               </span>
-            </div>
+            </Link>
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
               <UserAccountBar />
               <button

@@ -11,6 +11,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from models.auth import GUID, User  # noqa: F401 — registers User in SQLModel metadata
 from models.report_record import ReportRecord
+from models.soap_record import SOAPRecord
 
 
 @pytest.fixture
@@ -156,3 +157,126 @@ def test_report_stats_counts_only_own(ownership_client, eng, two_users):
 def test_unauthenticated_reports_returns_401(ownership_client):
     res = ownership_client.get("/reports")
     assert res.status_code == 401
+
+
+def _soap(user_id, report_id=None, session_id=None):
+    return SOAPRecord(
+        report_id=report_id,
+        session_id=session_id,
+        user_id=user_id,
+        subjective="S",
+        objective="O",
+        assessment="A",
+        plan="P",
+    )
+
+
+def test_get_soap_returns_own_note(ownership_client, eng, two_users):
+    user_a, _ = two_users
+    with Session(eng) as db:
+        note = _soap(user_a.id)
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        note_id = note.id
+
+    ownership_client.set_user(user_a)
+    res = ownership_client.get(f"/soap/{note_id}")
+    assert res.status_code == 200
+    assert res.json()["subjective"] == "S"
+
+
+def test_get_soap_404_for_other_user(ownership_client, eng, two_users):
+    user_a, user_b = two_users
+    with Session(eng) as db:
+        note = _soap(user_a.id)
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        note_id = note.id
+
+    ownership_client.set_user(user_b)
+    res = ownership_client.get(f"/soap/{note_id}")
+    assert res.status_code == 404
+
+
+def test_update_soap_persists_for_owner(ownership_client, eng, two_users):
+    user_a, _ = two_users
+    with Session(eng) as db:
+        note = _soap(user_a.id)
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        note_id = note.id
+
+    ownership_client.set_user(user_a)
+    res = ownership_client.put(
+        f"/soap/{note_id}",
+        json={
+            "subjective": "Geändert S",
+            "objective": "Geändert O",
+            "assessment": "Geändert A",
+            "plan": "Geändert P",
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["subjective"] == "Geändert S"
+
+    with Session(eng) as db:
+        saved = db.get(SOAPRecord, note_id)
+        assert saved is not None
+        assert saved.subjective == "Geändert S"
+
+
+def test_update_soap_404_for_other_user(ownership_client, eng, two_users):
+    user_a, user_b = two_users
+    with Session(eng) as db:
+        note = _soap(user_a.id)
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        note_id = note.id
+
+    ownership_client.set_user(user_b)
+    res = ownership_client.put(
+        f"/soap/{note_id}",
+        json={
+            "subjective": "Leak",
+            "objective": "Leak",
+            "assessment": "Leak",
+            "plan": "Leak",
+        },
+    )
+    assert res.status_code == 404
+
+    with Session(eng) as db:
+        saved = db.get(SOAPRecord, note_id)
+        assert saved is not None
+        assert saved.subjective == "S"
+
+
+def test_generate_soap_from_report_assigns_current_user(ownership_client, eng, two_users, mock_groq):
+    user_a, _ = two_users
+    mock_groq["json"].return_value = {
+        "subjective": "Aus Bericht S",
+        "objective": "Aus Bericht O",
+        "assessment": "Aus Bericht A",
+        "plan": "Aus Bericht P",
+    }
+    with Session(eng) as db:
+        report = _report(user_a.id)
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        report_id = report.id
+
+    ownership_client.set_user(user_a)
+    res = ownership_client.post(f"/reports/{report_id}/soap")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["report_id"] == report_id
+
+    with Session(eng) as db:
+        saved = db.get(SOAPRecord, body["id"])
+        assert saved is not None
+        assert saved.user_id == user_a.id

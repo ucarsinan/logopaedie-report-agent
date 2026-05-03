@@ -182,6 +182,17 @@ export const api = {
       fetchApi<SOAPNote>(`/soap/${id}`),
     fromReport: (reportId: number): Promise<SOAPNote> =>
       fetchApi<SOAPNote>(`/reports/${reportId}/soap`, { method: "POST" }),
+    update: (id: number, note: SOAPNote): Promise<SOAPNote> =>
+      fetchApi<SOAPNote>(`/soap/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subjective: note.subjective,
+          objective: note.objective,
+          assessment: note.assessment,
+          plan: note.plan,
+        }),
+      }),
   },
 
   therapyPlans: {

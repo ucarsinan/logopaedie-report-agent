@@ -20,7 +20,9 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
   const [mode, setMode] = useState<"session" | "report">(sessionId ? "session" : "report");
   const [soapNote, setSoapNote] = useState<SOAPNote | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<SOAPNote | null>(null);
 
@@ -43,9 +45,13 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
     if (!sessionId) return;
     setLoading(true);
     setError(null);
+    setStatus(null);
     try {
       const result = await api.soap.generate(sessionId);
       setSoapNote(result);
+      setEditData({ ...result });
+      setEditing(true);
+      setStatus("SOAP-Notiz generiert. Bitte prüfen und speichern.");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "SOAP-Generierung fehlgeschlagen");
     } finally {
@@ -57,9 +63,13 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
     if (!selectedReportId) return;
     setLoading(true);
     setError(null);
+    setStatus(null);
     try {
       const result = await api.soap.fromReport(selectedReportId);
       setSoapNote(result);
+      setEditData({ ...result });
+      setEditing(true);
+      setStatus("SOAP-Notiz generiert. Bitte prüfen und speichern.");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "SOAP-Generierung fehlgeschlagen");
     } finally {
@@ -78,11 +88,27 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
     setEditData(null);
   };
 
-  const saveEdits = () => {
+  const saveEdits = async () => {
     if (!editData) return;
-    setSoapNote(editData);
-    setEditing(false);
-    setEditData(null);
+    if (!editData.id) {
+      setError("SOAP-Notiz kann ohne ID nicht gespeichert werden.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const saved = await api.soap.update(editData.id, editData);
+      setSoapNote(saved);
+      setEditing(false);
+      setEditData(null);
+      setStatus("SOAP-Notiz gespeichert.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "SOAP-Speichern fehlgeschlagen");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -99,6 +125,8 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
         <div className="flex flex-col gap-4">
           <div className="flex gap-2">
             <button
+              type="button"
+              aria-pressed={mode === "session"}
               onClick={() => setMode("session")}
               className={`px-4 py-2 text-sm rounded-md border transition-colors ${
                 mode === "session"
@@ -109,6 +137,8 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
               Aus aktueller Session
             </button>
             <button
+              type="button"
+              aria-pressed={mode === "report"}
               onClick={() => setMode("report")}
               className={`px-4 py-2 text-sm rounded-md border transition-colors ${
                 mode === "report"
@@ -124,6 +154,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
             <div>
               {sessionId ? (
                 <button
+                  type="button"
                   onClick={generateFromSession}
                   className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity"
                 >
@@ -139,13 +170,14 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
 
           {mode === "report" && (
             <div className="flex flex-col gap-3">
-              {reportsLoading && <p className="text-sm text-muted-foreground">Lade Berichte...</p>}
+              {reportsLoading && <p className="text-sm text-muted-foreground">Lade Berichte…</p>}
               {!reportsLoading && reports.length === 0 && (
                 <p className="text-sm text-muted-foreground">Keine gespeicherten Berichte vorhanden.</p>
               )}
               {!reportsLoading && reports.length > 0 && (
                 <>
                   <select
+                    aria-label="Gespeicherten Bericht für SOAP-Notiz auswählen"
                     value={selectedReportId ?? ""}
                     onChange={(e) => setSelectedReportId(e.target.value ? Number(e.target.value) : null)}
                     className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
@@ -158,6 +190,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                     ))}
                   </select>
                   <button
+                    type="button"
                     onClick={generateFromReport}
                     disabled={!selectedReportId}
                     className="self-start px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
@@ -186,6 +219,13 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
         </div>
       )}
 
+      {/* Status */}
+      {status && (
+        <div aria-live="polite" className="p-4 rounded-lg border border-border bg-card text-sm text-muted-foreground">
+          {status}
+        </div>
+      )}
+
       {/* SOAP Display */}
       {soapNote && !loading && (
         <div className="flex flex-col gap-4">
@@ -194,6 +234,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
             <div className="flex gap-2">
               {!editing && (
                 <button
+                  type="button"
                   onClick={startEditing}
                   className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors"
                 >
@@ -203,13 +244,17 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
               {editing && (
                 <>
                   <button
+                    type="button"
                     onClick={saveEdits}
-                    className="px-3 py-1.5 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90"
+                    disabled={saving}
+                    className="px-3 py-1.5 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Speichern
+                    {saving ? "Speichern…" : "Speichern"}
                   </button>
                   <button
+                    type="button"
                     onClick={cancelEditing}
+                    disabled={saving}
                     className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors"
                   >
                     Abbrechen
@@ -217,8 +262,10 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                 </>
               )}
               <button
-                onClick={() => { setSoapNote(null); setEditing(false); setEditData(null); }}
-                className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"
+                type="button"
+                onClick={() => { setSoapNote(null); setEditing(false); setEditData(null); setStatus(null); setError(null); }}
+                disabled={saving}
+                className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Neue Notiz
               </button>
@@ -230,14 +277,20 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
               <h4 className="font-medium text-sm">{label}</h4>
               <p className="text-xs text-muted-foreground mb-2">{description}</p>
               {editing && editData ? (
-                <textarea
-                  value={editData[key]}
-                  onChange={(e) =>
-                    setEditData((prev) => prev ? { ...prev, [key]: e.target.value } : prev)
-                  }
-                  rows={4}
-                  className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-accent"
-                />
+                <>
+                  <label className="sr-only" htmlFor={`soap-${key}`}>
+                    {label}
+                  </label>
+                  <textarea
+                    id={`soap-${key}`}
+                    value={editData[key]}
+                    onChange={(e) =>
+                      setEditData((prev) => prev ? { ...prev, [key]: e.target.value } : prev)
+                    }
+                    rows={4}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{soapNote[key]}</p>
               )}

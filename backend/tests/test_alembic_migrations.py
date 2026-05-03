@@ -52,11 +52,13 @@ def test_alembic_upgrade_head_fresh_db(alembic_cfg):
     command.upgrade(cfg, "head")
     insp = inspect(create_engine(url))
     tables = set(insp.get_table_names())
-    assert {"reports", "users", "user_sessions", "email_tokens", "audit_log"} <= tables
+    assert {"reports", "users", "user_sessions", "email_tokens", "audit_log", "soaprecord"} <= tables
     user_indexes = {ix["name"] for ix in insp.get_indexes("users")}
     sess_indexes = {ix["name"] for ix in insp.get_indexes("user_sessions")}
+    soap_indexes = {ix["name"] for ix in insp.get_indexes("soaprecord")}
     assert "ix_users_email" in user_indexes
     assert "ix_user_sessions_refresh_token_hash" in sess_indexes
+    assert "ix_soaprecord_user_id" in soap_indexes
 
 
 def test_alembic_downgrade_0002(alembic_cfg):

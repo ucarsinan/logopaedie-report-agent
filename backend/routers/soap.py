@@ -2,8 +2,10 @@
 
 import json
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from database import get_db
@@ -19,15 +21,42 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["soap"])
 
 _store = SessionStore()
+_SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
+
+
+class SOAPUpdateRequest(BaseModel):
+    subjective: str
+    objective: str
+    assessment: str
+    plan: str
+
+
+def _validate_session_id(session_id: str) -> None:
+    if not _SESSION_ID_PATTERN.match(session_id):
+        raise HTTPException(status_code=400, detail="Ungültige Session-ID.")
+
+
+def _serialize_soap(record: SOAPRecord) -> dict:
+    return {
+        "id": record.id,
+        "session_id": record.session_id,
+        "report_id": record.report_id,
+        "subjective": record.subjective,
+        "objective": record.objective,
+        "assessment": record.assessment,
+        "plan": record.plan,
+        "created_at": record.created_at.isoformat(),
+    }
 
 
 @router.post("/sessions/{session_id}/soap")
 async def generate_soap_from_session(
     session_id: str,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     soap_gen: SOAPGenerator = Depends(get_soap_generator),
     db: Session = Depends(get_db),
 ):
+    _validate_session_id(session_id)
     session = _store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session nicht gefunden.")
@@ -40,6 +69,7 @@ async def generate_soap_from_session(
     # Persist
     record = SOAPRecord(
         session_id=session_id,
+        user_id=current_user.id,
         subjective=result["subjective"],
         objective=result["objective"],
         assessment=result["assessment"],
@@ -49,16 +79,7 @@ async def generate_soap_from_session(
     db.commit()
     db.refresh(record)
 
-    return {
-        "id": record.id,
-        "session_id": record.session_id,
-        "report_id": record.report_id,
-        "subjective": record.subjective,
-        "objective": record.objective,
-        "assessment": record.assessment,
-        "plan": record.plan,
-        "created_at": record.created_at.isoformat(),
-    }
+    return _serialize_soap(record)
 
 
 @router.post("/reports/{report_id}/soap")
@@ -79,6 +100,7 @@ async def generate_soap_from_report(
 
     soap_record = SOAPRecord(
         report_id=report_id,
+        user_id=current_user.id,
         subjective=result["subjective"],
         objective=result["objective"],
         assessment=result["assessment"],
@@ -88,35 +110,38 @@ async def generate_soap_from_report(
     db.commit()
     db.refresh(soap_record)
 
-    return {
-        "id": soap_record.id,
-        "session_id": soap_record.session_id,
-        "report_id": soap_record.report_id,
-        "subjective": soap_record.subjective,
-        "objective": soap_record.objective,
-        "assessment": soap_record.assessment,
-        "plan": soap_record.plan,
-        "created_at": soap_record.created_at.isoformat(),
-    }
+    return _serialize_soap(soap_record)
 
 
 @router.get("/soap/{soap_id}")
 async def get_soap_note(
     soap_id: int,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    record = db.get(SOAPRecord, soap_id)
+    record = db.exec(select(SOAPRecord).where(SOAPRecord.id == soap_id, SOAPRecord.user_id == current_user.id)).first()
     if not record:
         raise HTTPException(status_code=404, detail="SOAP-Notiz nicht gefunden.")
 
-    return {
-        "id": record.id,
-        "session_id": record.session_id,
-        "report_id": record.report_id,
-        "subjective": record.subjective,
-        "objective": record.objective,
-        "assessment": record.assessment,
-        "plan": record.plan,
-        "created_at": record.created_at.isoformat(),
-    }
+    return _serialize_soap(record)
+
+
+@router.put("/soap/{soap_id}")
+async def update_soap_note(
+    soap_id: int,
+    req: SOAPUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = db.exec(select(SOAPRecord).where(SOAPRecord.id == soap_id, SOAPRecord.user_id == current_user.id)).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="SOAP-Notiz nicht gefunden.")
+
+    record.subjective = req.subjective
+    record.objective = req.objective
+    record.assessment = req.assessment
+    record.plan = req.plan
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return _serialize_soap(record)
