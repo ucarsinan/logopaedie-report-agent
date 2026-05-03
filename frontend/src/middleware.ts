@@ -8,6 +8,8 @@ const PUBLIC_PATHS = [
   "/reset-password",
 ];
 
+const DEMO_ALLOWED_PATHS = ["/module/report", "/module/soap"];
+
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
@@ -16,6 +18,12 @@ function isPublic(pathname: string): boolean {
 
 function isAdmin(pathname: string): boolean {
   return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+function isDemoAllowed(pathname: string): boolean {
+  return DEMO_ALLOWED_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
 }
 
 export function middleware(req: NextRequest): NextResponse {
@@ -32,6 +40,20 @@ export function middleware(req: NextRequest): NextResponse {
   }
 
   if (!access) {
+    const isDemo =
+      req.nextUrl.searchParams.get("demo") === "true" ||
+      req.cookies.get("demo_mode")?.value === "true";
+
+    if (isDemo && isDemoAllowed(pathname)) {
+      const response = NextResponse.next();
+      response.cookies.set("demo_mode", "true", {
+        maxAge: 3600,
+        path: "/",
+        sameSite: "lax",
+      });
+      return response;
+    }
+
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);

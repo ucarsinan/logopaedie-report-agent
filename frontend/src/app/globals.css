@@ -5,21 +5,26 @@
 
 /* ── Light mode tokens (default) ── */
 :root {
-  --background:        #f9fafb;
-  --surface:           #ffffff;
-  --surface-elevated:  #f3f4f6;
-  --border:            #e5e7eb;
-  --border-strong:     #d1d5db;
+  --background:        #ffffff;
+  --surface:           #f8fafc;
+  --surface-elevated:  #f1f5f9;
+  --border:            #e2e8f0;
+  --border-strong:     #cbd5e1;
   --foreground:        #111827;
   --muted-foreground:  #6b7280;
   --muted:             #9ca3af;
-  --input-bg:          #f9fafb;
-  --ring:              #2a7f6f;
-  --accent:            #2a7f6f;
-  --accent-hover:      #206958;
-  --accent-muted:      #dceee8;
-  --accent-text:       #236f60;
-  --brand-warm:        #c4714f;
+  --input-bg:          #f8fafc;
+  --ring:              #2079C0;
+  /* Brand: Praxis Şimşek Blau */
+  --accent:            #2079C0;
+  --accent-hover:      #1860a0;
+  --accent-muted:      #e8f4ff;
+  --accent-text:       #1860a0;
+  /* KI-Signal: nur für AI-Aktionen */
+  --ai:                #72B52A;
+  --ai-hover:          #5a9620;
+  --ai-muted:          #f0f9e8;
+  --ai-text:           #5a9620;
   --error-surface:     #fef2f2;
   --error-border:      #fecaca;
   --error-text:        #b91c1c;
@@ -36,12 +41,17 @@
   --muted-foreground:  #64748b;
   --muted:             #475569;
   --input-bg:          #0f172a;
-  --ring:              #70d3bf;
-  --accent:            #2a7f6f;
-  --accent-hover:      #3a9a86;
-  --accent-muted:      rgba(42, 127, 111, 0.18);
-  --accent-text:       #70d3bf;
-  --brand-warm:        #d08a63;
+  --ring:              #6db3f0;
+  /* Brand: Blau bleibt, heller für dark bg */
+  --accent:            #2079C0;
+  --accent-hover:      #2d8fd4;
+  --accent-muted:      rgba(32, 121, 192, 0.15);
+  --accent-text:       #6db3f0;
+  /* KI-Signal dark */
+  --ai:                #72B52A;
+  --ai-hover:          #86cc33;
+  --ai-muted:          rgba(114, 181, 42, 0.12);
+  --ai-text:           #a0d462;
   --error-surface:     rgba(69, 10, 10, 0.8);
   --error-border:      #991b1b;
   --error-text:        #fca5a5;
@@ -62,6 +72,10 @@
   --color-accent-hover:    var(--accent-hover);
   --color-accent-muted:    var(--accent-muted);
   --color-accent-text:     var(--accent-text);
+  --color-ai:              var(--ai);
+  --color-ai-hover:        var(--ai-hover);
+  --color-ai-muted:        var(--ai-muted);
+  --color-ai-text:         var(--ai-text);
   --color-ring:            var(--ring);
   --color-error-surface:   var(--error-surface);
   --color-error-border:    var(--error-border);
@@ -76,11 +90,17 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* ── Animations ── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* ── Dark mode card elevation ── */
 .dark .card-elevated {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .dark .btn-accent-glow {
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+  box-shadow: 0 2px 8px rgba(32, 121, 192, 0.4);
 }

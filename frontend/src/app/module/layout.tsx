@@ -10,6 +10,10 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { BrandLogo } from "@/components/BrandLogo";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { UserAccountBar } from "@/features/auth/components/UserAccountBar";
+import { DemoBanner } from "@/components/DemoBanner";
+import { BurgerButton } from "@/components/BurgerButton";
+import { MobileSidebar } from "@/components/MobileSidebar";
+import { useMobileNav } from "@/hooks/useMobileNav";
 
 const MODULE_TABS: [string, string, string][] = [
   ["report", "Berichterstellung", "KI-geführtes Anamnesegespräch → professioneller Bericht"],
@@ -31,6 +35,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
   const { isSending, error, handleSoftReset, handleFullReset } = useSession();
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const { isOpen: isMobileNavOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNav();
 
   useEffect(() => {
     const handler = () => setIsResetDialogOpen(true);
@@ -48,6 +53,12 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <MobileSidebar
+        isOpen={isMobileNavOpen}
+        activeSlug={activeSlug}
+        onClose={closeMobileNav}
+      />
+
       {/* Header */}
       <header className="border-b border-border print:hidden">
         <div className="max-w-5xl mx-auto px-6">
@@ -73,10 +84,11 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
                 ? Hilfe
               </button>
               <ThemeToggle />
+              <BurgerButton isOpen={isMobileNavOpen} onClick={toggleMobileNav} />
             </div>
           </div>
 
-          <nav className="relative flex gap-1 -mb-px overflow-x-auto after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-8 after:bg-gradient-to-l after:from-background after:to-transparent md:after:hidden">
+          <nav className="relative hidden md:flex gap-1 -mb-px overflow-x-auto after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-8 after:bg-linear-to-l after:from-background after:to-transparent md:after:hidden">
             {MODULE_TABS.map(([key, label, tooltip]) => (
               <Link
                 key={key}
@@ -84,7 +96,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
                 title={tooltip}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeSlug === key
-                    ? "border-[var(--accent)] text-[var(--accent-text)]"
+                    ? "border-accent text-accent-text"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:border-border-strong"
                 }`}
               >
@@ -94,6 +106,8 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
+
+      <DemoBanner />
 
       {/* Main */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
