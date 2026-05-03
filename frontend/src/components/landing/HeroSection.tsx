@@ -15,14 +15,11 @@ export function HeroSection() {
       {/* Headline */}
       <div className="max-w-2xl">
         <h1 className="text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl">
-          Logopädische Berichte{" "}
-          <span className="text-accent">in Sekunden</span>
+          Weniger Dokumentation.{" "}
+          <span className="text-accent">Mehr Therapie.</span>
         </h1>
-        <p className="mt-3 text-xl font-medium text-muted-foreground">
-          mit <span className="text-ai font-semibold">KI</span> erstellen
-        </p>
-        <p className="mt-4 text-sm text-muted-foreground">
-          Praxis für Logopädie Şimşek · KI-gestütztes Dokumentationstool
+        <p className="mt-4 text-base text-muted-foreground">
+          KI-gestützte klinische Dokumentation für Logopäden
         </p>
       </div>
 
