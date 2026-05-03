@@ -1,12 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/features/auth/api";
 import { PasswordStrengthMeter } from "@/features/auth/components/PasswordStrengthMeter";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const params = useSearchParams();
   const token = params.get("token") ?? "";
   const [pw1, setPw1] = useState("");

@@ -8,6 +8,7 @@ import { ResetConfirmDialog } from "@/components/ResetConfirmDialog";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
+import { UserAccountBar } from "@/features/auth/components/UserAccountBar";
 
 const MODULE_TABS: [string, string, string][] = [
   ["report", "Berichterstellung", "KI-geführtes Anamnesegespräch → professioneller Bericht"],
@@ -44,7 +45,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="border-b border-border print:hidden">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="flex items-center justify-between h-12">
+          <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 py-2">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-extrabold tracking-tight text-foreground">Logopädie</span>
               <span className="text-border-strong font-light">/</span>
@@ -52,7 +53,8 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
                 {MODULE_LABELS[activeSlug] ?? "Modul"}
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+              <UserAccountBar />
               <button
                 onClick={() => setShowOnboarding(true)}
                 className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"

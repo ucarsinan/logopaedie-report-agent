@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/features/auth/api";
 
 export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<p className="text-sm">Bestätige Email-Adresse…</p>}>
+      <VerifyEmailContent />
+    </Suspense>
+  );
+}
+
+function VerifyEmailContent() {
   const params = useSearchParams();
   const token = params.get("token");
   const [state, setState] = useState<"pending" | "ok" | "error">(() =>

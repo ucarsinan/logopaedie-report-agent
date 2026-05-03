@@ -14,9 +14,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     globals: true,
-    forks: {
-      singleFork: true,
-    },
+    fileParallelism: false,
     testTimeout: 30000,
   },
 });
