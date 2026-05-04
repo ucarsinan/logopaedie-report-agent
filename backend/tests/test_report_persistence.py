@@ -68,7 +68,7 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
     get_db = database_mod.get_db
     from sqlmodel import Session, select
 
-    from dependencies import get_current_user
+    from dependencies import get_optional_user
     from models.report_record import ReportRecord
 
     fake_user = User(id=TEST_USER_ID, email="gen@test.example", password_hash="x")
@@ -78,7 +78,7 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_optional_user] = lambda: fake_user
 
     fake_report = {
         "report_type": "befundbericht",
