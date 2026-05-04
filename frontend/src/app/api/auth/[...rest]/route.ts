@@ -46,11 +46,18 @@ async function forward(
     init.body = await req.text();
   }
 
-  const upstream = await fetch(target, init);
-  return new NextResponse(await upstream.text(), {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  try {
+    const upstream = await fetch(target, init);
+    return new NextResponse(await upstream.text(), {
+      status: upstream.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return new NextResponse(JSON.stringify({ detail: "service_unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
 
 export const GET = forward;

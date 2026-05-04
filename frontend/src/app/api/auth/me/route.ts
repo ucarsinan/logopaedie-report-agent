@@ -16,11 +16,18 @@ export async function GET(req: Request): Promise<Response> {
       headers: { "Content-Type": "application/json" },
     });
   }
-  const upstream = await fetch(`${BACKEND}/auth/me`, {
-    headers: { Authorization: `Bearer ${access}` },
-  });
-  return new NextResponse(await upstream.text(), {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  try {
+    const upstream = await fetch(`${BACKEND}/auth/me`, {
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    return new NextResponse(await upstream.text(), {
+      status: upstream.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return new NextResponse(JSON.stringify({ detail: "service_unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }

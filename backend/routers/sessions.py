@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from database import get_db
-from dependencies import anamnesis_engine, get_current_user, groq_service, report_generator
+from dependencies import anamnesis_engine, get_optional_user, groq_service, report_generator
 from exceptions import (
     FileTooLargeError,
     SessionNotFoundError,
@@ -57,7 +57,7 @@ class ConsentRequest(BaseModel):
 @router.post("/sessions")
 async def create_session(
     req: CreateSessionRequest | None = None,
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> SessionInfo:
     session = store.create()
     if req and req.mode == "therapy_plan":
@@ -85,7 +85,7 @@ async def create_session(
 @router.get("/sessions/{session_id}")
 async def get_session(
     session_id: str,
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -105,7 +105,7 @@ async def get_session(
 @router.post("/sessions/{session_id}/new-conversation")
 async def new_conversation(
     session_id: str,
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -144,7 +144,7 @@ async def chat(
     request: Request,
     session_id: str,
     req: ChatRequest,
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> ChatResponse:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -173,7 +173,7 @@ async def chat_audio(
     request: Request,
     session_id: str,
     audio_file: UploadFile = File(...),
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> ChatResponse:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -215,7 +215,7 @@ async def upload_material(
     session_id: str,
     file: UploadFile = File(...),
     material_type: str = "sonstiges",
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> UploadedMaterial:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -244,7 +244,7 @@ async def upload_material(
 async def set_materials_consent(
     session_id: str,
     req: ConsentRequest,
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get(session_id)
@@ -267,7 +267,7 @@ async def set_materials_consent(
 async def generate_report(
     request: Request,
     session_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ) -> dict:
     _validate_session_id(session_id)
@@ -284,16 +284,17 @@ async def generate_report(
         session.status = "complete"
         store.save(session)
 
-        record = ReportRecord(
-            pseudonym=session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
-            report_type=session.generated_report.get("report_type", "unbekannt"),
-            content_json=json.dumps(session.generated_report, ensure_ascii=False),
-            user_id=current_user.id,
-        )
-        db.add(record)
-        db.commit()
-        db.refresh(record)
-        session.generated_report["_db_id"] = record.id
+        if current_user is not None:
+            record = ReportRecord(
+                pseudonym=session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
+                report_type=session.generated_report.get("report_type", "unbekannt"),
+                content_json=json.dumps(session.generated_report, ensure_ascii=False),
+                user_id=current_user.id,
+            )
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            session.generated_report["_db_id"] = record.id
 
         return session.generated_report
     except Exception:
@@ -305,7 +306,7 @@ async def generate_report(
 @router.get("/sessions/{session_id}/report")
 async def get_report(
     session_id: str,
-    _: User = Depends(get_current_user),
+    _: User | None = Depends(get_optional_user),
 ) -> dict:
     _validate_session_id(session_id)
     session = store.get(session_id)

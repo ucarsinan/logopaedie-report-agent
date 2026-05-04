@@ -20,11 +20,19 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const upstream = await fetch(`${BACKEND}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refresh }),
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${BACKEND}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+  } catch {
+    return new NextResponse(JSON.stringify({ detail: "service_unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   if (!upstream.ok) {
     return new NextResponse(await upstream.text(), {

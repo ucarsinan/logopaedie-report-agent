@@ -36,7 +36,7 @@ function isDemoAllowed(pathname: string): boolean {
   );
 }
 
-export function middleware(req: NextRequest): NextResponse {
+export function proxy(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
   const access = req.cookies.get("access_token")?.value;
   const role = req.cookies.get("user_role")?.value;

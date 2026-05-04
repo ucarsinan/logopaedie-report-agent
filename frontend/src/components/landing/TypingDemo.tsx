@@ -34,10 +34,10 @@ export function TypingDemo() {
           ⬡ KI generiert gerade · Llama-3.3-70b
         </span>
       </div>
-      <p className="text-sm leading-relaxed text-foreground">
-        {displayed}
-        <span className="ml-0.5 inline-block h-4 w-0.5 animate-[blink_1s_step-end_infinite] bg-ai align-middle" />
-      </p>
+      <div className="relative text-sm leading-relaxed text-foreground">
+        <p className="invisible select-none" aria-hidden="true">{DEMO_TEXT}</p>
+        <p className="absolute inset-0">{displayed}<span className="ml-0.5 inline-block h-4 w-0.5 animate-[blink_1s_step-end_infinite] bg-ai align-middle" /></p>
+      </div>
     </div>
   );
 }

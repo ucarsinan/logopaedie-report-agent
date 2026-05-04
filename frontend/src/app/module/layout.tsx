@@ -75,6 +75,13 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
               </span>
             </Link>
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+              <Link
+                href="/"
+                className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"
+                title="Zurück zur Startseite"
+              >
+                ← Startseite
+              </Link>
               <UserAccountBar />
               <button
                 onClick={() => setShowOnboarding(true)}

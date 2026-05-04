@@ -6,6 +6,16 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
 import { REPORT_TYPE_LABELS } from "@/types";
+
+async function downloadPdf(id: number, pseudonym: string) {
+  const blob = await api.reports.downloadPdf(id);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bericht-${pseudonym.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 import type { ReportSummary, ReportDetail, ReportFilterParams, ReportStats } from "@/types";
 import { FilterBar } from "./components/FilterBar";
 import { StatsCards } from "./components/StatsCards";
@@ -93,12 +103,29 @@ export function HistoryModule() {
   if (selectedId !== null) {
     return (
       <div className="flex flex-col gap-4">
-        <button
-          onClick={() => setSelectedId(null)}
-          className="self-start text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {"\u2190"} Zurück zur Übersicht
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => setSelectedId(null)}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {"\u2190"} Zurück zur Übersicht
+          </button>
+          {detail && (
+            <button
+              onClick={() =>
+                downloadPdf(selectedId, detail.patient?.pseudonym ?? String(selectedId))
+              }
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-surface transition-colors"
+            >
+              <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              PDF herunterladen
+            </button>
+          )}
+        </div>
 
         {detailLoading && <p className="text-muted-foreground text-sm">Lade Bericht…</p>}
 

@@ -14,6 +14,7 @@ export function useRegister() {
     setError(null);
     try {
       const res = await authApi.register(email, password);
+      localStorage.removeItem("demo_mode");
       if (res.auto_verified) {
         router.push("/login");
       } else {

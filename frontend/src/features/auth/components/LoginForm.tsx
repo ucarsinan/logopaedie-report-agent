@@ -19,6 +19,7 @@ export function LoginForm() {
       setChallengeId(res.challenge_id);
       return;
     }
+    localStorage.removeItem("demo_mode");
     window.location.href = "/";
   }
 
@@ -26,6 +27,7 @@ export function LoginForm() {
     if (!challengeId) return;
     const res = await submit2fa(challengeId, code);
     if (res && !("step" in res)) {
+      localStorage.removeItem("demo_mode");
       window.location.href = "/";
     }
   }
