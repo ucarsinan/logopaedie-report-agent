@@ -1,36 +1,39 @@
-const FEATURES = [
+const WORKFLOW_STEPS = [
   {
-    icon: "🎙",
-    title: "Sprachaufnahme → Bericht",
-    description:
-      "Groq Whisper transkribiert die Therapiesitzung in Echtzeit. Llama-3.3-70b strukturiert daraus einen professionellen Befundbericht.",
+    step: "01",
+    title: "Therapeutische Beobachtung",
+    body: "Klinische Beobachtungen, Spontansprache und Testergebnisse werden in der Sitzung aufgezeichnet — als Audiodatei oder strukturierte Texteingabe.",
   },
   {
-    icon: "📋",
-    title: "SOAP-Notes automatisch",
-    description:
-      "Strukturierte klinische Dokumentation im S-O-A-P-Format — in Sekunden generiert, sofort exportierbar.",
+    step: "02",
+    title: "Logopädische Einordnung",
+    body: "Störungsmuster werden klassifiziert: Phonologie, Semantik, Pragmatik, Redeflussstörung. Die Einordnung folgt dem klinischen Kontext des Patienten.",
   },
   {
-    icon: "📊",
-    title: "Phonologische Analyse",
-    description:
-      "Störungsmuster wie Plosivierung oder Fronting werden automatisch aus Wortpaaren erkannt und dokumentiert.",
+    step: "03",
+    title: "Berichtsfähige Dokumentation",
+    body: "Der Bericht gliedert sich in Befund, Diagnose, Therapieziel und Empfehlung — im Format, das Kassen, Ärzte und Gutachter erwarten.",
   },
 ];
 
 export function FeatureHighlights() {
   return (
     <section className="w-full max-w-4xl mx-auto px-6 py-12">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {FEATURES.map(({ icon, title, description }) => (
-          <div
-            key={title}
-            className="rounded-xl border border-border bg-surface p-5 shadow-sm"
-          >
-            <div className="mb-3 text-2xl">{icon}</div>
-            <h3 className="mb-1.5 text-sm font-semibold text-foreground">{title}</h3>
-            <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+      <p className="mb-8 text-xs uppercase tracking-widest text-muted-foreground">
+        Dokumentationsablauf
+      </p>
+      <div className="grid grid-cols-1 gap-8 sm:grid-cols-3 sm:gap-6">
+        {WORKFLOW_STEPS.map(({ step, title, body }) => (
+          <div key={step} className="border-t border-border pt-5">
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              {step}
+            </span>
+            <h3 className="mt-3 text-sm font-semibold leading-snug text-foreground">
+              {title}
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {body}
+            </p>
           </div>
         ))}
       </div>
