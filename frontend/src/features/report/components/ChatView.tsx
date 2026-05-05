@@ -175,6 +175,11 @@ export function ChatView({
     [hasStarted, setInputMode, sendMessage],
   );
 
+  // Contextual placeholder
+  const inputPlaceholder = showWelcome
+    ? "Oder beschreiben Sie Ihren Fall frei\u2026"
+    : "Ihre Antwort eingeben\u2026";
+
   return (
     <div className="flex flex-1 flex-col gap-3">
       {/* Header with progress — only after conversation started */}
@@ -208,12 +213,7 @@ export function ChatView({
 
       {/* Welcome screen OR chat messages */}
       {showWelcome ? (
-        <WelcomeScreen
-          onSelectReportType={handleSelectReportType}
-          onFreeText={handleFreeTextSend}
-          onError={(msg) => setError(msg)}
-          isSending={isSending}
-        />
+        <WelcomeScreen onSelectReportType={handleSelectReportType} />
       ) : (
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto max-h-[60vh] rounded-xl bg-surface/30 p-4">
           {messages.map((msg, i) => (
@@ -260,15 +260,14 @@ export function ChatView({
         </div>
       )}
 
-      {/* Input — only when not in welcome state */}
-      {!showWelcome && (
-        <ChatInput
-          onSend={handleFreeTextSend}
-          onError={(msg: string) => setError(msg)}
-          disabled={isSending}
-          placeholder="Ihre Antwort eingeben…"
-        />
-      )}
+      {/* Unified input — always visible */}
+      <ChatInput
+        onSend={handleFreeTextSend}
+        onError={(msg) => setError(msg)}
+        disabled={isSending}
+        placeholder={inputPlaceholder}
+        showAttachment={showWelcome}
+      />
     </div>
   );
 }
