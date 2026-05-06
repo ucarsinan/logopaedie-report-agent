@@ -182,7 +182,7 @@ export const api = {
     stats: (): Promise<ReportStats> =>
       fetchApi<ReportStats>("/reports/stats"),
     downloadPdf: async (id: number): Promise<Blob> => {
-      const res = await fetch(`${API}/reports/${id}/pdf`);
+      const res = await apiCall(`${API}/reports/${id}/pdf`);
       if (!res.ok) throw new Error("PDF-Download fehlgeschlagen");
       return res.blob();
     },

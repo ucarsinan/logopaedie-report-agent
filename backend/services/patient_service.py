@@ -4,21 +4,27 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from models.patient import Patient
 from services.encryption_service import EncryptionService
+
+_MAX_RETRIES = 5
 
 
 class PatientService:
     def __init__(self, encryption: EncryptionService) -> None:
         self._enc = encryption
 
-    def generate_system_id(self, db: Session, year: int) -> str:
-        """Generate a unique system ID for a patient in the given year."""
+    def _next_system_id(self, db: Session, year: int) -> str:
         prefix = f"PAT-{year}-"
-        count = db.exec(select(func.count(Patient.id)).where(col(Patient.system_id).startswith(prefix))).one()
-        return f"{prefix}{count + 1:04d}"
+        # MAX+1 is safe against gaps from soft-deletes; COUNT+1 was not.
+        max_val: str | None = db.exec(
+            select(func.max(Patient.system_id)).where(col(Patient.system_id).startswith(prefix))
+        ).one()
+        seq = 1 if max_val is None else int(max_val.split("-")[-1]) + 1
+        return f"{prefix}{seq:04d}"
 
     def create_patient(
         self,
@@ -40,12 +46,8 @@ class PatientService:
         insurance_name: str | None = None,
         guardian_name: str | None = None,
     ) -> Patient:
-        """Create a new patient with encrypted PII fields."""
         year = datetime.now(UTC).year
-        system_id = self.generate_system_id(db, year)
-        patient = Patient(
-            system_id=system_id,
-            pseudonym=pseudonym or system_id,
+        kwargs = dict(
             user_id=user_id,
             realname_enc=self._enc.encrypt(realname),
             birthdate_enc=self._enc.encrypt(birthdate),
@@ -61,10 +63,22 @@ class PatientService:
             insurance_name=insurance_name,
             guardian_name=guardian_name,
         )
-        db.add(patient)
-        db.commit()
-        db.refresh(patient)
-        return patient
+        for _ in range(_MAX_RETRIES):
+            system_id = self._next_system_id(db, year)
+            patient = Patient(
+                system_id=system_id,
+                pseudonym=pseudonym or system_id,
+                **kwargs,
+            )
+            db.add(patient)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                continue
+            db.refresh(patient)
+            return patient
+        raise RuntimeError(f"Could not generate unique system_id after {_MAX_RETRIES} retries.")
 
     def update_patient(
         self,

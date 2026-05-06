@@ -97,7 +97,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
 
           <nav className="relative hidden md:flex gap-1 -mb-px overflow-x-auto after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-8 after:bg-linear-to-l after:from-background after:to-transparent md:after:hidden">
             <Link
-              href="/patients"
+              href="/patienten"
               title="Patienten verwalten"
               className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground transition-colors whitespace-nowrap hover:text-foreground hover:border-border-strong"
             >

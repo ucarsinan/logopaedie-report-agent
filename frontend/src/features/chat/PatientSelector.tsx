@@ -117,7 +117,7 @@ export function PatientSelector({ onSelect, onDemo, loading }: PatientSelectorPr
           Demo-Modus
         </button>
         <Link
-          href="/patients/new"
+          href="/patienten/neu"
           className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
         >
           Neuer Patient

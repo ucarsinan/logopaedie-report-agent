@@ -67,7 +67,7 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
     return (
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-8">
         <Link
-          href="/patients"
+          href="/patienten"
           className="text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           ← Zurück zur Patientenliste
@@ -84,7 +84,7 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
       <div className="flex flex-col gap-4 border-b border-border pb-5 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
           <Link
-            href="/patients"
+            href="/patienten"
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← Zurück zur Patientenliste
@@ -104,7 +104,7 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
             Bericht starten
           </Link>
           <Link
-            href={`/patients/${patient.id}/edit`}
+            href={`/patienten/${patient.id}/bearbeiten`}
             className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
           >
             Bearbeiten

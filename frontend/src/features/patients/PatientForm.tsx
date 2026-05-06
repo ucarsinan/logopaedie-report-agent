@@ -144,7 +144,7 @@ export function PatientForm({ patientId }: PatientFormProps) {
           guardian_name: optional(form.guardian_name),
         };
         const saved = await api.patients.update(patientId, payload);
-        router.push(`/patients/${saved.id}`);
+        router.push(`/patienten/${saved.id}`);
         return;
       }
 
@@ -165,7 +165,7 @@ export function PatientForm({ patientId }: PatientFormProps) {
         guardian_name: optional(form.guardian_name),
       };
       const created = await api.patients.create(payload);
-      router.push(`/patients/${created.id}`);
+      router.push(`/patienten/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
     } finally {
@@ -177,7 +177,7 @@ export function PatientForm({ patientId }: PatientFormProps) {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
       <div className="flex flex-col gap-3 border-b border-border pb-5">
         <Link
-          href="/patients"
+          href="/patienten"
           className="text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           ← Zurück zur Patientenliste
@@ -342,7 +342,7 @@ export function PatientForm({ patientId }: PatientFormProps) {
 
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
             <Link
-              href="/patients"
+              href="/patienten"
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface"
             >
               Abbrechen

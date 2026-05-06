@@ -19,7 +19,7 @@ function PatientRow({ patient }: { patient: PatientSummary }) {
   return (
     <li>
       <Link
-        href={`/patients/${patient.id}`}
+        href={`/patienten/${patient.id}`}
         className="grid gap-3 border-b border-border px-4 py-3 transition-colors hover:bg-surface md:grid-cols-[1.15fr_0.8fr_1fr_8rem]"
       >
         <div className="min-w-0">
@@ -91,7 +91,7 @@ export function PatientList() {
             Berichte
           </Link>
           <Link
-            href="/patients/new"
+            href="/patienten/neu"
             className="inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Neuer Patient

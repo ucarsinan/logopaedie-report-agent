@@ -58,13 +58,6 @@ class ConsentRequest(BaseModel):
     granted: bool
 
 
-def _get_or_404(pid: UUID, user_id: UUID, db: Session) -> Patient:
-    p = db.exec(select(Patient).where(Patient.id == pid, Patient.user_id == user_id)).first()
-    if not p:
-        raise HTTPException(status_code=404, detail="Patient nicht gefunden.")
-    return p
-
-
 def _get_active_or_404(pid: UUID, user_id: UUID, db: Session) -> Patient:
     p = db.exec(
         select(Patient).where(
@@ -145,7 +138,7 @@ def get_patient(
     db: Session = Depends(get_db),
     svc: PatientService = Depends(get_patient_service),
 ) -> dict[str, Any]:
-    return svc.to_response(_get_or_404(patient_id, current_user.id, db))
+    return svc.to_response(_get_active_or_404(patient_id, current_user.id, db))
 
 
 @router.patch("/patients/{patient_id}")
@@ -215,7 +208,7 @@ def get_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _get_or_404(patient_id, current_user.id, db)
+    _get_active_or_404(patient_id, current_user.id, db)
     reports = db.exec(
         select(ReportRecord)
         .where(ReportRecord.patient_id == patient_id, ReportRecord.user_id == current_user.id)
@@ -243,7 +236,7 @@ async def get_progress(
 ) -> dict[str, Any]:
     import json
 
-    _get_or_404(patient_id, current_user.id, db)
+    _get_active_or_404(patient_id, current_user.id, db)
     reports = db.exec(
         select(ReportRecord)
         .where(ReportRecord.patient_id == patient_id, ReportRecord.user_id == current_user.id)
@@ -268,7 +261,7 @@ def record_consent(
             status_code=422,
             detail=f"Ungültiger consent_type. Erlaubt: {sorted(VALID_CONSENT_TYPES)}",
         )
-    _get_or_404(patient_id, current_user.id, db)
+    _get_active_or_404(patient_id, current_user.id, db)
     record = ConsentRecord(
         patient_id=patient_id,
         consent_type=req.consent_type,
