@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 
 class EncryptionService:
@@ -24,4 +24,7 @@ class EncryptionService:
         """Decrypt bytes value. Returns None if input is None."""
         if value is None:
             return None
-        return self._fernet.decrypt(value).decode()
+        try:
+            return self._fernet.decrypt(value).decode()
+        except InvalidToken as exc:
+            raise ValueError("Decryption failed: token is invalid or key mismatch.") from exc

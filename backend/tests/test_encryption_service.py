@@ -38,11 +38,18 @@ def test_encrypt_none_returns_none(key):
 
 def test_missing_key_raises(monkeypatch):
     monkeypatch.delenv("PATIENT_ENCRYPTION_KEY", raising=False)
-    import importlib
+    from services.encryption_service import EncryptionService
 
-    import services.encryption_service as mod
-
-    importlib.reload(mod)
     with pytest.raises(RuntimeError, match="PATIENT_ENCRYPTION_KEY"):
-        mod.EncryptionService()
-    importlib.reload(mod)
+        EncryptionService()
+
+
+def test_decrypt_invalid_token_raises(key):
+    from services.encryption_service import EncryptionService
+
+    svc = EncryptionService()
+    wrong_key_svc = EncryptionService.__new__(EncryptionService)
+    wrong_key_svc._fernet = Fernet(Fernet.generate_key())
+    encrypted = svc.encrypt("test")
+    with pytest.raises(ValueError, match="Decryption failed"):
+        wrong_key_svc.decrypt(encrypted)
