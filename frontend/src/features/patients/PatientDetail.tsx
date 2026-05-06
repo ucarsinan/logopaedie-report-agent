@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Patient } from "@/types";
+import { ProgressSnapshot } from "@/features/patient-progress/ProgressSnapshot";
 import { ConsentManager } from "./ConsentManager";
 import { PatientHistory } from "./PatientHistory";
 
@@ -153,7 +154,10 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-        <PatientHistory patientId={patient.id} />
+        <div className="grid gap-6">
+          <ProgressSnapshot patientId={patient.id} />
+          <PatientHistory patientId={patient.id} />
+        </div>
         <ConsentManager patientId={patient.id} />
       </div>
     </div>
