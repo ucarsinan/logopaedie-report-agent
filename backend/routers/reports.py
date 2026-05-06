@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, col, func, select
@@ -18,6 +19,7 @@ router = APIRouter(tags=["reports"])
 async def list_reports(
     pseudonym: str | None = Query(None, description="Filter by pseudonym (case-insensitive)"),
     report_type: str | None = Query(None, description="Filter by report type"),
+    patient_id: UUID | None = Query(None, description="Filter by patient ID"),
     from_date: str | None = Query(None, description="Filter from date (ISO format)"),
     to_date: str | None = Query(None, description="Filter to date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -31,6 +33,8 @@ async def list_reports(
         query = query.where(func.lower(ReportRecord.pseudonym).contains(pseudonym.lower()))
     if report_type:
         query = query.where(ReportRecord.report_type == report_type)
+    if patient_id:
+        query = query.where(ReportRecord.patient_id == patient_id)
     if from_date:
         try:
             dt = datetime.fromisoformat(from_date)

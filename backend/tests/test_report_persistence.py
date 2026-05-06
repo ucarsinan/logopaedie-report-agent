@@ -251,6 +251,80 @@ def test_list_reports_returns_saved_records():
     app.dependency_overrides.clear()
 
 
+def test_list_reports_filters_by_patient_id():
+    import sys
+
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session
+
+    from main import app
+    from models.report_record import ReportRecord
+
+    database_mod = sys.modules.get("database") or sys.modules["backend.database"]
+    get_db = database_mod.get_db
+
+    from dependencies import get_current_user
+
+    fake_user = User(id=TEST_USER_ID, email="patient-filter@test.example", password_hash="x")
+
+    def override_get_db():
+        with Session(test_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+
+    with Session(test_engine) as db:
+        patient_a = Patient(
+            system_id="PAT-2026-0001",
+            pseudonym="Patient A",
+            user_id=TEST_USER_ID,
+            realname_enc=b"encrypted",
+            birthdate_enc=b"encrypted",
+        )
+        patient_b = Patient(
+            system_id="PAT-2026-0002",
+            pseudonym="Patient B",
+            user_id=TEST_USER_ID,
+            realname_enc=b"encrypted",
+            birthdate_enc=b"encrypted",
+        )
+        db.add(patient_a)
+        db.add(patient_b)
+        db.commit()
+        db.refresh(patient_a)
+        db.refresh(patient_b)
+        db.add(
+            ReportRecord(
+                pseudonym="Patient A",
+                report_type="befundbericht",
+                content_json="{}",
+                user_id=TEST_USER_ID,
+                patient_id=patient_a.id,
+            )
+        )
+        db.add(
+            ReportRecord(
+                pseudonym="Patient B",
+                report_type="abschlussbericht",
+                content_json="{}",
+                user_id=TEST_USER_ID,
+                patient_id=patient_b.id,
+            )
+        )
+        db.commit()
+        patient_a_id = patient_a.id
+
+    client = TestClient(app)
+    res = client.get(f"/reports?patient_id={patient_a_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["items"][0]["pseudonym"] == "Patient A"
+
+    app.dependency_overrides.clear()
+
+
 def test_get_single_report_returns_full_content():
     import json
     import sys
