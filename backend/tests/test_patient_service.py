@@ -40,7 +40,7 @@ def test_generate_system_id_first_patient(engine, enc_svc):
     svc = PatientService(enc_svc)
     year = datetime.now(UTC).year
     with Session(engine) as db:
-        sid = svc.generate_system_id(db, year)
+        sid = svc._next_system_id(db, year)
     assert sid == f"PAT-{year}-0001"
 
 
@@ -60,7 +60,7 @@ def test_generate_system_id_increments(engine, enc_svc):
         )
         db.add(p)
         db.commit()
-        sid = svc.generate_system_id(db, year)
+        sid = svc._next_system_id(db, year)
     assert sid == f"PAT-{year}-0002"
 
 

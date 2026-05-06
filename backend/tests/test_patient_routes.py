@@ -72,7 +72,7 @@ def test_delete_patient_soft(client):
     pid = client.post("/api/patients", json=_payload()).json()["id"]
     assert client.delete(f"/api/patients/{pid}").status_code == 200
     assert client.get("/api/patients").json()["total"] == 0
-    assert client.get(f"/api/patients/{pid}").json()["deleted_at"] is not None
+    assert client.get(f"/api/patients/{pid}").status_code == 404
 
 
 def test_get_history_empty(client):
