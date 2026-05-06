@@ -1,19 +1,36 @@
 import type {
   ChatResponse,
+  ConsentRecord,
+  ConsentType,
+  CreatePatientRequest,
+  CreateSessionParams,
+  Patient,
+  PatientHistoryResponse,
+  PatientListParams,
+  PatientListResponse,
+  PatientProgressResponse,
   ReportData,
   ReportDetail,
   ReportListResponse,
   ReportStats,
   ReportFilterParams,
   SOAPNote,
+  SessionInfo,
   TherapyPlanSummary,
+  UpdatePatientRequest,
   UploadedFile,
 } from "@/types";
 import type { TherapyPlanData } from "@/types/therapy-plan";
 import type { PhonologicalAnalysisData, ReportComparisonData } from "@/types/phonology";
 
 export { REPORT_TYPE_LABELS } from "@/types";
-export type { ReportSummary, ReportDetail, TherapyPlanSummary } from "@/types";
+export type {
+  Patient,
+  PatientSummary,
+  ReportSummary,
+  ReportDetail,
+  TherapyPlanSummary,
+} from "@/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
 
@@ -73,33 +90,28 @@ export const api = {
   health: () => fetchApi<{ status: string }>("/health"),
 
   sessions: {
-    create: (mode?: string) =>
-      fetchApi<{ session_id: string; collected_data?: { greeting?: string } }>(
-        "/sessions",
-        {
-          method: "POST",
-          ...(mode
-            ? {
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ mode }),
-              }
-            : {}),
-        },
-      ),
+    create: (
+      modeOrParams?: string | CreateSessionParams,
+      patientId?: string | null,
+    ) => {
+      const payload: CreateSessionParams =
+        typeof modeOrParams === "string"
+          ? { mode: modeOrParams, patient_id: patientId }
+          : (modeOrParams ?? {});
+      const hasBody = Boolean(payload.mode || payload.patient_id);
+      return fetchApi<SessionInfo>("/sessions", {
+        method: "POST",
+        ...(hasBody
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          : {}),
+      });
+    },
 
     get: (id: string) =>
-      fetchApi<{
-        session_id: string;
-        status: string;
-        chat_history?: { role: string; content: string }[];
-        collected_data?: {
-          greeting?: string;
-          current_phase?: string;
-          collected_fields?: string[];
-          missing_fields?: string[];
-        };
-        materials_consent?: boolean;
-      }>(`/sessions/${id}`),
+      fetchApi<SessionInfo>(`/sessions/${id}`),
 
     chat: (id: string, message: string, mode?: string) =>
       fetchApi<ChatResponse>(`/sessions/${id}/chat`, {
@@ -157,6 +169,7 @@ export const api = {
       const qs = new URLSearchParams();
       if (params?.pseudonym) qs.set("pseudonym", params.pseudonym);
       if (params?.report_type) qs.set("report_type", params.report_type);
+      if (params?.patient_id) qs.set("patient_id", params.patient_id);
       if (params?.from_date) qs.set("from_date", params.from_date);
       if (params?.to_date) qs.set("to_date", params.to_date);
       if (params?.page) qs.set("page", String(params.page));
@@ -173,6 +186,47 @@ export const api = {
       if (!res.ok) throw new Error("PDF-Download fehlgeschlagen");
       return res.blob();
     },
+  },
+
+  patients: {
+    list: (params?: PatientListParams): Promise<PatientListResponse> => {
+      const qs = new URLSearchParams();
+      if (params?.q) qs.set("q", params.q);
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      const q = qs.toString();
+      return fetchApi<PatientListResponse>(`/patients${q ? `?${q}` : ""}`);
+    },
+    create: (payload: CreatePatientRequest): Promise<Patient> =>
+      fetchApi<Patient>("/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    get: (id: string): Promise<Patient> =>
+      fetchApi<Patient>(`/patients/${id}`),
+    update: (id: string, payload: UpdatePatientRequest): Promise<Patient> =>
+      fetchApi<Patient>(`/patients/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    delete: (id: string): Promise<{ status: string }> =>
+      fetchApi<{ status: string }>(`/patients/${id}`, { method: "DELETE" }),
+    history: (id: string): Promise<PatientHistoryResponse> =>
+      fetchApi<PatientHistoryResponse>(`/patients/${id}/history`),
+    progress: (id: string): Promise<PatientProgressResponse> =>
+      fetchApi<PatientProgressResponse>(`/patients/${id}/progress`),
+    consent: (
+      id: string,
+      consentType: ConsentType,
+      granted: boolean,
+    ): Promise<ConsentRecord> =>
+      fetchApi<ConsentRecord>(`/patients/${id}/consent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent_type: consentType, granted }),
+      }),
   },
 
   soap: {

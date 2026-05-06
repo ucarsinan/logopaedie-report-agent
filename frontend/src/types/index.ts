@@ -58,6 +58,134 @@ export interface ReportData {
 export type AppPhase = "pre-upload" | "chat" | "generating" | "preview";
 export type AppModule = "report" | "phonology" | "therapy-plan" | "compare" | "suggest" | "history" | "soap";
 
+/* ═══════════════════════════════ Sessions ═══════════════════════════════════ */
+
+export interface SessionInfo {
+  session_id: string;
+  status: string;
+  report_type?: string | null;
+  collected_data?: {
+    greeting?: string;
+    current_phase?: string;
+    collected_fields?: string[];
+    missing_fields?: string[];
+  };
+  chat_history?: ChatMsg[];
+  materials_consent?: boolean;
+  therapy_plan_mode?: boolean;
+  patient_id?: string | null;
+  is_demo?: boolean;
+}
+
+export interface CreateSessionParams {
+  mode?: string;
+  patient_id?: string | null;
+}
+
+/* ═══════════════════════════════ Patients ═══════════════════════════════════ */
+
+export interface Patient {
+  id: string;
+  system_id: string;
+  pseudonym: string;
+  realname: string;
+  birthdate: string;
+  phone: string | null;
+  email: string | null;
+  insurance_nr: string | null;
+  gender: string | null;
+  age_group: string;
+  icd10_codes: string[];
+  disorder_text: string;
+  indikationsschluessel: string;
+  insurance_type: string | null;
+  insurance_name: string | null;
+  guardian_name: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface PatientSummary {
+  id: string;
+  system_id: string;
+  pseudonym: string;
+  age_group: string;
+  disorder_text: string;
+  created_at: string;
+}
+
+export interface PatientListResponse {
+  items: PatientSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface PatientListParams {
+  q?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface CreatePatientRequest {
+  realname: string;
+  birthdate: string;
+  pseudonym?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  insurance_nr?: string | null;
+  gender?: string | null;
+  age_group?: string;
+  icd10_codes?: string[];
+  disorder_text?: string;
+  indikationsschluessel?: string;
+  insurance_type?: string | null;
+  insurance_name?: string | null;
+  guardian_name?: string | null;
+}
+
+export interface UpdatePatientRequest {
+  pseudonym?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  gender?: string | null;
+  age_group?: string | null;
+  icd10_codes?: string[] | null;
+  disorder_text?: string | null;
+  indikationsschluessel?: string | null;
+  insurance_type?: string | null;
+  insurance_name?: string | null;
+  guardian_name?: string | null;
+}
+
+export interface PatientHistoryItem {
+  type: "report";
+  id: number;
+  report_type: string;
+  pseudonym: string;
+  created_at: string;
+}
+
+export interface PatientHistoryResponse {
+  items: PatientHistoryItem[];
+  total: number;
+}
+
+export interface PatientProgressResponse {
+  comparison: unknown | null;
+  message?: string;
+}
+
+export type ConsentType = "data_processing" | "ai_processing" | "data_sharing";
+
+export interface ConsentRecord {
+  id: string;
+  consent_type: ConsentType;
+  granted: boolean;
+  granted_at: string;
+  revoked_at: string | null;
+}
+
 /* ═══════════════════════════════ Report List/Stats ═══════════════════════════ */
 
 export interface ReportListResponse {
@@ -76,6 +204,7 @@ export interface ReportStats {
 export interface ReportFilterParams {
   pseudonym?: string;
   report_type?: string;
+  patient_id?: string;
   from_date?: string;
   to_date?: string;
   page?: number;
