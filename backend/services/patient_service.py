@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlmodel import Session, col, func, select
@@ -65,7 +66,7 @@ class PatientService:
         db.refresh(patient)
         return patient
 
-    def to_response(self, patient: Patient) -> dict:
+    def to_response(self, patient: Patient) -> dict[str, Any]:
         """Convert patient to response dict with decrypted PII fields."""
         return {
             "id": str(patient.id),
