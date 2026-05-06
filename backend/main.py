@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
+import models.patient  # noqa: F401
 from database import create_db_and_tables
 from exceptions import (
     AIServiceError,
@@ -52,6 +53,9 @@ from routers import (
 )
 from routers import (
     auth as auth_router,
+)
+from routers import (
+    patients as patients_router,
 )
 
 setup_logging()
@@ -183,6 +187,7 @@ app.include_router(auth_router.router)
 app.include_router(auth_admin.router)
 app.include_router(health.router)
 app.include_router(sessions.router)
+app.include_router(patients_router.router, prefix="/api")
 app.include_router(reports.router)
 app.include_router(analysis.router)
 app.include_router(therapy_plans.router)
