@@ -64,6 +64,8 @@ class Session:
         self.materials_consent: bool = False
         self.generated_report: dict | None = None
         self.therapy_plan_mode: bool = False
+        self.patient_id: str | None = None
+        self.is_demo: bool = False
         self.created_at: float = time.time()
         self._version: int = 0
 
@@ -82,6 +84,8 @@ class Session:
             "materials_consent": self.materials_consent,
             "generated_report": self.generated_report,
             "therapy_plan_mode": self.therapy_plan_mode,
+            "patient_id": self.patient_id,
+            "is_demo": self.is_demo,
             "created_at": self.created_at,
             "_version": self._version,
         }
@@ -98,6 +102,8 @@ class Session:
         s.materials_consent = data.get("materials_consent", False)
         s.generated_report = data.get("generated_report")
         s.therapy_plan_mode = data.get("therapy_plan_mode", False)
+        s.patient_id = data.get("patient_id")
+        s.is_demo = data.get("is_demo", False)
         s.created_at = data.get("created_at", time.time())
         s._version = data.get("_version", 0)
         return s

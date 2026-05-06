@@ -47,6 +47,7 @@ def _validate_session_id(session_id: str) -> None:
 
 class CreateSessionRequest(BaseModel):
     mode: str = "anamnesis"  # "anamnesis" | "therapy_plan"
+    patient_id: str | None = None
 
 
 class ConsentRequest(BaseModel):
@@ -62,6 +63,11 @@ async def create_session(
     session = store.create()
     if req and req.mode == "therapy_plan":
         session.therapy_plan_mode = True
+    if req and req.patient_id:
+        session.patient_id = req.patient_id
+        session.is_demo = False
+    else:
+        session.is_demo = True
     try:
         greeting = await anamnesis_engine.get_initial_greeting(session)
     except Exception:
@@ -79,6 +85,8 @@ async def create_session(
         report_type=session.report_type,
         collected_data={"greeting": greeting},
         therapy_plan_mode=session.therapy_plan_mode,
+        patient_id=session.patient_id,
+        is_demo=session.is_demo,
     )
 
 
