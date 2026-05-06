@@ -3,15 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { ChatMsg, UploadedFile, ReportData, AppPhase } from "@/types";
+import type { ChatMsg, UploadedFile, ReportData, AppPhase, PatientSummary } from "@/types";
 import { WorkflowStepper } from "@/components/WorkflowStepper";
 import type { StepConfig } from "@/components/WorkflowStepper";
+import { PatientSelector } from "@/features/chat/PatientSelector";
 import { ChatView } from "./components/ChatView";
 import { PreUploadView } from "./components/PreUploadView";
 import { GeneratingView } from "./components/GeneratingView";
 import { ReportPreview } from "./components/ReportPreview";
 
 const SESSION_STORAGE_KEY = "logopaedie_session_id";
+const DEMO_STORAGE_KEY = "demo_mode";
 
 const REPORT_STEPS: StepConfig[] = [
   {
@@ -88,6 +90,34 @@ export function ReportModule({
   const [savedReportId, setSavedReportId] = useState<number | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [consentChecked, setConsentChecked] = useState(false);
+  const [showPatientSelector, setShowPatientSelector] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
+  const [sessionPatient, setSessionPatient] = useState<PatientSummary | null>(null);
+
+  const startSession = useCallback(
+    async (patient?: PatientSummary | null) => {
+      setStartingSession(true);
+      setError(null);
+      try {
+        const data = await api.sessions.create({
+          mode: "anamnesis",
+          patient_id: patient?.id ?? null,
+        });
+        setSessionId(data.session_id);
+        localStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
+        setSessionPatient(patient ?? null);
+        setShowPatientSelector(false);
+        if (data.collected_data?.greeting) {
+          setMessages([{ role: "assistant", content: data.collected_data.greeting }]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen.");
+      } finally {
+        setStartingSession(false);
+      }
+    },
+    [setError, setMessages, setSessionId],
+  );
 
   // Restore session on mount
   useEffect(() => {
@@ -126,19 +156,20 @@ export function ReportModule({
           }
         }
 
-        const data = await api.sessions.create();
-        setSessionId(data.session_id);
-        localStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
-        if (data.collected_data?.greeting) {
-          setMessages([{ role: "assistant", content: data.collected_data.greeting }]);
+        const isDemo =
+          window.location.search.includes("demo=true") ||
+          localStorage.getItem(DEMO_STORAGE_KEY) === "true";
+        if (isDemo) {
+          await startSession(null);
+        } else {
+          setShowPatientSelector(true);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen.");
       }
     }
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [setError, setMessages, setSessionId, startSession]);
 
   // File upload
   async function handleFileUpload(files: FileList) {
@@ -215,8 +246,27 @@ export function ReportModule({
     };
   }, [handleReset]);
 
+  if (showPatientSelector) {
+    return (
+      <PatientSelector
+        loading={startingSession}
+        onSelect={(patient) => startSession(patient)}
+        onDemo={() => {
+          localStorage.setItem(DEMO_STORAGE_KEY, "true");
+          startSession(null);
+        }}
+      />
+    );
+  }
+
   return (
     <>
+      {sessionPatient && (
+        <div className="rounded-lg border border-accent/20 bg-accent-muted px-4 py-3 text-sm text-accent-text">
+          Sitzung für <span className="font-semibold">{sessionPatient.pseudonym}</span>
+        </div>
+      )}
+
       <WorkflowStepper
         steps={REPORT_STEPS}
         currentStep={PHASE_TO_STEP[phase] ?? 0}

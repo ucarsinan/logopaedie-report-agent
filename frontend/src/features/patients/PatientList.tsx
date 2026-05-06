@@ -83,12 +83,20 @@ export function PatientList() {
             Patienten
           </h1>
         </div>
-        <Link
-          href="/patients/new"
-          className="inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Neuer Patient
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/module/report"
+            className="inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated"
+          >
+            Berichte
+          </Link>
+          <Link
+            href="/patients/new"
+            className="inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Neuer Patient
+          </Link>
+        </div>
       </div>
 
       <form
