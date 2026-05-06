@@ -32,6 +32,9 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("KV_REST_API_TOKEN", "fake-token")
     # Remove token guard so /health is reachable without a service token
     monkeypatch.delenv("SERVICE_TOKEN", raising=False)
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("PATIENT_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
 
 @pytest.fixture()
@@ -77,6 +80,7 @@ def test_db(fake_user):
     from sqlmodel import Session, SQLModel, create_engine
 
     import models.auth
+    import models.patient
     import models.report_record
     import models.soap_record
     import models.therapy_plan_record  # noqa: F401
