@@ -73,3 +73,36 @@ def test_delete_patient_soft(client):
     assert client.delete(f"/api/patients/{pid}").status_code == 200
     assert client.get("/api/patients").json()["total"] == 0
     assert client.get(f"/api/patients/{pid}").json()["deleted_at"] is not None
+
+
+def test_get_history_empty(client):
+    pid = client.post("/api/patients", json=_payload()).json()["id"]
+    res = client.get(f"/api/patients/{pid}/history")
+    assert res.status_code == 200
+    assert res.json()["items"] == []
+
+
+def test_get_progress_no_reports(client):
+    pid = client.post("/api/patients", json=_payload()).json()["id"]
+    res = client.get(f"/api/patients/{pid}/progress")
+    assert res.status_code == 200
+    assert res.json()["comparison"] is None
+
+
+def test_record_consent(client):
+    pid = client.post("/api/patients", json=_payload()).json()["id"]
+    res = client.post(
+        f"/api/patients/{pid}/consent",
+        json={"consent_type": "data_processing", "granted": True},
+    )
+    assert res.status_code == 201
+    assert res.json()["granted"] is True
+
+
+def test_record_consent_invalid_type(client):
+    pid = client.post("/api/patients", json=_payload()).json()["id"]
+    res = client.post(
+        f"/api/patients/{pid}/consent",
+        json={"consent_type": "bad_type", "granted": True},
+    )
+    assert res.status_code == 422
