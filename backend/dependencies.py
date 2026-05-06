@@ -6,8 +6,10 @@ from uuid import UUID
 from services.anamnesis_engine import AnamnesisEngine
 from services.audit_service import AuditService
 from services.email_service import EmailService
+from services.encryption_service import EncryptionService
 from services.groq_client import GroqService
 from services.password_service import PasswordService
+from services.patient_service import PatientService
 from services.phonological_analyzer import PhonologicalAnalyzer
 from services.report_comparator import ReportComparator
 from services.report_generator import ReportGenerator
@@ -85,6 +87,16 @@ def get_email_service() -> EmailService:
 @lru_cache(maxsize=1)
 def get_audit_service() -> AuditService:
     return AuditService()
+
+
+@lru_cache(maxsize=1)
+def get_encryption_service() -> EncryptionService:
+    return EncryptionService()
+
+
+@lru_cache(maxsize=1)
+def get_patient_service() -> PatientService:
+    return PatientService(get_encryption_service())
 
 
 @lru_cache(maxsize=1)
