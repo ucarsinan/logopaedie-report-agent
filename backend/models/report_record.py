@@ -19,3 +19,7 @@ class ReportRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     content_json: str  # full report as JSON string
     user_id: UUID = Field(sa_column=Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False))
+    patient_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(GUID(), ForeignKey("patients.id", ondelete="SET NULL"), nullable=True),
+    )

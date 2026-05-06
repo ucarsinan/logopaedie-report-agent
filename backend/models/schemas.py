@@ -22,6 +22,8 @@ class SessionInfo(BaseModel):
     chat_history: list[ChatMessage] = Field(default_factory=list)
     materials_consent: bool = False
     therapy_plan_mode: bool = False
+    patient_id: str | None = None  # UUID as string
+    is_demo: bool = False
 
 
 # ── Chat ────────────────────────────────────────────────────────────────────
