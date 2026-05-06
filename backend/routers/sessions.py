@@ -5,10 +5,11 @@ import logging
 import os
 import re
 import tempfile
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from database import get_db
 from dependencies import anamnesis_engine, get_optional_user, groq_service, report_generator
@@ -18,6 +19,7 @@ from exceptions import (
 )
 from middleware.rate_limiter import AUDIO_LIMIT, CHAT_LIMIT, GENERATE_LIMIT, limiter
 from models.auth import User
+from models.patient import Patient
 from models.report_record import ReportRecord
 from models.schemas import (
     ChatMessage,
@@ -283,6 +285,25 @@ async def generate_report(
     if not session:
         raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
 
+    record_patient_id: UUID | None = None
+    record_pseudonym: str | None = None
+    if current_user is not None and session.patient_id:
+        try:
+            record_patient_id = UUID(session.patient_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Ungültige patient_id in Session.") from exc
+
+        patient = db.exec(
+            select(Patient).where(
+                Patient.id == record_patient_id,
+                Patient.user_id == current_user.id,
+                Patient.deleted_at.is_(None),  # type: ignore[union-attr]
+            )
+        ).first()
+        if patient is None:
+            raise HTTPException(status_code=404, detail="Patient nicht gefunden.")
+        record_pseudonym = patient.pseudonym
+
     session.status = "generating"
     store.save(session)
 
@@ -294,10 +315,11 @@ async def generate_report(
 
         if current_user is not None:
             record = ReportRecord(
-                pseudonym=session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
+                pseudonym=record_pseudonym or session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
                 report_type=session.generated_report.get("report_type", "unbekannt"),
                 content_json=json.dumps(session.generated_report, ensure_ascii=False),
                 user_id=current_user.id,
+                patient_id=record_patient_id,
             )
             db.add(record)
             db.commit()

@@ -18,6 +18,7 @@ test_engine = create_engine(
 )
 
 from models.auth import GUID, User  # noqa: E402, F401 — registers User in SQLModel metadata
+from models.patient import Patient  # noqa: E402 — must be imported before create_all
 from models.report_record import ReportRecord  # noqa: E402 — must be imported before create_all
 
 # Pre-register short-name aliases so that main.py's sys.path-based imports (`from models.X import …`)
@@ -123,6 +124,88 @@ def test_generate_endpoint_saves_report_to_db(mock_groq, mock_redis):
     assert records[0].pseudonym == "Anna B."
     assert records[0].report_type == "befundbericht"
     assert str(records[0].user_id) == str(TEST_USER_ID)
+
+    app.dependency_overrides.clear()
+
+
+def test_generate_endpoint_links_report_to_patient(mock_groq, mock_redis):
+    import sys
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session, select
+
+    from main import app
+
+    database_mod = sys.modules.get("database") or sys.modules["backend.database"]
+    get_db = database_mod.get_db
+
+    from dependencies import get_optional_user
+    from models.report_record import ReportRecord
+
+    fake_user = User(id=TEST_USER_ID, email="patient-report@test.example", password_hash="x")
+
+    def override_get_db():
+        with Session(test_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_optional_user] = lambda: fake_user
+
+    with Session(test_engine) as db:
+        patient = Patient(
+            system_id="PAT-2026-0001",
+            pseudonym="Patient Pseudonym",
+            user_id=TEST_USER_ID,
+            realname_enc=b"encrypted",
+            birthdate_enc=b"encrypted",
+        )
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+        patient_id = patient.id
+
+    fake_report = {
+        "report_type": "befundbericht",
+        "patient": {"pseudonym": "AI Pseudonym", "age_group": "kind", "gender": None},
+        "diagnose": {"icd_10_codes": [], "indikationsschluessel": "", "diagnose_text": ""},
+        "anamnese": "Test",
+        "befund": "",
+        "therapieindikation": "",
+        "therapieziele": [],
+        "empfehlung": "",
+    }
+
+    _stored = {}
+    mock_redis.set = MagicMock(side_effect=lambda k, v, **kw: _stored.__setitem__(k, v))
+    mock_redis.get = MagicMock(side_effect=lambda k: _stored.get(k))
+
+    with patch("services.report_generator.ReportGenerator.generate", new_callable=AsyncMock) as mock_gen:
+        mock_report_obj = MagicMock()
+        mock_report_obj.model_dump.return_value = fake_report
+        mock_gen.return_value = mock_report_obj
+        mock_groq["chat"].return_value = "Willkommen!"
+
+        client = TestClient(app)
+        res = client.post("/sessions", json={"patient_id": str(patient_id)})
+        assert res.status_code == 200
+        session_id = res.json()["session_id"]
+
+        from services.session_store import store
+
+        session = store.get(session_id)
+        session.status = "materials"
+        store.save(session)
+
+        res = client.post(f"/sessions/{session_id}/generate")
+        assert res.status_code == 200
+
+    with Session(test_engine) as db:
+        records = db.exec(select(ReportRecord)).all()
+
+    assert len(records) == 1
+    assert records[0].patient_id == patient_id
+    assert records[0].pseudonym == "Patient Pseudonym"
 
     app.dependency_overrides.clear()
 
