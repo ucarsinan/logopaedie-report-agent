@@ -56,4 +56,4 @@ class ConsentRecord(SQLModel, table=True):
     granted: bool
     granted_at: datetime = Field(default_factory=_utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
     revoked_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    recorded_by: UUID = Field(sa_column=Column(GUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=False))
+    recorded_by: UUID = Field(sa_column=Column(GUID(), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False))
