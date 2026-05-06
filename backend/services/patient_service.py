@@ -66,6 +66,50 @@ class PatientService:
         db.refresh(patient)
         return patient
 
+    def update_patient(
+        self,
+        db: Session,
+        patient: Patient,
+        *,
+        pseudonym: str | None = None,
+        phone: str | None = None,
+        email: str | None = None,
+        gender: str | None = None,
+        age_group: str | None = None,
+        icd10_codes: list[str] | None = None,
+        disorder_text: str | None = None,
+        indikationsschluessel: str | None = None,
+        insurance_type: str | None = None,
+        insurance_name: str | None = None,
+        guardian_name: str | None = None,
+    ) -> Patient:
+        if pseudonym is not None:
+            patient.pseudonym = pseudonym
+        if phone is not None:
+            patient.phone_enc = self._enc.encrypt(phone)
+        if email is not None:
+            patient.email_enc = self._enc.encrypt(email)
+        if gender is not None:
+            patient.gender = gender
+        if age_group is not None:
+            patient.age_group = age_group
+        if icd10_codes is not None:
+            patient.icd10_codes = icd10_codes
+        if disorder_text is not None:
+            patient.disorder_text = disorder_text
+        if indikationsschluessel is not None:
+            patient.indikationsschluessel = indikationsschluessel
+        if insurance_type is not None:
+            patient.insurance_type = insurance_type
+        if insurance_name is not None:
+            patient.insurance_name = insurance_name
+        if guardian_name is not None:
+            patient.guardian_name = guardian_name
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+        return patient
+
     def to_response(self, patient: Patient) -> dict[str, Any]:
         """Convert patient to response dict with decrypted PII fields."""
         return {

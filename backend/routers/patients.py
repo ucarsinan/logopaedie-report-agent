@@ -10,11 +10,12 @@ from pydantic import BaseModel
 from sqlmodel import Session, col, func, select
 
 from database import get_db
-from dependencies import get_audit_service, get_current_user, get_patient_service
+from dependencies import get_audit_service, get_current_user, get_patient_service, get_report_comparator
 from models.auth import User
 from models.patient import ConsentRecord, Patient
 from models.report_record import ReportRecord
 from services.patient_service import PatientService
+from services.report_comparator import ReportComparator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["patients"])
@@ -64,6 +65,19 @@ def _get_or_404(pid: UUID, user_id: UUID, db: Session) -> Patient:
     return p
 
 
+def _get_active_or_404(pid: UUID, user_id: UUID, db: Session) -> Patient:
+    p = db.exec(
+        select(Patient).where(
+            Patient.id == pid,
+            Patient.user_id == user_id,
+            Patient.deleted_at.is_(None),  # type: ignore[union-attr]
+        )
+    ).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Patient nicht gefunden.")
+    return p
+
+
 @router.post("/patients", status_code=status.HTTP_201_CREATED)
 def create_patient(
     req: CreatePatientRequest,
@@ -103,7 +117,7 @@ def list_patients(
 ) -> dict[str, Any]:
     query = select(Patient).where(Patient.user_id == current_user.id, Patient.deleted_at.is_(None))  # type: ignore[union-attr]
     if q:
-        query = query.where(col(Patient.pseudonym).contains(q.lower()) | col(Patient.system_id).contains(q.lower()))
+        query = query.where(col(Patient.pseudonym).ilike(f"%{q}%") | col(Patient.system_id).ilike(f"%{q}%"))
     total = db.exec(select(func.count()).select_from(query.subquery())).one()
     patients = db.exec(query.order_by(col(Patient.created_at).desc()).offset((page - 1) * limit).limit(limit)).all()
     return {
@@ -144,32 +158,22 @@ def update_patient(
     svc: PatientService = Depends(get_patient_service),
     audit=Depends(get_audit_service),
 ) -> dict[str, Any]:
-    patient = _get_or_404(patient_id, current_user.id, db)
-    if req.pseudonym is not None:
-        patient.pseudonym = req.pseudonym
-    if req.phone is not None:
-        patient.phone_enc = svc._enc.encrypt(req.phone)
-    if req.email is not None:
-        patient.email_enc = svc._enc.encrypt(req.email)
-    if req.gender is not None:
-        patient.gender = req.gender
-    if req.age_group is not None:
-        patient.age_group = req.age_group
-    if req.icd10_codes is not None:
-        patient.icd10_codes = req.icd10_codes
-    if req.disorder_text is not None:
-        patient.disorder_text = req.disorder_text
-    if req.indikationsschluessel is not None:
-        patient.indikationsschluessel = req.indikationsschluessel
-    if req.insurance_type is not None:
-        patient.insurance_type = req.insurance_type
-    if req.insurance_name is not None:
-        patient.insurance_name = req.insurance_name
-    if req.guardian_name is not None:
-        patient.guardian_name = req.guardian_name
-    db.add(patient)
-    db.commit()
-    db.refresh(patient)
+    patient = _get_active_or_404(patient_id, current_user.id, db)
+    patient = svc.update_patient(
+        db,
+        patient,
+        pseudonym=req.pseudonym,
+        phone=req.phone,
+        email=req.email,
+        gender=req.gender,
+        age_group=req.age_group,
+        icd10_codes=req.icd10_codes,
+        disorder_text=req.disorder_text,
+        indikationsschluessel=req.indikationsschluessel,
+        insurance_type=req.insurance_type,
+        insurance_name=req.insurance_name,
+        guardian_name=req.guardian_name,
+    )
     audit.log(
         db,
         user_id=current_user.id,
@@ -190,7 +194,7 @@ def delete_patient(
     svc: PatientService = Depends(get_patient_service),
     audit=Depends(get_audit_service),
 ) -> dict[str, str]:
-    patient = _get_or_404(patient_id, current_user.id, db)
+    patient = _get_active_or_404(patient_id, current_user.id, db)
     patient.deleted_at = datetime.now(UTC)
     db.add(patient)
     db.commit()
@@ -235,10 +239,9 @@ async def get_progress(
     patient_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    comparator: ReportComparator = Depends(get_report_comparator),
 ) -> dict[str, Any]:
     import json
-
-    from dependencies import get_report_comparator
 
     _get_or_404(patient_id, current_user.id, db)
     reports = db.exec(
@@ -249,7 +252,6 @@ async def get_progress(
     ).all()
     if len(reports) < 2:
         return {"comparison": None, "message": "Mindestens 2 Berichte erforderlich."}
-    comparator = get_report_comparator()
     comparison = await comparator.compare(json.loads(reports[1].content_json), json.loads(reports[0].content_json))
     return {"comparison": comparison.model_dump()}
 
