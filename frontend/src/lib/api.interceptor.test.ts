@@ -18,13 +18,13 @@ describe("apiCall single-flight 401 interceptor", () => {
     const res = await apiCall("/reports");
     expect(res.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/refresh");
+    expect(fetchMock.mock.calls[1][0]).toBe("/auth-api/refresh");
   });
 
   it("parallel 401s share exactly one refresh", async () => {
     const fetchMock = vi.fn<typeof fetch>((url: RequestInfo | URL) => {
       const u = typeof url === "string" ? url : url.toString();
-      if (u === "/api/auth/refresh")
+      if (u === "/auth-api/refresh")
         return Promise.resolve(new Response("{}", { status: 200 }));
       return Promise.resolve(new Response("", { status: 401 }));
     });
@@ -37,7 +37,7 @@ describe("apiCall single-flight 401 interceptor", () => {
     ]);
     expect(calls).toHaveLength(3);
     const refreshCalls = fetchMock.mock.calls.filter(
-      (c) => c[0] === "/api/auth/refresh",
+      (c) => c[0] === "/auth-api/refresh",
     );
     expect(refreshCalls).toHaveLength(1);
   });
@@ -65,12 +65,12 @@ describe("apiCall single-flight 401 interceptor", () => {
     expect(hrefSetter).toHaveBeenCalledWith("/login");
   });
 
-  it("bypasses interceptor for /api/auth/* URLs", async () => {
+  it("bypasses interceptor for /auth-api/* URLs", async () => {
     const fetchMock = vi.fn<typeof fetch>();
     fetchMock.mockResolvedValue(new Response("", { status: 401 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await apiCall("/api/auth/login");
+    const res = await apiCall("/auth-api/login");
     expect(res.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

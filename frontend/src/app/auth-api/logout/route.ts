@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
+import {
+  AUTH_REFRESH_PATH,
+  backendTarget,
+} from "../../_lib/backend-proxy";
 
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 const IS_PROD = process.env.NODE_ENV === "production";
 
 export async function POST(req: Request): Promise<Response> {
   const cookieHeader = req.headers.get("cookie") ?? "";
-  await fetch(`${BACKEND}/auth/logout`, {
+  await fetch(backendTarget(req, "/auth/logout"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -23,8 +26,7 @@ export async function POST(req: Request): Promise<Response> {
     maxAge: 0,
   };
   res.cookies.set("access_token", "", clearOpts);
-  // refresh_token is scoped to /api/auth/refresh — clear with matching path
-  res.cookies.set("refresh_token", "", { ...clearOpts, path: "/api/auth/refresh" });
+  res.cookies.set("refresh_token", "", { ...clearOpts, path: AUTH_REFRESH_PATH });
   res.cookies.set("user_role", "", {
     httpOnly: false,
     secure: IS_PROD,

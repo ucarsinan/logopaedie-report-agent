@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // access_token may be expired — attempt rotation before giving up
       try {
-        const refreshRes = await fetch("/api/auth/refresh", {
+        const refreshRes = await fetch("/auth-api/refresh", {
           method: "POST",
           credentials: "include",
         });

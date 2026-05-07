@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import {
+  backendTarget,
+  jsonResponse,
+  readCookie,
+} from "../../_lib/backend-proxy";
 
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
-
-// Only forward known safe paths — prevents accidental exposure of future
-// privileged backend auth endpoints (e.g. /auth/users, /auth/admin/*).
 const ALLOWED_PREFIXES = [
   "/verify-email",
   "/resend-verification",
@@ -13,12 +14,6 @@ const ALLOWED_PREFIXES = [
   "/totp/",
 ];
 
-function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null;
-  const match = header.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
 async function forward(
   req: Request,
   ctx: { params: Promise<{ rest: string[] }> },
@@ -27,13 +22,10 @@ async function forward(
   const path = "/" + rest.join("/");
 
   if (!ALLOWED_PREFIXES.some((p) => path.startsWith(p))) {
-    return new Response(JSON.stringify({ detail: "not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(JSON.stringify({ detail: "not found" }), 404);
   }
   const url = new URL(req.url);
-  const target = `${BACKEND}/auth${path}${url.search}`;
+  const target = backendTarget(req, `/auth${path}${url.search}`);
   const access = readCookie(req.headers.get("cookie"), "access_token");
 
   const headers: Record<string, string> = {
@@ -48,10 +40,7 @@ async function forward(
 
   try {
     const upstream = await fetch(target, init);
-    return new NextResponse(await upstream.text(), {
-      status: upstream.status,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(await upstream.text(), upstream.status);
   } catch {
     return new NextResponse(JSON.stringify({ detail: "service_unavailable" }), {
       status: 503,

@@ -44,7 +44,7 @@ export function useAuditLog(initial: Partial<Params> = {}) {
     qs.set("limit", String(params.limit));
     qs.set("offset", String(params.offset));
     try {
-      const res = await fetch(`/api/admin/audit?${qs.toString()}`, {
+      const res = await fetch(`/backend-api/admin/audit?${qs.toString()}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error();

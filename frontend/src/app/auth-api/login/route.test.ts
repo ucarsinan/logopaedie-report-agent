@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { POST } from "./route";
 
-describe("POST /api/auth/login Route Handler", () => {
+describe("POST /auth-api/login Route Handler", () => {
   beforeEach(() => {
     process.env.BACKEND_URL = "http://localhost:8001";
   });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("sets access_token, refresh_token, user_role cookies on success", async () => {
@@ -25,7 +26,7 @@ describe("POST /api/auth/login Route Handler", () => {
       ),
     );
 
-    const req = new Request("http://localhost:3000/api/auth/login", {
+    const req = new Request("http://localhost:3000/auth-api/login", {
       method: "POST",
       body: JSON.stringify({ email: "a@b.c", password: "pw1234567890" }),
     });
@@ -37,9 +38,9 @@ describe("POST /api/auth/login Route Handler", () => {
     expect(all).toContain("access_token=AT");
     expect(all).toContain("refresh_token=RT");
     expect(all).toContain("user_role=admin");
+    expect(all).toContain("Path=/auth-api/refresh");
     expect(all).toContain("HttpOnly");
     expect(all).toContain("SameSite=lax");
-    expect(all).toContain("Path=/");
   });
 
   it("forwards 2fa_required response without setting cookies", async () => {
@@ -49,7 +50,7 @@ describe("POST /api/auth/login Route Handler", () => {
         { status: 200 },
       ),
     );
-    const req = new Request("http://localhost:3000/api/auth/login", {
+    const req = new Request("http://localhost:3000/auth-api/login", {
       method: "POST",
       body: JSON.stringify({ email: "a@b.c", password: "pw1234567890" }),
     });
@@ -63,7 +64,7 @@ describe("POST /api/auth/login Route Handler", () => {
     vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "Invalid" }), { status: 401 }),
     );
-    const req = new Request("http://localhost:3000/api/auth/login", {
+    const req = new Request("http://localhost:3000/auth-api/login", {
       method: "POST",
       body: JSON.stringify({ email: "a@b.c", password: "wrong" }),
     });

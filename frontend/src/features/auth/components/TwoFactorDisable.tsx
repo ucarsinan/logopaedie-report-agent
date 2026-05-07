@@ -16,7 +16,7 @@ export function TwoFactorDisable() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/auth/2fa/disable", {
+      const res = await fetch("/auth-api/2fa/disable", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

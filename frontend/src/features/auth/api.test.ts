@@ -11,11 +11,11 @@ describe("authApi", () => {
     vi.restoreAllMocks();
   });
 
-  it("login POSTs to /api/auth/login with credentials include", async () => {
+  it("login POSTs to /auth-api/login with credentials include", async () => {
     await authApi.login("a@b.c", "pw123456789012");
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0];
-    expect(call[0]).toBe("/api/auth/login");
+    expect(call[0]).toBe("/auth-api/login");
     expect(call[1].method).toBe("POST");
     expect(call[1].credentials).toBe("include");
     expect(JSON.parse(call[1].body)).toEqual({
@@ -24,18 +24,18 @@ describe("authApi", () => {
     });
   });
 
-  it("me GETs /api/auth/me", async () => {
+  it("me GETs /auth-api/me", async () => {
     await authApi.me();
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0];
-    expect(call[0]).toBe("/api/auth/me");
+    expect(call[0]).toBe("/auth-api/me");
   });
 
-  it("logout POSTs /api/auth/logout", async () => {
+  it("logout POSTs /auth-api/logout", async () => {
     await authApi.logout();
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0];
-    expect(call[0]).toBe("/api/auth/logout");
+    expect(call[0]).toBe("/auth-api/logout");
     expect(call[1].method).toBe("POST");
   });
 });

@@ -19,7 +19,7 @@ export function TwoFactorSetup() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/auth/2fa/setup", {
+      const res = await fetch("/auth-api/2fa/setup", {
         method: "POST",
         credentials: "include",
       });
@@ -36,7 +36,7 @@ export function TwoFactorSetup() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/auth/2fa/enable", {
+      const res = await fetch("/auth-api/2fa/enable", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

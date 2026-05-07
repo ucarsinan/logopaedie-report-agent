@@ -1,25 +1,9 @@
 import { NextResponse } from "next/server";
-
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
-
-function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null;
-  const match = header.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function responseHeaders(upstream: Response): Headers {
-  const headers = new Headers();
-  const contentType = upstream.headers.get("content-type");
-  const contentDisposition = upstream.headers.get("content-disposition");
-
-  if (contentType) headers.set("Content-Type", contentType);
-  if (contentDisposition) {
-    headers.set("Content-Disposition", contentDisposition);
-  }
-
-  return headers;
-}
+import {
+  backendTarget,
+  readCookie,
+  responseHeaders,
+} from "../../_lib/backend-proxy";
 
 async function forward(
   req: Request,
@@ -27,7 +11,7 @@ async function forward(
 ): Promise<Response> {
   const { path } = await ctx.params;
   const url = new URL(req.url);
-  const target = `${BACKEND}/${path.join("/")}${url.search}`;
+  const target = backendTarget(req, `/${path.join("/")}${url.search}`);
   const access = readCookie(req.headers.get("cookie"), "access_token");
 
   const headers = new Headers();

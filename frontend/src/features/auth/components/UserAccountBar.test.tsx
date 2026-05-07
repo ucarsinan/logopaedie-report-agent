@@ -58,7 +58,7 @@ describe("UserAccountBar", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/logout",
+        "/auth-api/logout",
         expect.objectContaining({ method: "POST" }),
       ),
     );

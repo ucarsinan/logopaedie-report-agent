@@ -32,7 +32,7 @@ export type {
   TherapyPlanSummary,
 } from "@/types";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "/backend-api";
 
 /* ═══════════════════════════ Single-flight 401 refresh ═══════════════════════ */
 
@@ -47,12 +47,12 @@ export async function apiCall(
   opts: RequestInit = {},
 ): Promise<Response> {
   const res = await fetch(url, { credentials: "include", ...opts });
-  if (res.status !== 401 || url.includes("/api/auth/")) {
+  if (res.status !== 401 || url.includes("/auth-api/")) {
     return res;
   }
 
   if (!refreshPromise) {
-    refreshPromise = fetch("/api/auth/refresh", {
+    refreshPromise = fetch("/auth-api/refresh", {
       method: "POST",
       credentials: "include",
     }).finally(() => {

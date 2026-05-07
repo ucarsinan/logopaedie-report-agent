@@ -119,7 +119,7 @@ The app uses a full multi-user auth system: email + password registration, email
 | `SESSION_ENCRYPTION_KEY` | Fernet key for session data at rest |
 | `RESEND_API_KEY` | [Resend](https://resend.com) API key for transactional email |
 | `RESEND_FROM_EMAIL` | Sender address (e.g. `noreply@example.com`) |
-| `BACKEND_URL` | Backend URL as seen from the frontend service (e.g. `http://localhost:8001`) |
+| `BACKEND_URL` | Backend URL as seen from the frontend proxy routes (locally `http://localhost:8001`, on Vercel use the generated backend service URL, e.g. `/api` service prefix included) |
 
 > **Email:** Resend requires one-time domain verification at [resend.com/domains](https://resend.com/domains) before sending from a custom address.
 
@@ -141,10 +141,10 @@ vercel deploy
 
 ### Vercel deploy checklist
 
-1. Set `BACKEND_URL` in the **frontend** service env to the deployed FastAPI service URL.
+1. Use Vercel's generated `BACKEND_URL` in the **frontend** service env, or set it to the deployed FastAPI service URL including its `/api` service prefix.
 2. Set `JWT_SECRET`, `SERVICE_TOKEN`, `SESSION_ENCRYPTION_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `DATABASE_URL`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `GROQ_API_KEY` in the **backend** service env.
 3. Run Alembic migrations against Neon: `alembic upgrade head`.
-4. Verify `vercel.json` `experimentalServices` exposes both services and the `/api/*` rewrite carve-out is in place.
+4. Verify `vercel.json` `experimentalServices` exposes the FastAPI backend at `/api`; the frontend proxies use `/auth-api/*` and `/backend-api/*` to avoid colliding with that service prefix.
 5. Smoke-test: register a user, verify email, log in, enable 2FA, log in again with 2FA.
 
 ## License

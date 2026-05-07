@@ -1,18 +1,19 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { POST } from "./route";
 
-describe("POST /api/auth/login/2fa Route Handler", () => {
+describe("POST /auth-api/login/2fa Route Handler", () => {
   beforeEach(() => {
     process.env.BACKEND_URL = "http://localhost:8001";
   });
+
   afterEach(() => vi.restoreAllMocks());
 
-  it("sets cookies on successful 2FA verification", async () => {
+  it("sets cookies after successful 2FA login", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
-          access_token: "AT2",
-          refresh_token: "RT2",
+          access_token: "AT",
+          refresh_token: "RT",
           user: {
             id: "u1",
             email: "a@b.c",
@@ -24,15 +25,16 @@ describe("POST /api/auth/login/2fa Route Handler", () => {
         { status: 200 },
       ),
     );
-    const req = new Request("http://localhost:3000/api/auth/login/2fa", {
+
+    const req = new Request("http://localhost:3000/auth-api/login/2fa", {
       method: "POST",
       body: JSON.stringify({ challenge_id: "c1", code: "123456" }),
     });
     const res = await POST(req);
-    expect(res.status).toBe(200);
     const all = res.headers.getSetCookie().join("\n");
-    expect(all).toContain("access_token=AT2");
-    expect(all).toContain("refresh_token=RT2");
-    expect(all).toContain("user_role=user");
+    expect(res.status).toBe(200);
+    expect(all).toContain("access_token=AT");
+    expect(all).toContain("refresh_token=RT");
+    expect(all).toContain("Path=/auth-api/refresh");
   });
 });

@@ -19,7 +19,7 @@ export function useActiveSessions() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/sessions", { credentials: "include" });
+      const res = await fetch("/auth-api/sessions", { credentials: "include" });
       if (!res.ok) throw new Error();
       setSessions(await res.json());
     } catch {
@@ -34,7 +34,7 @@ export function useActiveSessions() {
   }, [load]);
 
   async function revoke(id: string): Promise<{ current_session_revoked?: boolean }> {
-    const res = await fetch(`/api/auth/sessions/${id}`, {
+    const res = await fetch(`/auth-api/sessions/${id}`, {
       method: "DELETE",
       credentials: "include",
     });

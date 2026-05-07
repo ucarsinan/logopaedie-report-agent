@@ -10,7 +10,7 @@ function Probe() {
 describe("AuthProvider", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("loads /api/auth/me on mount and becomes authenticated", async () => {
+  it("loads /auth-api/me on mount and becomes authenticated", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({

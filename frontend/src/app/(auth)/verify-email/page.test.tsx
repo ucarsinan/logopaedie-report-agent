@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({
 describe("VerifyEmailPage", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("calls /api/auth/verify-email with token and shows success", async () => {
+  it("calls /auth-api/verify-email with token and shows success", async () => {
     const spy = vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
@@ -18,7 +18,7 @@ describe("VerifyEmailPage", () => {
       expect(screen.getByText(/email.*bestätigt/i)).toBeInTheDocument(),
     );
     const call = spy.mock.calls[0];
-    expect(call[0]).toBe("/api/auth/verify-email");
+    expect(call[0]).toBe("/auth-api/verify-email");
     expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({
       token: "abc123",
     });

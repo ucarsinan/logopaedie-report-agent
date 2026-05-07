@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { GET, POST } from "./route";
 
-describe("/api backend proxy Route Handler", () => {
+describe("/backend-api backend proxy Route Handler", () => {
   beforeEach(() => {
     process.env.BACKEND_URL = "http://localhost:8001";
   });
@@ -15,7 +15,7 @@ describe("/api backend proxy Route Handler", () => {
         headers: { "Content-Type": "application/json" },
       }),
     );
-    const req = new Request("http://localhost:3000/api/sessions?mode=report", {
+    const req = new Request("http://localhost:3000/backend-api/sessions?mode=report", {
       headers: { cookie: "access_token=AT" },
     });
 
@@ -42,7 +42,7 @@ describe("/api backend proxy Route Handler", () => {
         headers: { "Content-Type": "application/json" },
       }),
     );
-    const req = new Request("http://localhost:3000/api/sessions", {
+    const req = new Request("http://localhost:3000/backend-api/sessions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

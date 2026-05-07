@@ -1,44 +1,34 @@
 import { NextResponse } from "next/server";
+import {
+  AUTH_REFRESH_PATH,
+  backendTarget,
+  jsonResponse,
+  readCookie,
+} from "../../_lib/backend-proxy";
 
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 const IS_PROD = process.env.NODE_ENV === "production";
 const ACCESS_MAX_AGE = 60 * 15;
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
-function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null;
-  const match = header.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
 export async function POST(req: Request): Promise<Response> {
   const refresh = readCookie(req.headers.get("cookie"), "refresh_token");
   if (!refresh) {
-    return new NextResponse(JSON.stringify({ detail: "no refresh token" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(JSON.stringify({ detail: "no refresh token" }), 401);
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${BACKEND}/auth/refresh`, {
+    upstream = await fetch(backendTarget(req, "/auth/refresh"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
     });
   } catch {
-    return new NextResponse(JSON.stringify({ detail: "service_unavailable" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(JSON.stringify({ detail: "service_unavailable" }), 503);
   }
 
   if (!upstream.ok) {
-    return new NextResponse(await upstream.text(), {
-      status: upstream.status,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(await upstream.text(), upstream.status);
   }
 
   const payload = await upstream.json();
@@ -54,7 +44,7 @@ export async function POST(req: Request): Promise<Response> {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: "lax",
-    path: "/api/auth/refresh",
+    path: AUTH_REFRESH_PATH,
     maxAge: REFRESH_MAX_AGE,
   });
   return res;

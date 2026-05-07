@@ -16,7 +16,7 @@ describe("api client", () => {
     await api.sessions.create({ mode: "anamnesis", patient_id: "patient-1" });
 
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://localhost:8001/sessions");
+    expect(call[0]).toBe("/backend-api/sessions");
     expect(call[1].method).toBe("POST");
     expect(JSON.parse(call[1].body)).toEqual({
       mode: "anamnesis",
@@ -35,7 +35,7 @@ describe("api client", () => {
     await api.reports.list({ patient_id: "patient-1", page: 2 });
 
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://localhost:8001/reports?patient_id=patient-1&page=2");
+    expect(call[0]).toBe("/backend-api/reports?patient_id=patient-1&page=2");
   });
 
   it("creates patients", async () => {
@@ -46,7 +46,7 @@ describe("api client", () => {
     });
 
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://localhost:8001/patients");
+    expect(call[0]).toBe("/backend-api/patients");
     expect(call[1].method).toBe("POST");
     expect(JSON.parse(call[1].body)).toEqual({
       realname: "Max Mustermann",
@@ -59,7 +59,7 @@ describe("api client", () => {
     await api.patients.consent("patient-1", "ai_processing", true);
 
     const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://localhost:8001/patients/patient-1/consent");
+    expect(call[0]).toBe("/backend-api/patients/patient-1/consent");
     expect(call[1].method).toBe("POST");
     expect(JSON.parse(call[1].body)).toEqual({
       consent_type: "ai_processing",

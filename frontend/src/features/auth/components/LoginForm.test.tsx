@@ -21,7 +21,7 @@ describe("LoginForm", () => {
 
   it("submits credentials and redirects on success", async () => {
     mockFetch((url) => {
-      if (url.endsWith("/api/auth/login"))
+      if (url.endsWith("/auth-api/login"))
         return new Response(
           JSON.stringify({
             user: {
@@ -85,13 +85,13 @@ describe("LoginForm", () => {
   it("completes login after 2FA code submit", async () => {
     let stage = 0;
     mockFetch((url) => {
-      if (url.endsWith("/api/auth/login")) {
+      if (url.endsWith("/auth-api/login")) {
         return new Response(
           JSON.stringify({ step: "2fa_required", challenge_id: "c1" }),
           { status: 200 },
         );
       }
-      if (url.endsWith("/api/auth/login/2fa")) {
+      if (url.endsWith("/auth-api/login/2fa")) {
         stage = 1;
         return new Response(
           JSON.stringify({
