@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useLogin } from "../hooks/useLogin";
 import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
@@ -10,6 +11,12 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  function getRedirectUrl(): string {
+    const next = searchParams.get("next");
+    return next && next.startsWith("/") ? next : "/module/report";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,7 +27,7 @@ export function LoginForm() {
       return;
     }
     localStorage.removeItem("demo_mode");
-    window.location.href = "/";
+    window.location.href = getRedirectUrl();
   }
 
   async function handle2fa(code: string) {
@@ -28,7 +35,7 @@ export function LoginForm() {
     const res = await submit2fa(challengeId, code);
     if (res && !("step" in res)) {
       localStorage.removeItem("demo_mode");
-      window.location.href = "/";
+      window.location.href = getRedirectUrl();
     }
   }
 
