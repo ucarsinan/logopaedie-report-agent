@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { PasswordChangeForm } from "@/features/auth/components/PasswordChangeForm";
 import { TwoFactorSetup } from "@/features/auth/components/TwoFactorSetup";
@@ -7,8 +8,11 @@ import { ActiveSessionsList } from "@/features/auth/components/ActiveSessionsLis
 
 export default function SecurityPage() {
   const { state } = useAuth();
+  const router = useRouter();
 
-  if (state.status !== "authenticated") {
+  if (state.status === "loading") return null;
+  if (state.status === "unauthenticated") {
+    router.replace("/login");
     return null;
   }
 

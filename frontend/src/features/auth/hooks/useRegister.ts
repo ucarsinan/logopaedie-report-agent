@@ -16,7 +16,7 @@ export function useRegister() {
       if (res.auto_verified) {
         try {
           await authApi.login(email, password);
-          window.location.href = "/";
+          window.location.href = "/module/report";
         } catch {
           // Email already registered with a different password — redirect to login
           window.location.href = "/login";

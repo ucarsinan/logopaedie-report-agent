@@ -1,12 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { AuditLogTable } from "@/features/auth/components/AuditLogTable";
 
 export default function AdminAuditPage() {
   const { state } = useAuth();
+  const router = useRouter();
 
-  if (state.status !== "authenticated" || state.user.role !== "admin") {
+  if (state.status === "loading") return null;
+  if (state.status === "unauthenticated" || state.user.role !== "admin") {
+    router.replace("/");
     return null;
   }
 
