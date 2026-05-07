@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { Patient } from "@/types";
 import { ProgressSnapshot } from "@/features/patient-progress/ProgressSnapshot";
@@ -38,9 +39,23 @@ function InfoItem({
 }
 
 export function PatientDetail({ patientId }: PatientDetailProps) {
+  const router = useRouter();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!window.confirm("Patient wirklich archivieren? Die Aktion kann nicht rückgängig gemacht werden.")) return;
+    setDeleting(true);
+    try {
+      await api.patients.delete(patientId);
+      router.push("/patienten");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Archivieren fehlgeschlagen.");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -98,7 +113,7 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/module/report`}
+            href={`/module/report?patient=${patient.id}`}
             className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated"
           >
             Bericht starten
@@ -109,6 +124,14 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
           >
             Bearbeiten
           </Link>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="inline-flex min-h-10 items-center justify-center rounded-md border border-error-border px-4 text-sm font-medium text-error-text transition-colors hover:bg-error-surface disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? "Archiviert..." : "Archivieren"}
+          </button>
         </div>
       </div>
 

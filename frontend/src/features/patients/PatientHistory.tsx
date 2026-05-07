@@ -60,7 +60,7 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
           {items.map((item) => (
             <li key={`${item.type}-${item.id}`}>
               <Link
-                href={`/module/history`}
+                href={`/module/history?report=${item.id}`}
                 className="grid gap-2 border-b border-border px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-surface md:grid-cols-[1fr_9rem]"
               >
                 <div className="min-w-0">

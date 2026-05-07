@@ -227,6 +227,8 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consent_type: consentType, granted }),
       }),
+    consents: (id: string): Promise<ConsentRecord[]> =>
+      fetchApi<ConsentRecord[]>(`/patients/${id}/consents`),
   },
 
   soap: {

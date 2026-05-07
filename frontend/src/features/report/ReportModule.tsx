@@ -161,9 +161,22 @@ export function ReportModule({
           localStorage.getItem(DEMO_STORAGE_KEY) === "true";
         if (isDemo) {
           await startSession(null);
-        } else {
-          setShowPatientSelector(true);
+          return;
         }
+
+        const params = new URLSearchParams(window.location.search);
+        const patientId = params.get("patient");
+        if (patientId) {
+          try {
+            const patient = await api.patients.get(patientId);
+            await startSession(patient as unknown as PatientSummary);
+            return;
+          } catch {
+            // fall through to patient selector
+          }
+        }
+
+        setShowPatientSelector(true);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen.");
       }

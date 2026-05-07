@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
@@ -40,11 +41,15 @@ const HISTORY_SKIP_KEYS = new Set([
 ]);
 
 export function HistoryModule() {
+  const searchParams = useSearchParams();
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const reportParam = searchParams.get("report");
+  const [selectedId, setSelectedId] = useState<number | null>(
+    reportParam ? Number(reportParam) : null,
+  );
   const [detail, setDetail] = useState<ReportDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [filters, setFilters] = useState<ReportFilterParams>({});

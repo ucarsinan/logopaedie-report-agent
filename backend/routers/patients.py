@@ -249,6 +249,30 @@ async def get_progress(
     return {"comparison": comparison.model_dump()}
 
 
+@router.get("/patients/{patient_id}/consents")
+def get_consents(
+    patient_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    _get_active_or_404(patient_id, current_user.id, db)
+    records = db.exec(
+        select(ConsentRecord)
+        .where(ConsentRecord.patient_id == patient_id)
+        .order_by(col(ConsentRecord.granted_at).desc())
+    ).all()
+    return [
+        {
+            "id": str(r.id),
+            "consent_type": r.consent_type,
+            "granted": r.granted,
+            "granted_at": r.granted_at.isoformat(),
+            "revoked_at": None,
+        }
+        for r in records
+    ]
+
+
 @router.post("/patients/{patient_id}/consent", status_code=status.HTTP_201_CREATED)
 def record_consent(
     patient_id: UUID,
