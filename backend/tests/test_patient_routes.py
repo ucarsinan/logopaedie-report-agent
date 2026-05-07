@@ -14,7 +14,7 @@ def _payload(**kw):
 
 
 def test_create_patient(client):
-    res = client.post("/api/patients", json=_payload())
+    res = client.post("/patients", json=_payload())
     assert res.status_code == 201
     data = res.json()
     assert data["system_id"].startswith("PAT-")
@@ -23,33 +23,33 @@ def test_create_patient(client):
 
 
 def test_create_patient_auto_pseudonym(client):
-    res = client.post("/api/patients", json=_payload(pseudonym=None))
+    res = client.post("/patients", json=_payload(pseudonym=None))
     assert res.status_code == 201
     assert res.json()["pseudonym"] == res.json()["system_id"]
 
 
 def test_list_patients_empty(client):
-    res = client.get("/api/patients")
+    res = client.get("/patients")
     assert res.status_code == 200
     assert res.json()["total"] == 0
 
 
 def test_list_patients_returns_created(client):
-    client.post("/api/patients", json=_payload())
-    res = client.get("/api/patients")
+    client.post("/patients", json=_payload())
+    res = client.get("/patients")
     assert res.json()["total"] == 1
 
 
 def test_list_patients_search(client):
-    client.post("/api/patients", json=_payload(pseudonym="Sonnenschein"))
-    client.post("/api/patients", json=_payload(pseudonym="Mond"))
-    res = client.get("/api/patients?q=sonn")
+    client.post("/patients", json=_payload(pseudonym="Sonnenschein"))
+    client.post("/patients", json=_payload(pseudonym="Mond"))
+    res = client.get("/patients?q=sonn")
     assert res.json()["total"] == 1
 
 
 def test_get_patient_detail(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
-    res = client.get(f"/api/patients/{pid}")
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    res = client.get(f"/patients/{pid}")
     assert res.status_code == 200
     assert res.json()["realname"] == "Max Mustermann"
 
@@ -57,42 +57,42 @@ def test_get_patient_detail(client):
 def test_get_patient_not_found(client):
     import uuid
 
-    res = client.get(f"/api/patients/{uuid.uuid4()}")
+    res = client.get(f"/patients/{uuid.uuid4()}")
     assert res.status_code == 404
 
 
 def test_patch_patient(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
-    res = client.patch(f"/api/patients/{pid}", json={"pseudonym": "Stern"})
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    res = client.patch(f"/patients/{pid}", json={"pseudonym": "Stern"})
     assert res.status_code == 200
     assert res.json()["pseudonym"] == "Stern"
 
 
 def test_delete_patient_soft(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
-    assert client.delete(f"/api/patients/{pid}").status_code == 200
-    assert client.get("/api/patients").json()["total"] == 0
-    assert client.get(f"/api/patients/{pid}").status_code == 404
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    assert client.delete(f"/patients/{pid}").status_code == 200
+    assert client.get("/patients").json()["total"] == 0
+    assert client.get(f"/patients/{pid}").status_code == 404
 
 
 def test_get_history_empty(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
-    res = client.get(f"/api/patients/{pid}/history")
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    res = client.get(f"/patients/{pid}/history")
     assert res.status_code == 200
     assert res.json()["items"] == []
 
 
 def test_get_progress_no_reports(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
-    res = client.get(f"/api/patients/{pid}/progress")
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    res = client.get(f"/patients/{pid}/progress")
     assert res.status_code == 200
     assert res.json()["comparison"] is None
 
 
 def test_record_consent(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
+    pid = client.post("/patients", json=_payload()).json()["id"]
     res = client.post(
-        f"/api/patients/{pid}/consent",
+        f"/patients/{pid}/consent",
         json={"consent_type": "data_processing", "granted": True},
     )
     assert res.status_code == 201
@@ -100,9 +100,9 @@ def test_record_consent(client):
 
 
 def test_record_consent_invalid_type(client):
-    pid = client.post("/api/patients", json=_payload()).json()["id"]
+    pid = client.post("/patients", json=_payload()).json()["id"]
     res = client.post(
-        f"/api/patients/{pid}/consent",
+        f"/patients/{pid}/consent",
         json={"consent_type": "bad_type", "granted": True},
     )
     assert res.status_code == 422
