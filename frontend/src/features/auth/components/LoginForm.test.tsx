@@ -2,6 +2,10 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LoginForm } from "./LoginForm";
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 function mockFetch(fn: (url: string, init?: RequestInit) => Response) {
   return vi
     .spyOn(global, "fetch")
@@ -46,7 +50,7 @@ describe("LoginForm", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /anmelden/i }));
 
-    await waitFor(() => expect(window.location.href).toBe("/"));
+    await waitFor(() => expect(window.location.href).toBe("/module/report"));
   });
 
   it("shows generic error on 401", async () => {
