@@ -1,9 +1,11 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useSession } from "@/providers/SessionProvider";
+import { PatientPickerModal } from "@/features/patients/PatientPickerModal";
 import { ReportModule } from "@/features/report/ReportModule";
 import { PhonologyModule } from "@/features/phonology/PhonologyModule";
 import { TherapyPlanModule } from "@/features/therapy-plan/TherapyPlanModule";
@@ -11,6 +13,7 @@ import { CompareModule } from "@/features/compare/CompareModule";
 import { SuggestModule } from "@/features/suggest/SuggestModule";
 import { HistoryModule } from "@/features/history/HistoryModule";
 import { SOAPModule } from "@/features/soap/SOAPModule";
+import type { PatientSummary } from "@/types";
 
 const VALID_SLUGS = new Set([
   "report",
@@ -19,6 +22,14 @@ const VALID_SLUGS = new Set([
   "compare",
   "suggest",
   "history",
+  "soap",
+]);
+
+/** Slugs that require a patient context before starting */
+const PATIENT_REQUIRED_SLUGS = new Set([
+  "report",
+  "phonology",
+  "therapy-plan",
   "soap",
 ]);
 
@@ -52,10 +63,35 @@ export default function ModulePage({
 
 function ModuleContent({ slug }: { slug: string }) {
   const session = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  switch (slug) {
-    case "report":
-      return (
+  const patientId = searchParams.get("patient");
+  const isDemo = searchParams.get("demo") === "true";
+  const [dismissed, setDismissed] = useState(false);
+
+  const showPicker =
+    PATIENT_REQUIRED_SLUGS.has(slug) && !patientId && !isDemo && !dismissed;
+
+  function handlePatientSelect(patient: PatientSummary) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("patient", patient.id);
+    router.replace(`?${params.toString()}`);
+  }
+
+  function handleDismiss() {
+    setDismissed(true);
+  }
+
+  return (
+    <>
+      <PatientPickerModal
+        open={showPicker}
+        onSelect={handlePatientSelect}
+        onDismiss={handleDismiss}
+      />
+
+      {slug === "report" && (
         <ReportModule
           sessionId={session.sessionId}
           setSessionId={session.setSessionId}
@@ -71,20 +107,16 @@ function ModuleContent({ slug }: { slug: string }) {
             window.dispatchEvent(event);
           }}
         />
-      );
-    case "phonology":
-      return <PhonologyModule />;
-    case "therapy-plan":
-      return <TherapyPlanModule sessionId={session.sessionId} />;
-    case "compare":
-      return <CompareModule />;
-    case "suggest":
-      return <SuggestModule />;
-    case "history":
-      return <HistoryModule />;
-    case "soap":
-      return <SOAPModule sessionId={session.sessionId} />;
-    default:
-      notFound();
-  }
+      )}
+      {slug === "phonology" && <PhonologyModule />}
+      {slug === "therapy-plan" && (
+        <TherapyPlanModule sessionId={session.sessionId} />
+      )}
+      {slug === "compare" && <CompareModule />}
+      {slug === "suggest" && <SuggestModule />}
+      {slug === "history" && <HistoryModule />}
+      {slug === "soap" && <SOAPModule sessionId={session.sessionId} />}
+      {!VALID_SLUGS.has(slug) && notFound()}
+    </>
+  );
 }
