@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ResetConfirmDialog } from "@/components/ResetConfirmDialog";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
@@ -11,6 +11,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { UserAccountBar } from "@/features/auth/components/UserAccountBar";
 import { DemoBanner } from "@/components/DemoBanner";
+import { PatientContextBar } from "@/features/patients/PatientContextBar";
 import { BurgerButton } from "@/components/BurgerButton";
 import { MobileSidebar } from "@/components/MobileSidebar";
 import { useMobileNav } from "@/hooks/useMobileNav";
@@ -31,6 +32,8 @@ const MODULE_LABELS: Record<string, string> = Object.fromEntries(
 
 function ModuleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const patientId = searchParams.get("patient");
   const activeSlug = pathname.split("/").pop() ?? "report";
   const { isSending, error, handleSoftReset, handleFullReset } = useSession();
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
@@ -122,6 +125,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <DemoBanner />
+      {patientId && <PatientContextBar patientId={patientId} />}
 
       {/* Main */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
