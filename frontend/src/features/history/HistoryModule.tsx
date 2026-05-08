@@ -5,17 +5,23 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { REPORT_TYPE_LABELS } from "@/types";
 
 async function downloadPdf(id: number, pseudonym: string) {
-  const blob = await api.reports.downloadPdf(id);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `bericht-${pseudonym.replace(/\s+/g, "-").toLowerCase()}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    const blob = await api.reports.downloadPdf(id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bericht-${pseudonym.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("PDF heruntergeladen");
+  } catch {
+    toast.error("PDF-Download fehlgeschlagen");
+  }
 }
 import type { ReportSummary, ReportDetail, ReportFilterParams, ReportStats } from "@/types";
 import { FilterBar } from "./components/FilterBar";

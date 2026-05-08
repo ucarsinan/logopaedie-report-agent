@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ChatMsg, UploadedFile, ReportData, AppPhase, PatientSummary } from "@/types";
 import { WorkflowStepper } from "@/components/WorkflowStepper";
@@ -192,8 +193,10 @@ export function ReportModule({
       try {
         const data = await api.sessions.upload(sessionId, file);
         setUploadedFiles((prev) => [...prev, data]);
+        toast.success(`${file.name} hochgeladen`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload fehlgeschlagen.");
+        toast.error(`Upload fehlgeschlagen: ${file.name}`);
       }
     }
   }
@@ -227,8 +230,11 @@ export function ReportModule({
         setSavedAt(Date.now());
       }
       setPhase("preview");
+      toast.success("Bericht erfolgreich generiert");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
+      const msg = err instanceof Error ? err.message : "Unbekannter Fehler.";
+      setError(msg);
+      toast.error("Bericht konnte nicht generiert werden");
       setPhase("chat");
     }
   }, [sessionId, setError]);

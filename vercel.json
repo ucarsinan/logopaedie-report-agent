@@ -8,5 +8,23 @@
       "entrypoint": "frontend",
       "routePrefix": "/"
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "env",
+          "key": "VERCEL_ENV",
+          "value": "preview"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    }
+  ]
 }

@@ -55,7 +55,7 @@ async def list_reports(
 
     join_query = _apply_filters(
         select(ReportRecord, Patient.pseudonym.label("patient_pseudonym")).outerjoin(  # type: ignore[attr-defined]
-            Patient, ReportRecord.patient_id == Patient.id
+            Patient, col(ReportRecord.patient_id) == col(Patient.id)
         )
     )
 
