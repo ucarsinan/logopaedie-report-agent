@@ -1,6 +1,16 @@
-const PLACEHOLDERS = [
-  { caption: "Geführte Anamnese" },
-  { caption: "Generierter Bericht" },
+import Image from "next/image";
+
+const SCREENSHOTS = [
+  {
+    src: "/screenshots/screenshot-anamnese.png",
+    caption: "Geführte Anamnese",
+    alt: "Berichterstellung-Interface mit Auswahl des Berichtstyps — Befundbericht, Therapiebericht, Abschlussbericht",
+  },
+  {
+    src: "/screenshots/screenshot-bericht.png",
+    caption: "Generierter Bericht",
+    alt: "KI generiert in Echtzeit einen strukturierten Klinikbericht via Llama-3.3-70b",
+  },
 ];
 
 export function ScreenshotSection() {
@@ -10,11 +20,16 @@ export function ScreenshotSection() {
         Einblick
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {PLACEHOLDERS.map(({ caption }) => (
+        {SCREENSHOTS.map(({ src, caption, alt }) => (
           <figure key={caption} className="flex flex-col gap-3">
-            {/* TODO: Replace div with <Image> once screenshots are ready */}
-            <div className="flex aspect-video items-center justify-center rounded-xl border-2 border-dashed border-border bg-surface">
-              <p className="text-xs text-muted-foreground">{caption}</p>
+            <div className="relative aspect-video overflow-hidden rounded-xl border border-border">
+              <Image
+                src={src}
+                alt={alt}
+                fill
+                className="object-cover object-top"
+                sizes="(max-width: 640px) 100vw, 50vw"
+              />
             </div>
             <figcaption className="text-center text-xs text-muted-foreground">
               {caption}
