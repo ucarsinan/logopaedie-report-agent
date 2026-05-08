@@ -17,11 +17,32 @@ const FEATURES = [
     description:
       "Störungsmuster wie Plosivierung oder Fronting werden automatisch aus Wortpaaren erkannt und dokumentiert.",
   },
+  {
+    icon: "👤",
+    title: "Patientenverwaltung",
+    description:
+      "Persistente Patientenprofile mit verschlüsselten Stammdaten (Fernet) und sitzungsübergreifendem Therapieverlauf.",
+  },
+  {
+    icon: "🔐",
+    title: "Multi-user Auth",
+    description:
+      "Registrierung, E-Mail-Verifikation, optionales TOTP 2FA, Passwort-Reset und aktive Sessions mit Geräte-Revoke.",
+  },
+  {
+    icon: "📄",
+    title: "PDF Export",
+    description:
+      "Professionelle PDFs via ReportLab — mit Patientendaten, Diagnose, Abschnittsgliederung und Unterschriftsfeld.",
+  },
 ];
 
 export function FeatureHighlights() {
   return (
     <section className="w-full max-w-4xl mx-auto px-6 py-12">
+      <h2 className="mb-8 text-center text-xl font-semibold text-foreground">
+        Alle Features
+      </h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {FEATURES.map(({ icon, title, description }) => (
           <div
