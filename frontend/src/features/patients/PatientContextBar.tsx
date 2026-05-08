@@ -15,6 +15,7 @@ export function PatientContextBar({ patientId }: PatientContextBarProps) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     api.patients
       .get(patientId)
