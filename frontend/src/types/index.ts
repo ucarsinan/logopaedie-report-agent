@@ -231,6 +231,8 @@ export interface ReportSummary {
   pseudonym: string;
   report_type: string;
   created_at: string;
+  patient_id?: string | null;
+  patient_pseudonym?: string | null;
 }
 
 export interface ReportDetail extends ReportSummary {

@@ -56,6 +56,7 @@ export function HistoryModule() {
   const [page, setPage] = useState(1);
   const [stats, setStats] = useState<ReportStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [patientFilter, setPatientFilter] = useState<"all" | "with" | "without">("all");
 
   const fetchReports = useCallback((params: ReportFilterParams) => {
     setLoading(true);
@@ -261,20 +262,65 @@ export function HistoryModule() {
 
       {!loading && !fetchError && reports.length > 0 && (
         <>
+          <div className="flex items-center gap-1 border border-border rounded-md w-fit text-sm">
+            {(["all", "with", "without"] as const).map((opt) => {
+              const labels = { all: "Alle", with: "Mit Patient", without: "Ohne Patient" };
+              const isActive = patientFilter === opt;
+              return (
+                <button
+                  key={opt}
+                  onClick={() => setPatientFilter(opt)}
+                  className={`px-3 py-1.5 transition-colors rounded-sm ${
+                    isActive
+                      ? "bg-surface-elevated font-semibold text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {labels[opt]}
+                </button>
+              );
+            })}
+          </div>
+
           <ul className="space-y-2">
-            {reports.map((r) => (
+            {reports
+              .filter((r) =>
+                patientFilter === "all"
+                  ? true
+                  : patientFilter === "with"
+                  ? !!r.patient_id
+                  : !r.patient_id,
+              )
+              .map((r) => (
               <li key={r.id}>
                 <button
                   onClick={() => setSelectedId(r.id)}
                   className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
                 >
-                  <div>
-                    <span className="font-medium">{r.pseudonym}</span>
-                    <span className="ml-3 text-sm text-muted-foreground">
-                      {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
-                    </span>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{r.pseudonym}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
+                      </span>
+                    </div>
+                    <div>
+                      {r.patient_pseudonym ? (
+                        <Link
+                          href={`/patienten/${r.patient_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center rounded-full bg-accent/10 text-accent-text px-2 py-0.5 text-xs font-medium hover:bg-accent/20 transition-colors"
+                        >
+                          {r.patient_pseudonym}
+                        </Link>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
+                          Demo
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm text-muted-foreground shrink-0">
                     {new Date(r.created_at).toLocaleDateString("de-DE", {
                       day: "2-digit", month: "2-digit", year: "numeric",
                     })}

@@ -10,6 +10,7 @@ from sqlmodel import Session, col, func, select
 from database import get_db
 from dependencies import get_current_user
 from models.auth import User
+from models.patient import Patient
 from models.report_record import ReportRecord
 
 router = APIRouter(tags=["reports"])
@@ -27,41 +28,52 @@ async def list_reports(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    query = select(ReportRecord).where(ReportRecord.user_id == current_user.id)
+    def _apply_filters(q):  # type: ignore[no-untyped-def]
+        q = q.where(ReportRecord.user_id == current_user.id)
+        if pseudonym:
+            q = q.where(func.lower(ReportRecord.pseudonym).contains(pseudonym.lower()))
+        if report_type:
+            q = q.where(ReportRecord.report_type == report_type)
+        if patient_id:
+            q = q.where(ReportRecord.patient_id == patient_id)
+        if from_date:
+            try:
+                dt = datetime.fromisoformat(from_date)
+                q = q.where(col(ReportRecord.created_at) >= dt)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                dt = datetime.fromisoformat(to_date)
+                q = q.where(col(ReportRecord.created_at) <= dt)
+            except ValueError:
+                pass
+        return q
 
-    if pseudonym:
-        query = query.where(func.lower(ReportRecord.pseudonym).contains(pseudonym.lower()))
-    if report_type:
-        query = query.where(ReportRecord.report_type == report_type)
-    if patient_id:
-        query = query.where(ReportRecord.patient_id == patient_id)
-    if from_date:
-        try:
-            dt = datetime.fromisoformat(from_date)
-            query = query.where(col(ReportRecord.created_at) >= dt)
-        except ValueError:
-            pass
-    if to_date:
-        try:
-            dt = datetime.fromisoformat(to_date)
-            query = query.where(col(ReportRecord.created_at) <= dt)
-        except ValueError:
-            pass
-
-    count_query = select(func.count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(_apply_filters(select(ReportRecord)).subquery())
     total = db.exec(count_query).one()
 
-    records = db.exec(query.order_by(col(ReportRecord.created_at).desc()).offset((page - 1) * limit).limit(limit)).all()
+    join_query = _apply_filters(
+        select(ReportRecord, Patient.pseudonym.label("patient_pseudonym")).outerjoin(  # type: ignore[attr-defined]
+            Patient, ReportRecord.patient_id == Patient.id
+        )
+    )
+
+    rows = db.exec(
+        join_query.order_by(col(ReportRecord.created_at).desc()).offset((page - 1) * limit).limit(limit)
+    ).all()
 
     return {
         "items": [
             {
-                "id": r.id,
-                "pseudonym": r.pseudonym,
-                "report_type": r.report_type,
-                "created_at": r.created_at.isoformat(),
+                "id": r.ReportRecord.id,
+                "pseudonym": r.ReportRecord.pseudonym,
+                "report_type": r.ReportRecord.report_type,
+                "created_at": r.ReportRecord.created_at.isoformat(),
+                "patient_id": str(r.ReportRecord.patient_id) if r.ReportRecord.patient_id else None,
+                "patient_pseudonym": r.patient_pseudonym,
             }
-            for r in records
+            for r in rows
         ],
         "total": total,
         "page": page,
