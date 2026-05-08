@@ -8,6 +8,7 @@ import type { Patient } from "@/types";
 import { ProgressSnapshot } from "@/features/patient-progress/ProgressSnapshot";
 import { ConsentManager } from "./ConsentManager";
 import { PatientHistory } from "./PatientHistory";
+import { PatientQuickActions } from "./PatientQuickActions";
 
 type PatientDetailProps = {
   patientId: string;
@@ -113,12 +114,6 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/module/report?patient=${patient.id}`}
-            className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated"
-          >
-            Bericht starten
-          </Link>
-          <Link
             href={`/patienten/${patient.id}/bearbeiten`}
             className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
           >
@@ -175,6 +170,8 @@ export function PatientDetail({ patientId }: PatientDetailProps) {
           </div>
         </dl>
       </section>
+
+      <PatientQuickActions patientId={patient.id} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="grid gap-6">
