@@ -6,6 +6,7 @@ import { PatientPickerModal } from "../PatientPickerModal";
 // Mock PatientSelector to avoid API calls in tests
 vi.mock("@/features/chat/PatientSelector", () => ({
   PatientSelector: ({
+    onSelect,
     onDemo,
   }: {
     onSelect: (patient: unknown) => void;
@@ -13,6 +14,12 @@ vi.mock("@/features/chat/PatientSelector", () => ({
   }) => (
     <div>
       <p>Patient auswählen</p>
+      <button
+        type="button"
+        onClick={() => onSelect({ id: "p1", pseudonym: "Test" })}
+      >
+        Patient wählen
+      </button>
       <button type="button" onClick={onDemo}>
         Demo-Modus
       </button>
@@ -61,5 +68,14 @@ describe("PatientPickerModal", () => {
     );
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onSelect with the patient when a patient is chosen", () => {
+    render(
+      <PatientPickerModal open={true} onSelect={onSelect} onDismiss={onDismiss} />,
+    );
+    fireEvent.click(screen.getByText("Patient wählen"));
+    expect(onSelect).toHaveBeenCalledWith({ id: "p1", pseudonym: "Test" });
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });
