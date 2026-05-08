@@ -282,53 +282,57 @@ export function HistoryModule() {
             })}
           </div>
 
-          <ul className="space-y-2">
-            {reports
-              .filter((r) =>
-                patientFilter === "all"
-                  ? true
-                  : patientFilter === "with"
-                  ? !!r.patient_id
-                  : !r.patient_id,
-              )
-              .map((r) => (
-              <li key={r.id}>
-                <button
-                  onClick={() => setSelectedId(r.id)}
-                  className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
-                >
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{r.pseudonym}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
+          {(() => {
+            const displayedReports = reports.filter((r) =>
+              patientFilter === "all" ? true : patientFilter === "with" ? !!r.patient_id : !r.patient_id
+            );
+
+            return displayedReports.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine Berichte für diesen Filter gefunden.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {displayedReports.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      onClick={() => setSelectedId(r.id)}
+                      className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{r.pseudonym}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
+                          </span>
+                        </div>
+                        <div>
+                          {r.patient_pseudonym ? (
+                            <Link
+                              href={`/patienten/${r.patient_id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center rounded-full bg-accent/10 text-accent-text px-2 py-0.5 text-xs font-medium hover:bg-accent/20 transition-colors"
+                            >
+                              {r.patient_pseudonym}
+                            </Link>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
+                              Demo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-sm text-muted-foreground shrink-0">
+                        {new Date(r.created_at).toLocaleDateString("de-DE", {
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                        })}
                       </span>
-                    </div>
-                    <div>
-                      {r.patient_pseudonym ? (
-                        <Link
-                          href={`/patienten/${r.patient_id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center rounded-full bg-accent/10 text-accent-text px-2 py-0.5 text-xs font-medium hover:bg-accent/20 transition-colors"
-                        >
-                          {r.patient_pseudonym}
-                        </Link>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
-                          Demo
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-sm text-muted-foreground shrink-0">
-                    {new Date(r.created_at).toLocaleDateString("de-DE", {
-                      day: "2-digit", month: "2-digit", year: "numeric",
-                    })}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-4 pt-2">
