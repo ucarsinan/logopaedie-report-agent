@@ -116,7 +116,6 @@ function ModuleContent({ slug }: { slug: string }) {
       {slug === "suggest" && <SuggestModule />}
       {slug === "history" && <HistoryModule />}
       {slug === "soap" && <SOAPModule sessionId={session.sessionId} />}
-      {!VALID_SLUGS.has(slug) && notFound()}
     </>
   );
 }

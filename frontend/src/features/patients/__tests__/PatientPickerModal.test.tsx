@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import { PatientPickerModal } from "../PatientPickerModal";
+import type { PatientSummary } from "@/types";
 
 // Mock PatientSelector to avoid API calls in tests
 vi.mock("@/features/chat/PatientSelector", () => ({
@@ -9,7 +10,7 @@ vi.mock("@/features/chat/PatientSelector", () => ({
     onSelect,
     onDemo,
   }: {
-    onSelect: (patient: unknown) => void;
+    onSelect: (patient: PatientSummary) => void;
     onDemo: () => void;
   }) => (
     <div>
@@ -40,7 +41,7 @@ describe("PatientPickerModal", () => {
       <PatientPickerModal open={true} onSelect={onSelect} onDismiss={onDismiss} />,
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Patient auswählen")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Patient auswählen" })).toBeInTheDocument();
   });
 
   it("does not render when open is false", () => {
