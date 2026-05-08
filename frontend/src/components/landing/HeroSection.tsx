@@ -39,6 +39,18 @@ export function HeroSection() {
         </Link>
       </div>
 
+      {/* Tech-Stack Pills */}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {["Next.js", "FastAPI", "Groq", "PostgreSQL", "Redis"].map((tech) => (
+          <span
+            key={tech}
+            className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted-foreground"
+          >
+            {tech}
+          </span>
+        ))}
+      </div>
+
       {/* Typing demo */}
       <div className="w-full max-w-xl">
         <TypingDemo />
