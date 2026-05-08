@@ -6,8 +6,7 @@ import { FeatureHighlights } from "@/components/landing/FeatureHighlights";
 import { ScreenshotSection } from "@/components/landing/ScreenshotSection";
 import { ArchitectureCallout } from "@/components/landing/ArchitectureCallout";
 import { RecentReportsSection } from "@/components/landing/RecentReportsSection";
-
-const GITHUB_URL = "https://github.com/ucarsinan/logopaedie-report-agent";
+import { GITHUB_URL } from "@/lib/constants";
 
 export default function LandingPage() {
   return (

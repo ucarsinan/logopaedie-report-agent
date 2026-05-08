@@ -1,4 +1,4 @@
-const GITHUB_URL = "https://github.com/ucarsinan/logopaedie-report-agent";
+import { GITHUB_URL } from "@/lib/constants";
 
 const STATS = ["157 Backend-Tests", "9 API-Router", "Fernet-encrypted Sessions"];
 
