@@ -9,9 +9,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
+    HRFlowable,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
+    Table,
+    TableStyle,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +51,9 @@ SKIP_KEYS = {
     "pseudonym",
 }
 
+_ACCENT = colors.HexColor("#1a1a2e")
+_RULE_COLOR = colors.HexColor("#e0e0e0")
+
 
 def _build_styles() -> dict:
     base = getSampleStyleSheet()
@@ -56,14 +62,15 @@ def _build_styles() -> dict:
             "ReportTitle",
             parent=base["Title"],
             fontSize=16,
-            spaceAfter=6,
+            spaceAfter=4,
+            textColor=_ACCENT,
         ),
         "subtitle": ParagraphStyle(
             "ReportSubtitle",
             parent=base["Normal"],
             fontSize=10,
             textColor=colors.grey,
-            spaceAfter=12,
+            spaceAfter=8,
         ),
         "heading": ParagraphStyle(
             "SectionHeading",
@@ -71,7 +78,7 @@ def _build_styles() -> dict:
             fontSize=12,
             spaceBefore=14,
             spaceAfter=6,
-            textColor=colors.HexColor("#1a1a2e"),
+            textColor=_ACCENT,
         ),
         "body": ParagraphStyle(
             "BodyText",
@@ -88,19 +95,39 @@ def _build_styles() -> dict:
             leftIndent=20,
             bulletIndent=10,
         ),
-        "footer": ParagraphStyle(
-            "Footer",
+        "sig_label": ParagraphStyle(
+            "SigLabel",
             parent=base["Normal"],
             fontSize=8,
             textColor=colors.grey,
-            alignment=1,
         ),
     }
+
+
+def _make_footer(canvas, doc) -> None:
+    """Draw page number + branding in the bottom margin on every page."""
+    canvas.saveState()
+    width, _ = A4
+    now = datetime.now(UTC).strftime("%d.%m.%Y")
+    text = f"Erstellt am {now} | Logopädie Report Agent | Seite {doc.page}"
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(colors.grey)
+    canvas.drawCentredString(width / 2, 1.2 * cm, text)
+    canvas.restoreState()
+
+
+def _hr() -> HRFlowable:
+    return HRFlowable(width="100%", thickness=0.5, color=_RULE_COLOR, spaceAfter=4)
 
 
 def generate_pdf(content: dict) -> bytes:
     """Generate a PDF from a report content dict. Returns PDF bytes."""
     buf = io.BytesIO()
+
+    report_type = content.get("report_type", "befundbericht")
+    type_label = REPORT_TYPE_LABELS.get(report_type, report_type)
+    title = f"Logopädischer {type_label}"
+
     doc = SimpleDocTemplate(
         buf,
         pagesize=A4,
@@ -108,17 +135,17 @@ def generate_pdf(content: dict) -> bytes:
         rightMargin=2 * cm,
         topMargin=2 * cm,
         bottomMargin=2.5 * cm,
+        title=title,
+        author="Logopädie Report Agent",
+        subject=type_label,
+        creator="Logopädie Report Agent",
     )
     styles = _build_styles()
     story: list = []
 
-    report_type = content.get("report_type", "befundbericht")
-    type_label = REPORT_TYPE_LABELS.get(report_type, report_type)
+    # Title block
+    story.append(Paragraph(title, styles["title"]))
 
-    # Title
-    story.append(Paragraph(f"Logopädischer {type_label}", styles["title"]))
-
-    # Patient info
     patient = content.get("patient", {})
     if patient:
         info_parts = []
@@ -130,6 +157,8 @@ def generate_pdf(content: dict) -> bytes:
             info_parts.append(f"Geschlecht: {patient['gender']}")
         if info_parts:
             story.append(Paragraph(" | ".join(info_parts), styles["subtitle"]))
+
+    story.append(_hr())
 
     # Diagnose
     diagnose = content.get("diagnose", {})
@@ -158,6 +187,7 @@ def generate_pdf(content: dict) -> bytes:
             continue
         label = SECTION_LABELS.get(key, key.replace("_", " ").title())
         story.append(Paragraph(label, styles["heading"]))
+        story.append(_hr())
 
         if isinstance(value, list):
             for item in value:
@@ -167,20 +197,27 @@ def generate_pdf(content: dict) -> bytes:
                 if para.strip():
                     story.append(Paragraph(para.strip(), styles["body"]))
 
-    # Signature area
+    # Signature block — date left, signature line right
     story.append(Spacer(1, 40))
-    story.append(Paragraph("_" * 40, styles["body"]))
-    story.append(Paragraph("Unterschrift Therapeut/in", styles["subtitle"]))
-
-    # Footer with date
-    story.append(Spacer(1, 20))
-    now = datetime.now(UTC).strftime("%d.%m.%Y")
-    story.append(
-        Paragraph(
-            f"Erstellt am {now} | Generiert mit Logopädie Report Agent",
-            styles["footer"],
+    now_str = datetime.now(UTC).strftime("%d.%m.%Y")
+    sig_table = Table(
+        [
+            [f"Datum: {now_str}", "_" * 30],
+            [Paragraph("", styles["sig_label"]), Paragraph("Unterschrift Therapeut/in", styles["sig_label"])],
+        ],
+        colWidths=["40%", "60%"],
+    )
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("TEXTCOLOR", (0, 1), (-1, 1), colors.grey),
+                ("FONTSIZE", (0, 1), (-1, 1), 8),
+            ]
         )
     )
+    story.append(sig_table)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_make_footer, onLaterPages=_make_footer)
     return buf.getvalue()
