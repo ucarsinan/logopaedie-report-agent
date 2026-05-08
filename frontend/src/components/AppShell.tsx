@@ -11,13 +11,13 @@ import { UserAccountBar } from "@/features/auth/components/UserAccountBar";
 import { useMobileNav } from "@/hooks/useMobileNav";
 
 export const MODULE_TABS: [string, string, string][] = [
-  ["report", "Berichterstellung", "KI-geführtes Anamnesegespräch → professioneller Bericht"],
-  ["phonology", "Ausspracheanalyse", "Phonologische Prozesse aus Wortpaaren automatisch erkennen"],
+  ["report", "Berichte", "Berichterstellung – KI-geführtes Anamnesegespräch → professioneller Bericht"],
+  ["phonology", "Aussprache", "Ausspracheanalyse – Phonologische Prozesse aus Wortpaaren erkennen"],
   ["therapy-plan", "Therapieplan", "ICF-basierten Therapieplan automatisch generieren"],
-  ["compare", "Berichtsvergleich", "Zwei Berichte gegenüberstellen und Fortschritt messen"],
+  ["compare", "Vergleich", "Berichtsvergleich – Zwei Berichte gegenüberstellen und Fortschritt messen"],
   ["suggest", "Textbausteine", "KI-Formulierungsvorschläge während des Schreibens"],
-  ["history", "Bericht-Verlauf", "Alle gespeicherten Berichte anzeigen und durchsuchen"],
-  ["soap", "SOAP-Notizen", "Strukturierte klinische Notizen im SOAP-Format generieren"],
+  ["history", "Verlauf", "Bericht-Verlauf – Alle gespeicherten Berichte anzeigen und durchsuchen"],
+  ["soap", "SOAP", "SOAP-Notizen – Strukturierte klinische Notizen im SOAP-Format generieren"],
 ];
 
 export const MODULE_LABELS: Record<string, string> = Object.fromEntries(
@@ -62,8 +62,8 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
               className="flex min-w-0 items-center gap-3 text-sm"
             >
               <BrandLogo compact showSubtitle={false} className="min-w-0" />
-              <span className="text-border-strong font-light">/</span>
-              <span className="font-semibold" style={{ color: "var(--accent-text)" }}>
+              <span className="text-border-strong font-light md:hidden">/</span>
+              <span className="font-semibold md:hidden" style={{ color: "var(--accent-text)" }}>
                 {sectionLabel}
               </span>
             </Link>
@@ -71,10 +71,10 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
               <Link
                 href="/"
-                className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"
+                className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                 title="Zurück zur Startseite"
               >
-                ← Startseite
+                ← Start
               </Link>
               <UserAccountBar />
               {headerExtras}
@@ -83,7 +83,7 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
             </div>
           </div>
 
-          <nav className="relative hidden md:flex gap-1 -mb-px overflow-x-auto after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-8 after:bg-linear-to-l after:from-background after:to-transparent md:after:hidden">
+          <nav className="relative hidden md:flex items-stretch gap-1 -mb-px overflow-x-auto after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-8 after:bg-linear-to-l after:from-background after:to-transparent md:after:hidden">
             <Link
               href="/patienten"
               title="Patienten verwalten"
@@ -95,6 +95,7 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
             >
               Patienten
             </Link>
+            <div className="mx-2 my-2 w-px bg-border shrink-0" />
             {MODULE_TABS.map(([key, label, tooltip]) => (
               <Link
                 key={key}
