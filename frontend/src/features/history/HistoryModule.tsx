@@ -23,7 +23,7 @@ async function downloadPdf(id: number, pseudonym: string) {
     toast.error("PDF-Download fehlgeschlagen");
   }
 }
-import type { ReportSummary, ReportDetail, ReportFilterParams, ReportStats } from "@/types";
+import type { ReportSummary, ReportDetail, ReportFilterParams, ReportStats, SOAPNote } from "@/types";
 import { FilterBar } from "./components/FilterBar";
 import { StatsCards } from "./components/StatsCards";
 
@@ -58,6 +58,8 @@ export function HistoryModule() {
   );
   const [detail, setDetail] = useState<ReportDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [soapNote, setSoapNote] = useState<SOAPNote | null>(null);
+  const [soapLoading, setSoapLoading] = useState(false);
   const [filters, setFilters] = useState<ReportFilterParams>({});
   const [page, setPage] = useState(1);
   const [stats, setStats] = useState<ReportStats | null>(null);
@@ -101,6 +103,7 @@ export function HistoryModule() {
     if (selectedId === null) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetail(null);
+      setSoapNote(null);
       return;
     }
     setDetailLoading(true);
@@ -109,6 +112,13 @@ export function HistoryModule() {
       .then(setDetail)
       .catch(() => setDetail(null))
       .finally(() => setDetailLoading(false));
+
+    setSoapLoading(true);
+    api.soap
+      .getByReport(selectedId)
+      .then(setSoapNote)
+      .catch(() => setSoapNote(null))
+      .finally(() => setSoapLoading(false));
   }, [selectedId]);
 
   /* Detail view */
@@ -206,6 +216,31 @@ export function HistoryModule() {
                   </section>
                 );
               })}
+
+            <div className="border-t border-border pt-4">
+              <h3 className="font-medium mb-3">SOAP-Notiz</h3>
+              {soapLoading && (
+                <p className="text-sm text-muted-foreground">Lade SOAP-Notiz…</p>
+              )}
+              {!soapLoading && !soapNote && (
+                <p className="text-sm text-muted-foreground">Keine SOAP-Notiz für diesen Bericht vorhanden.</p>
+              )}
+              {!soapLoading && soapNote && (
+                <div className="flex flex-col gap-3">
+                  {[
+                    { key: "subjective" as const, label: "S — Subjektiv" },
+                    { key: "objective" as const, label: "O — Objektiv" },
+                    { key: "assessment" as const, label: "A — Assessment" },
+                    { key: "plan" as const, label: "P — Plan" },
+                  ].map(({ key, label }) => (
+                    <section key={key} className="p-4 rounded-lg border border-border bg-card">
+                      <h4 className="font-medium text-sm mb-1">{label}</h4>
+                      <p className="text-sm whitespace-pre-wrap">{soapNote[key]}</p>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -303,7 +338,7 @@ export function HistoryModule() {
                   <li key={r.id}>
                     <button
                       onClick={() => setSelectedId(r.id)}
-                      className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
+                      className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-accent hover:text-white transition-colors text-left"
                     >
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -345,7 +380,7 @@ export function HistoryModule() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Zurück
               </button>
@@ -355,7 +390,7 @@ export function HistoryModule() {
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Weiter
               </button>

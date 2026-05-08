@@ -130,7 +130,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
               onClick={() => setMode("session")}
               className={`px-4 py-2 text-sm rounded-md border transition-colors ${
                 mode === "session"
-                  ? "border-accent bg-accent text-accent-foreground"
+                  ? "border-accent bg-accent text-white"
                   : "border-border hover:bg-accent/50"
               }`}
             >
@@ -142,7 +142,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
               onClick={() => setMode("report")}
               className={`px-4 py-2 text-sm rounded-md border transition-colors ${
                 mode === "report"
-                  ? "border-accent bg-accent text-accent-foreground"
+                  ? "border-accent bg-accent text-white"
                   : "border-border hover:bg-accent/50"
               }`}
             >
@@ -156,7 +156,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                 <button
                   type="button"
                   onClick={generateFromSession}
-                  className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity"
+                  className="px-4 py-2 text-sm rounded-md bg-accent text-white hover:opacity-90 transition-opacity"
                 >
                   SOAP-Notiz generieren
                 </button>
@@ -193,7 +193,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                     type="button"
                     onClick={generateFromReport}
                     disabled={!selectedReportId}
-                    className="self-start px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="self-start px-4 py-2 text-sm rounded-md bg-accent text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     SOAP-Notiz generieren
                   </button>
@@ -236,7 +236,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                 <button
                   type="button"
                   onClick={startEditing}
-                  className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors"
+                  className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent hover:text-white transition-colors"
                 >
                   Bearbeiten
                 </button>
@@ -247,7 +247,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                     type="button"
                     onClick={saveEdits}
                     disabled={saving}
-                    className="px-3 py-1.5 text-sm rounded-md bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-sm rounded-md bg-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {saving ? "Speichern…" : "Speichern"}
                   </button>
@@ -255,7 +255,7 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
                     type="button"
                     onClick={cancelEditing}
                     disabled={saving}
-                    className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent transition-colors"
+                    className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent hover:text-white transition-colors"
                   >
                     Abbrechen
                   </button>

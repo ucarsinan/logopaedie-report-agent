@@ -236,6 +236,8 @@ export const api = {
       fetchApi<SOAPNote>(`/sessions/${sessionId}/soap`, { method: "POST" }),
     get: (id: number): Promise<SOAPNote> =>
       fetchApi<SOAPNote>(`/soap/${id}`),
+    getByReport: (reportId: number): Promise<SOAPNote> =>
+      fetchApi<SOAPNote>(`/reports/${reportId}/soap`),
     fromReport: (reportId: number): Promise<SOAPNote> =>
       fetchApi<SOAPNote>(`/reports/${reportId}/soap`, { method: "POST" }),
     update: (id: number, note: SOAPNote): Promise<SOAPNote> =>

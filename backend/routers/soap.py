@@ -113,6 +113,22 @@ async def generate_soap_from_report(
     return _serialize_soap(soap_record)
 
 
+@router.get("/reports/{report_id}/soap")
+async def get_soap_for_report(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = db.exec(
+        select(SOAPRecord)
+        .where(SOAPRecord.report_id == report_id, SOAPRecord.user_id == current_user.id)
+        .order_by(SOAPRecord.created_at.desc())
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Keine SOAP-Notiz für diesen Bericht.")
+    return _serialize_soap(record)
+
+
 @router.get("/soap/{soap_id}")
 async def get_soap_note(
     soap_id: int,

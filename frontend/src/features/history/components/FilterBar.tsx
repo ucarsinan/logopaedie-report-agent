@@ -81,7 +81,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
       </div>
       <button
         onClick={handleReset}
-        className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-white transition-colors"
       >
         Zurücksetzen
       </button>
