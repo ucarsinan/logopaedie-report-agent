@@ -1,7 +1,5 @@
+import { AppShell } from "@/components/AppShell";
+
 export default function PatientenLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      {children}
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }
