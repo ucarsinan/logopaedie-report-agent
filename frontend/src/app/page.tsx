@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { FeatureHighlights } from "@/components/landing/FeatureHighlights";
+import { RecentReportsSection } from "@/components/landing/RecentReportsSection";
 
 export default function LandingPage() {
   return (
@@ -25,6 +26,9 @@ export default function LandingPage() {
       {/* Hero */}
       <main className="flex-1">
         <HeroSection />
+        <div className="border-t border-border">
+          <RecentReportsSection />
+        </div>
         <div className="border-t border-border">
           <FeatureHighlights />
         </div>
