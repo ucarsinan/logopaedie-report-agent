@@ -17,7 +17,16 @@ vi.mock("@/features/chat/PatientSelector", () => ({
       <p>Patient auswählen</p>
       <button
         type="button"
-        onClick={() => onSelect({ id: "p1", pseudonym: "Test" })}
+        onClick={() =>
+          onSelect({
+            id: "p1",
+            pseudonym: "Test",
+            system_id: "P-001",
+            age_group: "adult",
+            disorder_text: "Artikulationsstörung",
+            created_at: "2026-01-01T00:00:00Z",
+          })
+        }
       >
         Patient wählen
       </button>
@@ -76,7 +85,14 @@ describe("PatientPickerModal", () => {
       <PatientPickerModal open={true} onSelect={onSelect} onDismiss={onDismiss} />,
     );
     fireEvent.click(screen.getByText("Patient wählen"));
-    expect(onSelect).toHaveBeenCalledWith({ id: "p1", pseudonym: "Test" });
+    expect(onSelect).toHaveBeenCalledWith({
+      id: "p1",
+      pseudonym: "Test",
+      system_id: "P-001",
+      age_group: "adult",
+      disorder_text: "Artikulationsstörung",
+      created_at: "2026-01-01T00:00:00Z",
+    });
     expect(onDismiss).not.toHaveBeenCalled();
   });
 });
