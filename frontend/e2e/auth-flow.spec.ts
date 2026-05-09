@@ -25,10 +25,17 @@ test.describe("Auth Flow", () => {
       { name: "access_token", value: "fake-jwt-token", domain: "localhost", path: "/" },
       { name: "user_role", value: "user", domain: "localhost", path: "/" },
     ]);
-    await page.route("**/api/reports/stats", async (route) => {
+    await page.route("**/auth-api/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "test-user", email: "e2e@test.local", role: "user", totp_enabled: false }),
+      });
+    });
+    await page.route("**/backend-api/reports/stats", async (route) => {
       await route.fulfill({ json: { total: 0, by_type: {}, latest_date: null } });
     });
-    await page.route("**/api/reports**", async (route) => {
+    await page.route("**/backend-api/reports**", async (route) => {
       await route.fulfill({ json: { items: [], total: 0, page: 1, limit: 20 } });
     });
     await page.goto("/berichte");

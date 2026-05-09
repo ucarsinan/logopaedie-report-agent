@@ -13,7 +13,14 @@ test.describe("Suggest Module", () => {
   });
 
   test("shows suggestions after typing with mocked API", async ({ page }) => {
-    await page.route("**/api/suggest", async (route) => {
+    await page.route("**/auth-api/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "test-user", email: "e2e@test.local", role: "user", totp_enabled: false }),
+      });
+    });
+    await page.route("**/backend-api/suggest", async (route) => {
       await route.fulfill({ json: ["Phonologische Prozesse wurden festgestellt."] });
     });
 
