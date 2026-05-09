@@ -8,7 +8,7 @@ export default async function PatientBearbeitenPage({
 }) {
   const { id } = await params;
   return (
-    <ErrorBoundary fallbackTitle="Patientenliste nicht verfügbar">
+    <ErrorBoundary fallbackTitle="Patient bearbeiten nicht möglich">
       <PatientForm patientId={id} />
     </ErrorBoundary>
   );

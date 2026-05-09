@@ -8,7 +8,7 @@ export default async function PatientDetailPage({
 }) {
   const { id } = await params;
   return (
-    <ErrorBoundary fallbackTitle="Patientenliste nicht verfügbar">
+    <ErrorBoundary fallbackTitle="Patientendetails nicht verfügbar">
       <PatientDetail patientId={id} />
     </ErrorBoundary>
   );

@@ -3,7 +3,7 @@ import { PatientForm } from "@/features/patients/PatientForm";
 
 export default function NeuerPatientPage() {
   return (
-    <ErrorBoundary fallbackTitle="Patientenliste nicht verfügbar">
+    <ErrorBoundary fallbackTitle="Patientenformular nicht verfügbar">
       <PatientForm />
     </ErrorBoundary>
   );
