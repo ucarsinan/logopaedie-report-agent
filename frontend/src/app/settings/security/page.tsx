@@ -5,17 +5,9 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { PasswordChangeForm } from "@/features/auth/components/PasswordChangeForm";
 import { TwoFactorSetup } from "@/features/auth/components/TwoFactorSetup";
 import { ActiveSessionsList } from "@/features/auth/components/ActiveSessionsList";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-export default function SecurityPage() {
-  const { state } = useAuth();
-  const router = useRouter();
-
-  if (state.status === "loading") return null;
-  if (state.status === "unauthenticated") {
-    router.replace("/login");
-    return null;
-  }
-
+function SecurityContent() {
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-10">
       <section>
@@ -31,5 +23,22 @@ export default function SecurityPage() {
         <ActiveSessionsList />
       </section>
     </div>
+  );
+}
+
+export default function SecurityPage() {
+  const { state } = useAuth();
+  const router = useRouter();
+
+  if (state.status === "loading") return null;
+  if (state.status === "unauthenticated") {
+    router.replace("/login");
+    return null;
+  }
+
+  return (
+    <ErrorBoundary fallbackTitle="Einstellungen nicht verfügbar">
+      <SecurityContent />
+    </ErrorBoundary>
   );
 }
