@@ -19,7 +19,7 @@ Speech therapists spend a significant part of their day writing structured clini
 
 Built as a portfolio project to demonstrate **production-grade AI integration** (Groq Whisper + Llama), **DSGVO-aware data architecture** (Fernet encryption, soft-delete, consent tracking), and a **complete multi-user auth system** (JWT + TOTP 2FA, session management, audit log) — all deployed as a monorepo on Vercel.
 
-<!-- TODO: Add screenshot here — recommended: report generation flow or dashboard -->
+![Report Generation Flow](frontend/public/screenshots/screenshot-bericht.png)
 
 ---
 
