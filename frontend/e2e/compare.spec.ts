@@ -8,13 +8,35 @@ test.describe("Compare Module", () => {
   });
 
   test("has file upload areas", async ({ page }) => {
+    await page.context().addCookies([
+      { name: "access_token", value: "fake-token", domain: "localhost", path: "/" },
+      { name: "user_role", value: "user", domain: "localhost", path: "/" },
+    ]);
+    await page.route("**/auth-api/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "test-user", email: "e2e@test.local", role: "user", totp_enabled: false }),
+      });
+    });
     await page.goto("/module/compare");
     const fileInputs = page.locator('input[type="file"]');
     await expect(fileInputs.first()).toBeAttached({ timeout: 5_000 });
   });
 
   test("shows comparison results after upload with mocked API", async ({ page }) => {
-    await page.route("**/api/analysis/compare", async (route) => {
+    await page.context().addCookies([
+      { name: "access_token", value: "fake-token", domain: "localhost", path: "/" },
+      { name: "user_role", value: "user", domain: "localhost", path: "/" },
+    ]);
+    await page.route("**/auth-api/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "test-user", email: "e2e@test.local", role: "user", totp_enabled: false }),
+      });
+    });
+    await page.route("**/backend-api/analysis/compare", async (route) => {
       await route.fulfill({
         json: {
           items: [{ category: "Phonologie", initial_finding: "Vorverlagerung", current_finding: "Stabil", change: "verbessert" }],

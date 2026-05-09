@@ -6,10 +6,17 @@ test.describe("Patients Module", () => {
       { name: "access_token", value: "fake-token", domain: "localhost", path: "/" },
       { name: "user_role", value: "user", domain: "localhost", path: "/" },
     ]);
+    await page.route("**/auth-api/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "test-user", email: "e2e@test.local", role: "user", totp_enabled: false }),
+      });
+    });
   });
 
   test("patient list is reachable", async ({ page }) => {
-    await page.route("**/api/patients**", async (route) => {
+    await page.route("**/backend-api/patients**", async (route) => {
       await route.fulfill({ json: { items: [], total: 0, page: 1, limit: 20 } });
     });
     await page.goto("/patienten");
@@ -18,7 +25,7 @@ test.describe("Patients Module", () => {
   });
 
   test("patient list shows patients", async ({ page }) => {
-    await page.route("**/api/patients**", async (route) => {
+    await page.route("**/backend-api/patients**", async (route) => {
       await route.fulfill({
         json: {
           items: [{ id: "uuid-1", system_id: "SYS-001", pseudonym: "M.S.", age_group: "Kind", disorder_text: "Phonologische Störung", created_at: "2024-01-01T00:00:00Z" }],
