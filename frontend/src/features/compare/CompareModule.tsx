@@ -97,6 +97,13 @@ export function CompareModule() {
 
       {error && <div className="rounded-lg bg-red-950 border border-red-800 px-5 py-4 text-sm text-red-300">{error}</div>}
 
+      {loading && (
+        <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
+          <span className="size-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+          Vergleich wird generiert…
+        </div>
+      )}
+
       {result && (
         <div className="flex flex-col gap-4">
           {/* Comparison table */}

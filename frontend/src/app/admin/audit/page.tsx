@@ -3,6 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { AuditLogTable } from "@/features/auth/components/AuditLogTable";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function AdminAuditContent() {
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-2xl font-semibold mb-6">Audit-Log</h1>
+      <AuditLogTable />
+    </div>
+  );
+}
 
 export default function AdminAuditPage() {
   const { state } = useAuth();
@@ -15,9 +25,8 @@ export default function AdminAuditPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-semibold mb-6">Audit-Log</h1>
-      <AuditLogTable />
-    </div>
+    <ErrorBoundary fallbackTitle="Admin-Bereich nicht verfügbar">
+      <AdminAuditContent />
+    </ErrorBoundary>
   );
 }
