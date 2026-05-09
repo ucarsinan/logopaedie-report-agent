@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -114,7 +115,9 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
         </div>
       </header>
 
-      <DemoBanner />
+      <Suspense fallback={null}>
+        <DemoBanner />
+      </Suspense>
       {subheader}
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
