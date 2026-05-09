@@ -123,3 +123,8 @@ vercel deploy
 - `sys.path.insert(0, backend/)` in main.py → Imports ohne `backend.`-Prefix (Tests müssen gleichen Pfad nutzen)
 - Rate Limiting via slowapi + Redis
 - Linting: ruff (backend), ESLint (frontend); Type-Check: mypy (backend), tsc (frontend)
+
+## Aktions-Tracking
+Nach jeder Dateiänderung diese Zeile in ~/Development/personal-assistant/orchestration/current-state.md anhängen:
+`[HH:MM] <projektname> | <EDIT|BASH> <datei-oder-befehl>`
+Max. 15 Zeilen behalten (älteste löschen). So kann die nächste KI nahtlos übernehmen.
