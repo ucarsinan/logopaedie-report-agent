@@ -1,5 +1,7 @@
 # Logopädie Report Agent – Claude Context
 
+@AGENTS.md
+
 ## Was dieses Projekt ist
 
 AI-gestütztes Tool für Logopäden: Aufnahme von Therapiesitzungen → automatische strukturierte Berichte via Groq.
