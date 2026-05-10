@@ -2388,43 +2388,218 @@ git commit -m "feat(dashboard): add patient count stats"
 
 ---
 
-## Task 14: FastAPI AI-Service portieren
+## Task 14: FastAPI AI-Service mit abstrahierter Provider-Schicht (ADR-P1)
+
+> **Warum neu statt portieren:** Groq ist US-basiert und darf gemäß ADR-P1 keine rohen
+> Patientendaten empfangen (§203 StGB, DSGVO). Stattdessen wird eine `AIProvider`-Schnittstelle
+> implementiert: `LocalProvider` (faster-whisper + Ollama, läuft auf der Praxis-Hardware)
+> als Default, `CloudProvider` (Mistral AI EU, Paris) als opt-in via `AI_PROVIDER=cloud`.
 
 **Files:**
 - Create: `backend/main.py`
 - Create: `backend/requirements.txt`
+- Create: `backend/services/ai_provider.py`
+- Create: `backend/services/report_service.py`
 - Create: `backend/routers/sessions.py`
-- Create: `backend/routers/reports.py`
-- Create: `backend/services/groq_service.py`
 - Create: `backend/models/schemas.py`
+- Create: `backend/tests/test_ai_provider.py`
 
-- [ ] **Step 1: `backend/requirements.txt` schreiben**
+---
+
+### Step 1: Failing tests schreiben
+
+Datei: `backend/tests/test_ai_provider.py`
+
+```python
+import pytest
+from unittest.mock import patch, MagicMock
+import os
+
+def test_local_provider_is_default(monkeypatch):
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    from services.ai_provider import get_provider, LocalProvider
+    provider = get_provider()
+    assert isinstance(provider, LocalProvider)
+
+def test_cloud_provider_selected_via_env(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "cloud")
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+    # Reload module to pick up env change
+    import importlib
+    import services.ai_provider as mod
+    importlib.reload(mod)
+    from services.ai_provider import get_provider, CloudProvider
+    provider = get_provider()
+    assert isinstance(provider, CloudProvider)
+
+def test_provider_interface_has_required_methods():
+    from services.ai_provider import AIProvider
+    import inspect
+    methods = [m for m, _ in inspect.getmembers(AIProvider, predicate=inspect.isfunction)]
+    assert "transcribe" in methods
+    assert "generate" in methods
+
+def test_local_provider_transcribe_calls_faster_whisper(monkeypatch):
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        [MagicMock(text=" Hallo Welt")],
+        MagicMock()
+    )
+    with patch("services.ai_provider.WhisperModel", return_value=mock_model):
+        from services.ai_provider import LocalProvider
+        provider = LocalProvider()
+        result = provider.transcribe(b"fake-audio-bytes", "de")
+        assert result == "Hallo Welt"
+
+def test_cloud_provider_transcribe_calls_mistral(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+    mock_client = MagicMock()
+    mock_client.audio.transcriptions.create.return_value = MagicMock(text="Hallo Welt")
+    with patch("services.ai_provider.Mistral", return_value=mock_client):
+        from services.ai_provider import CloudProvider
+        provider = CloudProvider()
+        result = provider.transcribe(b"fake-audio-bytes", "de")
+        assert result == "Hallo Welt"
+
+def test_generate_raises_if_no_ollama(monkeypatch):
+    import httpx
+    with patch("services.ai_provider.httpx.post", side_effect=httpx.ConnectError("no ollama")):
+        from services.ai_provider import LocalProvider
+        provider = LocalProvider()
+        with pytest.raises(RuntimeError, match="Ollama"):
+            provider.generate("Schreibe einen Bericht.")
+```
+
+Tests laufen lassen (müssen alle **FAIL**):
+
+```bash
+cd backend && python -m pytest tests/test_ai_provider.py -v
+```
+
+Expected: `FAILED` für alle 6 Tests (Module nicht gefunden).
+
+---
+
+### Step 2: `backend/requirements.txt` schreiben
 
 ```
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
-groq==0.9.0
+faster-whisper==1.0.3
+httpx==0.27.0
+mistralai==1.2.0
 python-multipart==0.0.12
 pydantic==2.9.0
-httpx==0.27.0
 pytest==8.3.0
 pytest-asyncio==0.24.0
-httpx==0.27.0
 ```
 
-- [ ] **Step 2: Quellcode aus `logopaedie-report-agent/backend/` kopieren und anpassen**
+> `faster-whisper` ersetzt `groq` für STT. Ollama läuft als lokaler HTTP-Server
+> (kein Python-Package nötig — httpx reicht für die REST-API). `mistralai` für CloudProvider.
 
-```bash
-# Im neuen Repo-Verzeichnis:
-cp -r ../logopaedie-report-agent/backend/services/groq_service.py backend/services/
-cp -r ../logopaedie-report-agent/backend/services/report_service.py backend/services/
-cp -r ../logopaedie-report-agent/backend/services/audio_service.py backend/services/
-cp -r ../logopaedie-report-agent/backend/models/schemas.py backend/models/
+---
+
+### Step 3: `backend/services/ai_provider.py` implementieren
+
+```python
+from __future__ import annotations
+import os
+import io
+import httpx
+from abc import ABC, abstractmethod
+
+
+class AIProvider(ABC):
+    @abstractmethod
+    def transcribe(self, audio_bytes: bytes, language: str = "de") -> str:
+        """Audio-Bytes → Transkript-Text."""
+
+    @abstractmethod
+    def generate(self, prompt: str, system: str = "") -> str:
+        """Prompt → generierter Text."""
+
+
+class LocalProvider(AIProvider):
+    """STT: faster-whisper (lokal). NLP: Ollama + Llama (lokal, HTTP)."""
+
+    WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+
+    def __init__(self) -> None:
+        from faster_whisper import WhisperModel  # lazy import
+        self._whisper = WhisperModel(self.WHISPER_MODEL, device="cpu", compute_type="int8")
+
+    def transcribe(self, audio_bytes: bytes, language: str = "de") -> str:
+        segments, _ = self._whisper.transcribe(
+            io.BytesIO(audio_bytes), language=language
+        )
+        return "".join(s.text for s in segments).strip()
+
+    def generate(self, prompt: str, system: str = "") -> str:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            response = httpx.post(
+                f"{self.OLLAMA_URL}/api/chat",
+                json={"model": self.OLLAMA_MODEL, "messages": messages, "stream": False},
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            return response.json()["message"]["content"]
+        except httpx.ConnectError as e:
+            raise RuntimeError(
+                f"Ollama nicht erreichbar unter {self.OLLAMA_URL}. "
+                "Starte Ollama mit: `ollama serve`"
+            ) from e
+
+
+class CloudProvider(AIProvider):
+    """STT + NLP: Mistral AI (Paris, EU-DSGVO-konform). Kein Patientenname in Prompts!"""
+
+    MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
+
+    def __init__(self) -> None:
+        from mistralai import Mistral  # lazy import
+        api_key = os.environ["MISTRAL_API_KEY"]
+        self._client = Mistral(api_key=api_key)
+
+    def transcribe(self, audio_bytes: bytes, language: str = "de") -> str:
+        # Mistral nutzt aktuell Whisper-kompatibles Endpoint
+        result = self._client.audio.transcriptions.create(
+            model="whisper-large-v3",
+            file=("audio.wav", audio_bytes),
+            language=language,
+        )
+        return result.text
+
+    def generate(self, prompt: str, system: str = "") -> str:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        response = self._client.chat.complete(
+            model=self.MISTRAL_MODEL,
+            messages=messages,
+        )
+        return response.choices[0].message.content
+
+
+def get_provider() -> AIProvider:
+    """Factory: liest AI_PROVIDER env-var. Default: LocalProvider."""
+    provider_name = os.getenv("AI_PROVIDER", "local").lower()
+    if provider_name == "cloud":
+        return CloudProvider()
+    return LocalProvider()
 ```
 
-Dann anpassen: Imports reparieren (kein Redis/DB mehr, da Supabase das übernimmt).
+---
 
-- [ ] **Step 3: `backend/main.py` schreiben**
+### Step 4: `backend/main.py` schreiben
 
 ```python
 import sys
@@ -2433,7 +2608,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import sessions, reports, analysis
+from routers import sessions
 
 app = FastAPI(title="Logopädie-Praxis AI Service", version="1.0.0")
 
@@ -2447,28 +2622,102 @@ app.add_middleware(
 )
 
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-app.include_router(reports.router, prefix="/reports", tags=["reports"])
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "provider": os.getenv("AI_PROVIDER", "local")}
 ```
 
-- [ ] **Step 4: Backend starten und testen**
+---
+
+### Step 5: `backend/routers/sessions.py` schreiben
+
+```python
+import os
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from pydantic import BaseModel
+from services.ai_provider import get_provider
+
+router = APIRouter()
+
+class TranscribeResponse(BaseModel):
+    transcript: str
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    system: str = ""
+
+class GenerateResponse(BaseModel):
+    text: str
+
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(file: UploadFile = File(...)):
+    audio_bytes = await file.read()
+    if len(audio_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio-Datei zu groß (max 25 MB)")
+    provider = get_provider()
+    transcript = provider.transcribe(audio_bytes)
+    return TranscribeResponse(transcript=transcript)
+
+@router.post("/generate", response_model=GenerateResponse)
+async def generate_report(body: GenerateRequest):
+    provider = get_provider()
+    text = provider.generate(body.prompt, body.system)
+    return GenerateResponse(text=text)
+```
+
+---
+
+### Step 6: Tests laufen lassen (müssen alle **PASS**)
+
+```bash
+cd backend && python -m pytest tests/test_ai_provider.py -v
+```
+
+Expected: `6 passed`
+
+---
+
+### Step 7: Backend manuell starten und testen
 
 ```bash
 cd backend && pip install -r requirements.txt
+# LocalProvider (kein MISTRAL_API_KEY nötig, aber Ollama muss laufen):
 uvicorn main:app --reload --port 8001
-# Anderes Terminal:
 curl http://localhost:8001/health
 ```
-Expected: `{"status": "ok"}`
 
-- [ ] **Step 5: Commit**
+Expected: `{"status": "ok", "provider": "local"}`
+
+```bash
+# CloudProvider testen:
+AI_PROVIDER=cloud MISTRAL_API_KEY=... uvicorn main:app --reload --port 8001
+curl http://localhost:8001/health
+```
+
+Expected: `{"status": "ok", "provider": "cloud"}`
+
+---
+
+### Step 8: `.env.example` aktualisieren
+
+```bash
+# backend/.env.example
+AI_PROVIDER=local            # "local" (default) oder "cloud"
+WHISPER_MODEL=base           # base | small | medium | large-v3 (mehr RAM)
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b     # llama3.2:3b (CPU) oder llama3.3:70b (GPU)
+MISTRAL_API_KEY=             # nur wenn AI_PROVIDER=cloud
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+---
+
+### Step 9: Commit
 
 ```bash
 git add backend/
-git commit -m "feat(backend): port AI service from logopaedie-report-agent"
+git commit -m "feat(backend): implement abstracted AI provider — LocalProvider (faster-whisper + Ollama) + CloudProvider (Mistral EU)"
 ```
 
 ---
