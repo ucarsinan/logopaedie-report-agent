@@ -367,12 +367,12 @@ Nach AI-Generierung: Next.js Server Action schreibt Ergebnis als `patient_docume
 
 ## 9. Offene Entscheidungen (vor Implementierungsstart klären)
 
-- [ ] **Repo-Name:** `logopaedie-praxis` — bestätigen
-- [ ] **Supabase-Projekt:** neu anlegen, Region eu-central-1 erzwingen
-- [ ] **Vercel-Projekt:** neues Projekt oder gleiches Account
+- [x] **Repo-Name:** `logopaedie-praxis` — bestätigt
+- [ ] **Supabase-Projekt:** neu anlegen, Region eu-central-1 erzwingen (Account vorhanden)
+- [ ] **Vercel-Projekt:** neues Projekt, gleiches Account
 - [ ] **DSGVO-DPA:** Supabase DPA abschließen vor erstem echten Patientendatum
-- [ ] **ICD-10-Quelle:** Eigene Tabelle mit ICD-10-Codes anlegen oder Free-API nutzen?
-- [ ] **Sprache UI:** Nur Deutsch (v1) — bestätigt durch Zielmarkt Deutschland
+- [x] **ICD-10-Quelle:** Freitexteingabe mit Regex-Validierung (`/^[A-Z]\d{2}(\.\d{1,2})?$/`) in v1. Autocomplete-Katalog (ICD-10-GM, 16.000 Codes) kommt in Baustein 2.
+- [x] **Sprache UI:** Nur Deutsch (v1) — bestätigt durch Zielmarkt Deutschland
 
 ---
 
