@@ -6,6 +6,70 @@
 
 ---
 
+## ADR-P1: KI-Architektur für logopaedie-praxis (Echtes Produkt)
+
+**Date:** 2026-05-10
+**Status:** Accepted
+**Decided by:** human
+**Scope:** Gilt ausschließlich für `logopaedie-praxis` — NICHT für `logopaedie-report-agent`
+
+**Context:**
+`logopaedie-praxis` ist ein echtes Medizinprodukt das Patientendaten (Audio-Aufnahmen, Diagnosen, Therapiedokumentation) verarbeitet. Patientendaten unterliegen in Deutschland §203 StGB (ärztliche/therapeutische Schweigepflicht) und DSGVO. Der DSGVO-konforme Transfer von Patientendaten an US-basierte KI-APIs (Groq, OpenAI US, Anthropic) ist ohne explizite Einwilligung jedes Patienten und ohne valide SCCs (Standardvertragsklauseln) nicht zulässig. Im Streitfall haftet die Praxis strafrechtlich.
+
+### Entscheidung: Abstrahierte KI-Provider-Schicht mit lokalem KI als Default
+
+```text
+AIProvider Interface
+  transcribe(audio) -> text
+  generate(prompt)  -> text
+
+LocalProvider (Default)       | CloudProvider (EU only, optional)
+------------------------------|----------------------------------
+STT: faster-whisper (lokal)   | STT: faster-whisper auf EU-Server
+NLP: Ollama + Llama (lokal)   | NLP: Mistral AI (Paris, EU-DPA)
+                              |      ODER Azure OpenAI (West EU)
+                              | Anonymisierungs-Layer PFLICHT:
+                              | Kein Patientenname in Prompts!
+```
+
+### Explizit VERBOTEN für logopaedie-praxis
+
+- Groq API (keine EU-Region, kein klares DSGVO-DPA)
+- OpenAI direkt (US, kein EU-Data-Residency im Basis-Tarif)
+- Anthropic Claude API (keine EU-Region)
+- Jede US-API die rohe Patientenaudio oder ungeschwärzten Therapietext empfängt
+
+### Lokale KI — Technischer Stack
+
+- STT: `faster-whisper` (Python, läuft auf CPU/GPU, Whisper-Modell lokal)
+- NLP: `Ollama` mit `llama3.2:3b` (CPU, ausreichend für Reports) oder `llama3.3:70b` (GPU)
+- Minimale Hardware: 8 GB RAM, kein GPU nötig für Basis-Qualität
+- Empfohlene Hardware: 16 GB RAM + Nvidia GPU für Llama 70B
+
+### EU-Cloud als Alternative (für Praxen ohne eigene Hardware)
+
+- Provider: Mistral AI (Frankreich, EU-DSGVO-konform, API-Key-Modell)
+- Anonymisierungs-Regel: Prompt enthält NIEMALS Name, Geburtsdatum, Adresse, Versichertennummer
+- Prompt enthält NUR medizinischen/therapeutischen Inhalt und Session-interne Pseudonym-ID
+
+**Rationale:**
+Echte Praxissoftware muss ohne rechtliches Risiko betreibbar sein. Eine abstrahierte Provider-Schicht kostet ~1 Woche Mehraufwand, spart aber potenzielle Strafverfolgung und verhindert komplette Architektur-Rewrites wenn der erste Provider gewechselt werden muss.
+
+**Konsequenzen:**
+
+- `logopaedie-praxis/backend/services/ai_provider.py` definiert das Provider-Interface
+- `LocalProvider` ist der Default in `config.py`
+- `CloudProvider` (Mistral) ist optional konfigurierbar per Env-Var `AI_PROVIDER=cloud`
+- Der Implementierungsplan (IMPLEMENTATION_PLAN_B1.md) Task 14 muss entsprechend umgeschrieben werden
+
+**Alternativen abgewogen:**
+
+- Weiter Groq: rechtlich nicht vertretbar für Produktion
+- Nur EU-Cloud (Mistral): kein lokaler Fallback, Abhängigkeit von externem Service
+- Nur lokal: kein Angebot für Praxen ohne Hardware — schränkt Zielgruppe ein
+
+---
+
 ## ADR-000: Shared AI Repository State
 
 **Date:** 2026-05-10
