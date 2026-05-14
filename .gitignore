@@ -38,3 +38,13 @@ docs/superpowers/
 
 # Git worktrees
 .worktrees/
+
+# Git Policy — auto-managed (git-policy.mjs)
+# Edit rules in: personal-assistant/docs/git-policy/registry.yml
+orchestration/current-state.md
+scratch.md
+scratchpad.md
+test-results/
+playwright-report/
+.env.*.local
+# End Git Policy
