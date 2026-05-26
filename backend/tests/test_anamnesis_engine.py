@@ -59,3 +59,21 @@ def test_is_affirmation_recognizes_yes_variants():
     assert engine._is_affirmation("ja, passt")
     assert engine._is_affirmation("Stimmt so")
     assert not engine._is_affirmation("nein, das Alter ist falsch")
+
+
+def test_is_affirmation_rejects_embedded_negation():
+    engine = AnamnesisEngine(AsyncMock())
+    assert not engine._is_affirmation("das stimmt nicht ganz")
+    assert not engine._is_affirmation("eigentlich nicht")
+
+
+def test_is_affirmation_rejects_naja_substring():
+    engine = AnamnesisEngine(AsyncMock())
+    assert not engine._is_affirmation("naja")
+
+
+def test_is_affirmation_still_accepts_plain_yes():
+    engine = AnamnesisEngine(AsyncMock())
+    assert engine._is_affirmation("ja, passt")
+    assert engine._is_affirmation("Stimmt so")
+    assert engine._is_affirmation("genau")

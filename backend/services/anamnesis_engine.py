@@ -7,6 +7,7 @@ information needed for generating a professional report.
 from __future__ import annotations
 
 import logging
+import re
 
 from models.schemas import ChatMessage
 from services import anamnesis_catalog as cat
@@ -348,9 +349,11 @@ class AnamnesisEngine:
 
     def _is_affirmation(self, msg: str) -> bool:
         low = msg.strip().lower()
-        if low.startswith(("nein", "nicht", "falsch")):
+        # A negation word anywhere overrides any affirmation token.
+        if re.search(r"\b(nein|nicht|falsch|kein\w*)\b", low):
             return False
-        return any(word in low for word in self._AFFIRMATIONS)
+        tokens = set(re.findall(r"\w+", low))
+        return bool(tokens & set(self._AFFIRMATIONS))
 
     def _build_summary(self, session: Session) -> str:
         """Deterministic summary from collected_data — no LLM, no hallucination."""
