@@ -77,3 +77,66 @@ def test_is_affirmation_still_accepts_plain_yes():
     assert engine._is_affirmation("ja, passt")
     assert engine._is_affirmation("Stimmt so")
     assert engine._is_affirmation("genau")
+
+
+@pytest.mark.asyncio
+async def test_process_message_asks_next_unfilled_slot(monkeypatch):
+    groq = AsyncMock()
+    groq.chat_completion = AsyncMock(return_value="Notiert. Welche Altersgruppe?")
+    engine = AnamnesisEngine(groq)
+    s = _session("befundbericht", None, None, {})
+    s.collected_data = {"report_type": "befundbericht"}
+
+    async def fake_extract(session):
+        session.collected_data["patient_pseudonym"] = "DL"
+        session.collected_data["collected_fields"] = ["patient_pseudonym"]
+
+    monkeypatch.setattr(engine, "_extract_data", fake_extract)
+
+    out = await engine.process_message(s, "DL")
+    assert "Altersgruppe" in out or "– Kind" in out
+    assert s.status == "anamnesis"
+
+
+@pytest.mark.asyncio
+async def test_process_message_derives_icd_from_indikation(monkeypatch):
+    engine = AnamnesisEngine(AsyncMock())
+    engine._groq.chat_completion = AsyncMock(return_value="ok")
+    s = _session("befundbericht", None, None, {"report_type": "befundbericht"})
+
+    async def fake_extract(session):
+        session.collected_data["indikationsschluessel"] = "RE1"
+
+    monkeypatch.setattr(engine, "_extract_data", fake_extract)
+
+    await engine.process_message(s, "Stottern RE1")
+    assert s.collected_data["icd_10_codes"] == ["F98.5"]
+
+
+@pytest.mark.asyncio
+async def test_process_message_completes_on_affirmation_after_summary(monkeypatch):
+    engine = AnamnesisEngine(AsyncMock())
+    engine._groq.chat_completion = AsyncMock(return_value="ok")
+    full = {
+        "report_type": "befundbericht",
+        "patient_pseudonym": "DL",
+        "age_group": "jugendlich",
+        "indikationsschluessel": "RE1",
+        "sprachentwicklung": "spät",
+        "hoervermögen": "x",
+        "symptombeginn": "x",
+        "bisherige_behandlung": "x",
+        "anamnese_familie": "x",
+        "auswirkung_alltag": "x",
+        "diagnose_text": "Stottern",
+        "awaiting_confirmation": True,
+    }
+    s = _session("befundbericht", "RE1", "jugendlich", full)
+
+    async def fake_extract(session):
+        pass
+
+    monkeypatch.setattr(engine, "_extract_data", fake_extract)
+
+    await engine.process_message(s, "ja, passt")
+    assert s.status == "materials"

@@ -339,11 +339,12 @@ class AnamnesisEngine:
         """Return required fields not yet collected for the current report type."""
         if session.therapy_plan_mode:
             return [f for f in _REQUIRED_FIELDS_THERAPY_PLAN if not session.collected_data.get(f)]
-        report_type = session.collected_data.get("report_type")
+        d = session.collected_data
+        report_type = d.get("report_type")
         if not report_type:
             return []
-        required = _REQUIRED_FIELDS.get(report_type, [])
-        return [f for f in required if not session.collected_data.get(f)]
+        seq = cat.build_sequence(report_type, d.get("indikationsschluessel"), d.get("age_group"))
+        return [s.key for s in seq if not s.optional and not d.get(s.key)]
 
     _AFFIRMATIONS = ("ja", "passt", "stimmt", "korrekt", "richtig", "genau", "okay", "ok")
 
@@ -396,10 +397,62 @@ class AnamnesisEngine:
         return text
 
     async def process_message(self, session: Session, user_message: str, mode: str = "guided") -> str:
-        """Process a user message and return the assistant's response."""
-        # Add user message to history
+        """Slot-driven turn: extract → controller → phrase/summary."""
         session.chat_history.append(ChatMessage(role="user", content=user_message))
 
+        # Therapy-plan and quick_input modes keep their existing prompt path.
+        if session.therapy_plan_mode or mode == "quick_input":
+            return await self._process_legacy(session, user_message, mode)
+
+        # 1. Extract structured data from the latest answer.
+        await self._extract_data(session)
+
+        # 2. Derive ICD and compose the anamnesis narrative (deterministic).
+        d = session.collected_data
+        indikation = d.get("indikationsschluessel")
+        if indikation and not d.get("icd_10_codes"):
+            d["icd_10_codes"] = cat.ICD_BY_INDIKATION.get(indikation, [])
+        narrative = cat.compose_anamnese_persoenlich(
+            d.get("report_type", "befundbericht"), indikation, d.get("age_group"), d
+        )
+        if narrative:
+            d["anamnese_persoenlich"] = narrative
+
+        # 3. If we already presented a summary and the user confirms → done.
+        if d.get("awaiting_confirmation") and self._is_affirmation(user_message):
+            session.status = "materials"
+            reply = "Vielen Dank. Sie können nun Unterlagen ergänzen oder den Bericht erstellen."
+            session.chat_history.append(ChatMessage(role="assistant", content=reply))
+            return reply
+        d["awaiting_confirmation"] = False
+
+        # 4. Controller picks the next slot or signals completion.
+        slot = cat.next_slot(d.get("report_type", "befundbericht"), indikation, d.get("age_group"), d)
+        if slot is None:
+            d["awaiting_confirmation"] = True
+            d["current_phase"] = "summary"
+            reply = self._build_summary(session)
+        else:
+            d["current_phase"] = self._phase_for(slot.key)
+            recent = [{"role": m.role, "content": m.content} for m in session.chat_history[:-1]]
+            reply = await self._phrase_turn(user_message, slot, recent)
+
+        session.chat_history.append(ChatMessage(role="assistant", content=reply))
+        return reply
+
+    @staticmethod
+    def _phase_for(slot_key: str) -> str:
+        if slot_key in ("patient_pseudonym", "age_group"):
+            return "patient_info"
+        if slot_key in ("indikationsschluessel", "diagnose_text"):
+            return "disorder"
+        return "anamnesis"
+
+    async def _process_legacy(self, session: Session, user_message: str, mode: str = "guided") -> str:
+        """Legacy process path for therapy_plan_mode and quick_input — preserves original logic.
+
+        NOTE: The user message is already appended by process_message; do NOT re-append it here.
+        """
         collected = list(session.collected_data.get("collected_fields", []))
         missing = self._compute_missing_fields(session)
 
