@@ -16,7 +16,7 @@ from dependencies import anamnesis_engine, get_optional_user, groq_service, repo
 from exceptions import (
     FileTooLargeError,
 )
-from middleware.rate_limiter import AUDIO_LIMIT, CHAT_LIMIT, GENERATE_LIMIT, limiter
+from middleware.rate_limiter import AUDIO_LIMIT, CHAT_LIMIT, GENERATE_LIMIT, client_ip_key, limiter
 from models.auth import User
 from models.patient import Patient
 from models.report_record import ReportRecord
@@ -27,6 +27,8 @@ from models.schemas import (
     SessionInfo,
     UploadedMaterial,
 )
+from services import session_store
+from services.demo_quota import within_demo_quota
 from services.file_processor import extract_text
 from services.session_store import store
 
@@ -274,6 +276,13 @@ async def generate_report(
 ) -> dict:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
+
+    # H-2: cap anonymous demo usage of the expensive generation per client per day.
+    if session.user_id is None and not within_demo_quota(client_ip_key(request), session_store._get_redis()):
+        raise HTTPException(
+            status_code=429,
+            detail="Tageslimit für die kostenlose Demo erreicht. Bitte morgen erneut versuchen oder einloggen.",
+        )
 
     record_patient_id: UUID | None = None
     record_pseudonym: str | None = None

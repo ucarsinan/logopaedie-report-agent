@@ -45,6 +45,9 @@ def mock_redis():
     mock.get = MagicMock(return_value=None)
     mock.delete = MagicMock(return_value=None)
     mock.scan = MagicMock(return_value=(0, []))
+    # Sane defaults for the demo-quota counter (overridable per test).
+    mock.incr = MagicMock(return_value=1)
+    mock.expire = MagicMock(return_value=None)
     with patch("services.session_store._get_redis", return_value=mock):
         yield mock
 
