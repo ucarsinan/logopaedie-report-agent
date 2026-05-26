@@ -344,6 +344,34 @@ class AnamnesisEngine:
         required = _REQUIRED_FIELDS.get(report_type, [])
         return [f for f in required if not session.collected_data.get(f)]
 
+    _AFFIRMATIONS = ("ja", "passt", "stimmt", "korrekt", "richtig", "genau", "okay", "ok")
+
+    def _is_affirmation(self, msg: str) -> bool:
+        low = msg.strip().lower()
+        if low.startswith(("nein", "nicht", "falsch")):
+            return False
+        return any(word in low for word in self._AFFIRMATIONS)
+
+    def _build_summary(self, session: Session) -> str:
+        """Deterministic summary from collected_data — no LLM, no hallucination."""
+        d = session.collected_data
+        labels = [
+            ("patient_pseudonym", "Pseudonym"),
+            ("age_group", "Altersgruppe"),
+            ("indikationsschluessel", "Störungsbild"),
+            ("icd_10_codes", "ICD-10"),
+            ("diagnose_text", "Diagnose"),
+        ]
+        lines = []
+        for key, label in labels:
+            val = d.get(key)
+            if val and val != [] and val != "":
+                if isinstance(val, list):
+                    val = ", ".join(str(v) for v in val)
+                lines.append(f"- {label}: {val}")
+        body = "\n".join(lines)
+        return f"Ich habe folgende Angaben erfasst:\n\n{body}\n\nStimmt das so, und soll ich den Bericht erstellen?"
+
     async def _phrase_turn(self, last_user_msg: str, slot: cat.Slot, recent: list[dict[str, str]]) -> str:
         """Confirm the last answer and ask exactly one question — minimal context."""
         instruction = (
