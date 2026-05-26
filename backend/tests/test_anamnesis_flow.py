@@ -8,6 +8,8 @@ from services.anamnesis_catalog import (
     HEAD,
     ICD_BY_INDIKATION,
     REPORT_SEQUENCE,
+    build_sequence,
+    next_slot,
 )
 
 _ALL_INDIKATION = {"SP1", "SP2", "SP3", "SP4", "SP5", "SP6", "ST1", "ST2", "SC1", "RE1", "RE2", "OFD"}
@@ -75,3 +77,56 @@ def test_befundbericht_sequence_ends_with_diagnose():
     assert keys[:3] == ["patient_pseudonym", "age_group", "indikationsschluessel"]
     assert keys[-1] == "diagnose_text"
     assert "__anamnese__" in keys  # placeholder marker expanded at runtime
+
+
+def test_build_sequence_expands_anamnese_marker_by_category_and_age():
+    seq = build_sequence("befundbericht", "RE1", "jugendlich")
+    keys = [s.key for s in seq]
+    assert "__anamnese__" not in keys
+    assert "sprachentwicklung" in keys  # from redefluss/_default
+    assert keys[0] == "patient_pseudonym"
+    assert keys[-1] == "diagnose_text"
+
+
+def test_build_sequence_without_disorder_stops_at_head():
+    seq = build_sequence("befundbericht", None, None)
+    keys = [s.key for s in seq]
+    assert keys == ["patient_pseudonym", "age_group", "indikationsschluessel"]
+
+
+def test_next_slot_returns_first_unfilled_required():
+    collected = {"patient_pseudonym": "DL"}
+    slot = next_slot("befundbericht", "RE1", "jugendlich", collected)
+    assert slot.key == "age_group"
+
+
+def test_next_slot_returns_none_when_all_filled():
+    collected = {
+        "patient_pseudonym": "DL",
+        "age_group": "jugendlich",
+        "indikationsschluessel": "RE1",
+        "sprachentwicklung": "spät",
+        "hoervermögen": "eingeschränkt",
+        "symptombeginn": "mit 5",
+        "bisherige_behandlung": "keine",
+        "anamnese_familie": "keine",
+        "auswirkung_alltag": "negativ",
+        "diagnose_text": "Stottern",
+    }
+    assert next_slot("befundbericht", "RE1", "jugendlich", collected) is None
+
+
+def test_next_slot_skips_optional_slots():
+    assert (
+        next_slot(
+            "therapiebericht_kurz",
+            "ST2",
+            "erwachsen",
+            {
+                "patient_pseudonym": "DL",
+                "age_group": "erwachsen",
+                "indikationsschluessel": "ST2",
+            },
+        ).key
+        == "therapieziele"
+    )

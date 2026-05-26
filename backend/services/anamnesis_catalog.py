@@ -136,3 +136,44 @@ REPORT_SEQUENCE: dict[str, list[Slot]] = {
         Slot("kooperation", "nach der Kooperation und Mitarbeit des Patienten bzw. der Eltern"),
     ],
 }
+
+
+def _anamnese_block(indikation: str | None, age_group: str | None) -> list[Slot]:
+    if not indikation:
+        return []
+    category = CATEGORY_BY_INDIKATION.get(indikation)
+    if not category or category not in ANAMNESE:
+        return []
+    by_age = ANAMNESE[category]
+    return list(by_age.get(age_group or "", by_age["_default"]))
+
+
+def build_sequence(report_type: str, indikation: str | None, age_group: str | None) -> list[Slot]:
+    """Concrete ordered slot list for one case; __anamnese__ marker expanded.
+
+    When indikation is None the sequence is truncated at the first
+    __anamnese__ marker (HEAD-only mode — nothing to ask about disorder yet).
+    """
+    template = REPORT_SEQUENCE.get(report_type, REPORT_SEQUENCE["befundbericht"])
+    result: list[Slot] = []
+    for slot in template:
+        if slot.key == "__anamnese__":
+            block = _anamnese_block(indikation, age_group)
+            if not block:
+                # No indikation known yet — stop here, further slots not applicable
+                break
+            result.extend(block)
+        else:
+            result.append(slot)
+    return result
+
+
+def next_slot(report_type: str, indikation: str | None, age_group: str | None, collected: dict) -> Slot | None:
+    """First unfilled, non-optional slot in the sequence, or None when done."""
+    for slot in build_sequence(report_type, indikation, age_group):
+        if slot.optional:
+            continue
+        value = collected.get(slot.key)
+        if not value or value == [] or value == "":
+            return slot
+    return None
