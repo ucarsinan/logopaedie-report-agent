@@ -58,7 +58,9 @@ def test_full_report_lifecycle(client, mock_groq, mock_redis, fake_user):
     }
     resp = client.post(f"/sessions/{session_id}/chat", json={"message": "Befundbericht bitte"})
     assert resp.status_code == 200
-    assert resp.json()["message"] == "Verstanden — ein Befundbericht für ein Kind."
+    # The slot-driven flow may append a deterministic options line (e.g. the
+    # age-group choices) after the LLM's confirmation text, so assert containment.
+    assert "Verstanden — ein Befundbericht für ein Kind." in resp.json()["message"]
 
     # 3. Generate report — json_completion now returns the report content
     mock_groq["json"].return_value = BEFUNDBERICHT_PAYLOAD

@@ -446,6 +446,8 @@ class AnamnesisEngine:
             return "patient_info"
         if slot_key in ("indikationsschluessel", "diagnose_text"):
             return "disorder"
+        if slot_key in ("therapieziele", "therapieinhalte", "anzahl_sitzungen", "fortschritte", "kooperation"):
+            return "goals"
         return "anamnesis"
 
     async def _process_legacy(self, session: Session, user_message: str, mode: str = "guided") -> str:
