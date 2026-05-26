@@ -299,16 +299,31 @@ async def generate_report(
 
     try:
         report = await report_generator.generate(session)
-        session.generated_report = report.model_dump()
+        report_dict = report.model_dump()
+
+        # H-4: surface required fields that were never collected, so generating from
+        # an incomplete anamnesis is explicit rather than silent. The guardrail (C-2)
+        # keeps these gaps as "Nicht erhoben" instead of fabricated values.
+        missing = anamnesis_engine.missing_required_fields(session)
+        session.generated_report = dict(report_dict)
+        if missing:
+            session.generated_report["_warnings"] = {
+                "missing_required_fields": missing,
+                "message": (
+                    "Anamnese unvollständig: Diese Pflichtfelder wurden nicht erhoben "
+                    "und im Bericht nicht ergänzt. Bitte fachlich prüfen."
+                ),
+            }
         session.status = "complete"
         store.save(session)
 
         # Persist only for the session owner; demo (unowned) reports stay unattributed.
+        # The stored content is the clean report (without the UI-only warnings).
         if session.user_id is not None and user is not None:
             record = ReportRecord(
-                pseudonym=record_pseudonym or session.generated_report.get("patient", {}).get("pseudonym", "Unbekannt"),
-                report_type=session.generated_report.get("report_type", "unbekannt"),
-                content_json=json.dumps(session.generated_report, ensure_ascii=False),
+                pseudonym=record_pseudonym or report_dict.get("patient", {}).get("pseudonym", "Unbekannt"),
+                report_type=report_dict.get("report_type", "unbekannt"),
+                content_json=json.dumps(report_dict, ensure_ascii=False),
                 user_id=user.id,
                 patient_id=record_patient_id,
             )

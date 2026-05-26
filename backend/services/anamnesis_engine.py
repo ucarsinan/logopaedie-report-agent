@@ -346,6 +346,20 @@ class AnamnesisEngine:
         seq = cat.build_sequence(report_type, d.get("indikationsschluessel"), d.get("age_group"))
         return [s.key for s in seq if not s.optional and not d.get(s.key)]
 
+    def missing_required_fields(self, session: Session) -> list[str]:
+        """Hard required fields (per report type / therapy plan) not yet collected.
+
+        Distinct from _compute_missing_fields, which drives the next conversational
+        question. This is the minimal set a finished report needs, used to gate and
+        flag generation from an incomplete anamnesis (see report generation, H-4).
+        """
+        if session.therapy_plan_mode:
+            required = _REQUIRED_FIELDS_THERAPY_PLAN
+        else:
+            report_type = session.collected_data.get("report_type") or session.report_type or "befundbericht"
+            required = _REQUIRED_FIELDS.get(report_type, _REQUIRED_FIELDS["befundbericht"])
+        return [f for f in required if not session.collected_data.get(f)]
+
     _AFFIRMATIONS = ("ja", "passt", "stimmt", "korrekt", "richtig", "genau", "okay", "ok")
 
     def _is_affirmation(self, msg: str) -> bool:
