@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from models.schemas import ChatMessage
+from services import anamnesis_catalog as cat
 from services.groq_client import GroqService
 from services.session_store import Session
 
@@ -205,6 +206,13 @@ BEISPIELE für gute Fragen:
 
 Fehlende Felder: {missing_fields}"""
 
+_PHRASE_SYSTEM_PROMPT = """\
+Du bist ein logopädischer Dokumentationsassistent und sprichst die Therapeut:in mit "Sie" an.
+Bestätige die letzte Antwort in EINEM kurzen, natürlichen Satz (keine Floskeln, keine
+Einleitungssätze wie "Lassen Sie uns..."). Stelle danach GENAU die vorgegebene Frage,
+flüssig formuliert. Keine weiteren Fragen, kein zusätzlicher Text, keine technischen
+Feldnamen, kein JSON."""
+
 _THERAPY_PLAN_SYSTEM_PROMPT = """\
 Du bist ein logopädischer Dokumentationsassistent. Du sammelst kurz die nötigen
 Informationen für einen ICF-basierten Therapieplan.
@@ -335,6 +343,26 @@ class AnamnesisEngine:
             return []
         required = _REQUIRED_FIELDS.get(report_type, [])
         return [f for f in required if not session.collected_data.get(f)]
+
+    async def _phrase_turn(self, last_user_msg: str, slot: cat.Slot, recent: list[dict[str, str]]) -> str:
+        """Confirm the last answer and ask exactly one question — minimal context."""
+        instruction = (
+            f'Letzte Antwort der Therapeut:in: "{last_user_msg}". '
+            f"Bestätige das in einem Satz. Stelle dann genau diese Frage: {slot.ask}."
+        )
+        messages = [*recent[-2:], {"role": "user", "content": instruction}]
+        try:
+            text = await self._groq.chat_completion(messages, _PHRASE_SYSTEM_PROMPT, temperature=0.5)
+            text = (text or "").strip()
+            if not text:
+                raise ValueError("empty phrasing")
+        except Exception as e:  # deterministic fallback — chat never dies
+            logger.warning("_phrase_turn fallback: %s", e)
+            text = f"Verstanden. Ich frage {slot.ask}?"
+        line = cat.options_line(slot)
+        if line:
+            text = f"{text}\n\n{line}"
+        return text
 
     async def process_message(self, session: Session, user_message: str, mode: str = "guided") -> str:
         """Process a user message and return the assistant's response."""
