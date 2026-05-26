@@ -57,9 +57,7 @@ async def generate_soap_from_session(
     db: Session = Depends(get_db),
 ):
     _validate_session_id(session_id)
-    session = _store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden.")
+    session = _store.get_authorized(session_id, str(current_user.id))
 
     collected_data = session.collected_data
     report = session.generated_report

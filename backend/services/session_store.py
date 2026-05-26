@@ -65,6 +65,7 @@ class Session:
         self.generated_report: dict | None = None
         self.therapy_plan_mode: bool = False
         self.patient_id: str | None = None
+        self.user_id: str | None = None
         self.is_demo: bool = False
         self.created_at: float = time.time()
         self._version: int = 0
@@ -85,6 +86,7 @@ class Session:
             "generated_report": self.generated_report,
             "therapy_plan_mode": self.therapy_plan_mode,
             "patient_id": self.patient_id,
+            "user_id": self.user_id,
             "is_demo": self.is_demo,
             "created_at": self.created_at,
             "_version": self._version,
@@ -103,6 +105,7 @@ class Session:
         s.generated_report = data.get("generated_report")
         s.therapy_plan_mode = data.get("therapy_plan_mode", False)
         s.patient_id = data.get("patient_id")
+        s.user_id = data.get("user_id")
         s.is_demo = data.get("is_demo", False)
         s.created_at = data.get("created_at", time.time())
         s._version = data.get("_version", 0)
@@ -133,6 +136,19 @@ class SessionStore:
         """Get a session or raise SessionNotFoundError."""
         session = self.get(session_id)
         if session is None:
+            raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
+        return session
+
+    def get_authorized(self, session_id: str, user_id: str | None) -> Session:
+        """Get a session the caller is allowed to access, or raise SessionNotFoundError.
+
+        Owned (authenticated) sessions are only accessible by their owner.
+        Anonymous demo sessions have no owner and stay reachable via their
+        capability ID. We raise the same not-found error for missing and
+        unauthorized sessions so existence is never leaked to a non-owner.
+        """
+        session = self.get_or_raise(session_id)
+        if session.user_id is not None and session.user_id != user_id:
             raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
         return session
 

@@ -26,8 +26,19 @@ logopädischen Bericht auf Deutsch.
 - Formuliere sachlich und präzise
 - Beachte §12 SGB V: Heilmittel müssen ausreichend, zweckmäßig und wirtschaftlich sein
 - Verwende Pseudonyme statt echter Patientennamen
-- Bei fehlenden Informationen schreibe "Nicht erhoben" oder "Keine Angaben"
 - Orientiere dich an ICF-Klassifikation wo möglich
+
+## WICHTIG — Keine erfundenen Fakten (Faktentreue)
+Dies ist ein medizinisch-rechtliches Dokument. Verwende AUSSCHLIESSLICH die unten
+gesammelten Anamnese-Daten. Erfinde oder rate NIEMALS konkrete Werte, die nicht
+ausdrücklich erhoben wurden — insbesondere:
+- **Therapiefrequenz** (z.B. "einmal wöchentlich") und **Therapiedauer** (z.B. "über 6 Monate")
+- **Sitzungszahlen** (z.B. "12 Sitzungen") und **Prozentangaben** (z.B. "Reduktion um 50 %")
+- **Testergebnisse, Messwerte, Diagnosedaten** oder Verlaufszahlen
+
+Wurde ein Wert nicht erhoben, lass das Feld neutral und ohne konkrete Zahl, oder
+schreibe ausdrücklich "Nicht erhoben" / "Keine Angaben". Eine allgemeine, qualitative
+Empfehlung ohne erfundene Zahlen ist einer falschen Präzision immer vorzuziehen.
 
 ## Gesammelte Anamnese-Daten
 {anamnesis_data}
@@ -49,7 +60,7 @@ Erstelle einen Befundbericht mit exakt dieser JSON-Struktur:
   "diagnose_text": "<Zusammenfassende Diagnose mit Bezug auf ICD-10 und Indikationsschlüssel>",
   "therapieindikation": "<Begründung der Therapienotwendigkeit und -dringlichkeit. Auswirkungen der Störung auf Kommunikation, Teilhabe, Schullaufbahn (bei Kindern) oder Beruf (bei Erwachsenen).>",
   "therapieziele": ["<Ziel 1>", "<Ziel 2>", "<...weitere Ziele>"],
-  "empfehlung": "<Empfehlung bezüglich Therapiefrequenz, -dauer und weiterem Vorgehen>"
+  "empfehlung": "<Empfehlung zum weiteren Vorgehen. Konkrete Therapiefrequenz/-dauer NUR nennen, wenn sie in den Anamnese-Daten erhoben wurden; andernfalls allgemein formulieren, ohne Zahlen zu erfinden.>"
 }}
 """
 )
