@@ -28,20 +28,24 @@ HEAD: list[Slot] = [
     ),
 ]
 
-# ── ICD-10 derived deterministically from the indication key (no asking) ─────
+# ── ICD-10-GM suggested deterministically from the indication key (no asking) ─
+# Codes verified against ICD-10-GM-2026 (BfArM, via icd-code.de) and the
+# Heilmittelkatalog (Stimm-, Sprech-, Sprach- und Schlucktherapie). These are
+# *suggestions* for the report; the therapist remains responsible for the final
+# diagnosis code. Where the precise code is case-dependent, a note explains it.
 ICD_BY_INDIKATION: dict[str, list[str]] = {
-    "SP1": ["F80.1"],  # TODO: fachlich bestätigen
-    "SP2": ["F80.20"],  # TODO: fachlich bestätigen
-    "SP3": ["F80.0"],  # TODO: fachlich bestätigen
-    "SP4": ["H90.3"],  # TODO: fachlich bestätigen
-    "SP5": ["R47.0"],  # TODO: fachlich bestätigen
-    "SP6": ["R47.1"],  # TODO: fachlich bestätigen
-    "ST1": ["R49.0"],  # TODO: fachlich bestätigen
-    "ST2": ["R49.0"],  # TODO: fachlich bestätigen
-    "SC1": ["R13.0"],  # TODO: fachlich bestätigen
-    "RE1": ["F98.5"],
-    "RE2": ["F98.6"],
-    "OFD": ["F80.8"],  # TODO: fachlich bestätigen
+    "SP1": ["F80.1"],  # Expressive Sprachstörung (Sprachentwicklungsstörung)
+    "SP2": ["F80.20"],  # Auditive Verarbeitungs- und Wahrnehmungsstörung (AVWS)
+    "SP3": ["F80.0"],  # Artikulationsstörung / Dyslalie
+    "SP4": ["H90.3"],  # Hörverlust-bedingt; tatsächlicher H90.-/H91.-Code ist audiologisch fallabhängig
+    "SP5": ["R47.0"],  # Dysphasie und Aphasie
+    "SP6": ["R47.1"],  # Dysarthrie und Anarthrie (Sprechapraxie wäre R48.2)
+    "ST1": ["R49.0"],  # Dysphonie (organisch bedingt)
+    "ST2": ["R49.0"],  # Dysphonie (funktionell bedingt)
+    "SC1": ["R13.9"],  # Dysphagie o.n.A. (R13.0 nur bei Beaufsichtigungspflicht/Aspirationsrisiko)
+    "RE1": ["F98.5"],  # Stottern
+    "RE2": ["F98.6"],  # Poltern
+    "OFD": ["F80.8"],  # Myofunktionelle Störung — kein präziser ICD-10-GM-Code; F80.8 als Näherung
 }
 
 # ── Maps an indication key to its anamnesis category ─────────────────────────
