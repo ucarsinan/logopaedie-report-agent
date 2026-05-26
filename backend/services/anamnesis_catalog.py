@@ -158,11 +158,9 @@ def build_sequence(report_type: str, indikation: str | None, age_group: str | No
     result: list[Slot] = []
     for slot in template:
         if slot.key == "__anamnese__":
-            block = _anamnese_block(indikation, age_group)
-            if not block:
-                # No indikation known yet — stop here, further slots not applicable
-                break
-            result.extend(block)
+            if indikation is None:
+                break  # HEAD-only mode: we can't ask disorder-specific slots yet
+            result.extend(_anamnese_block(indikation, age_group))
         else:
             result.append(slot)
     return result

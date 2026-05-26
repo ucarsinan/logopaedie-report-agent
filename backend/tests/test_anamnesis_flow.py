@@ -130,3 +130,12 @@ def test_next_slot_skips_optional_slots():
         ).key
         == "therapieziele"
     )
+
+
+def test_build_sequence_unknown_indikation_keeps_post_marker_slots():
+    # indikation set but not in the category map → anamnese block empty,
+    # but post-marker required slots (diagnose_text) must NOT be dropped.
+    seq = build_sequence("befundbericht", "ZZ_UNKNOWN", "erwachsen")
+    keys = [s.key for s in seq]
+    assert keys[:3] == ["patient_pseudonym", "age_group", "indikationsschluessel"]
+    assert keys[-1] == "diagnose_text"
