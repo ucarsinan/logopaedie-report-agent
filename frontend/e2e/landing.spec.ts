@@ -21,12 +21,15 @@ test.describe("Landing Page", () => {
 
   test("HowItWorks section is visible", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /Wie es funktioniert/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Vom Gespräch zum Bericht/i })
+    ).toBeVisible();
   });
 
-  test("FeatureHighlights shows section heading", async ({ page }) => {
+  test("FeatureHighlights section is visible", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /Alle Features/i })).toBeVisible();
+    // FeatureHighlights has no section heading; assert a stable feature card title.
+    await expect(page.getByText("Phonologische Analyse").first()).toBeVisible();
   });
 
   test("Demo starten navigates to report module", async ({ page }) => {
