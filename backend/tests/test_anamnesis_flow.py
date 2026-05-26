@@ -8,8 +8,11 @@ from services.anamnesis_catalog import (
     HEAD,
     ICD_BY_INDIKATION,
     REPORT_SEQUENCE,
+    Slot,
     build_sequence,
+    compose_anamnese_persoenlich,
     next_slot,
+    options_line,
 )
 
 _ALL_INDIKATION = {"SP1", "SP2", "SP3", "SP4", "SP5", "SP6", "ST1", "ST2", "SC1", "RE1", "RE2", "OFD"}
@@ -139,3 +142,29 @@ def test_build_sequence_unknown_indikation_keeps_post_marker_slots():
     keys = [s.key for s in seq]
     assert keys[:3] == ["patient_pseudonym", "age_group", "indikationsschluessel"]
     assert keys[-1] == "diagnose_text"
+
+
+def test_options_line_formats_inline_with_dashes():
+    slot = next(s for s in HEAD if s.key == "age_group")
+    assert options_line(slot) == "– Kind – Jugendliche/r – Erwachsene/r"
+
+
+def test_options_line_none_when_no_options():
+    assert options_line(Slot("x", "y")) is None
+
+
+def test_compose_joins_filled_anamnese_fields_in_order():
+    collected = {
+        "sprachentwicklung": "verspätet",
+        "hoervermögen": "eingeschränkt",
+        "auswirkung_alltag": "negativ in der Schule",
+    }
+    text = compose_anamnese_persoenlich("befundbericht", "RE1", "jugendlich", collected)
+    assert "Sprachentwicklung: verspätet" in text
+    assert "Hörvermögen: eingeschränkt" in text
+    assert text.index("Sprachentwicklung") < text.index("Hörvermögen")
+    assert "Familienanamnese" not in text  # empty field omitted
+
+
+def test_compose_returns_empty_string_when_nothing_filled():
+    assert compose_anamnese_persoenlich("befundbericht", "RE1", "jugendlich", {}) == ""

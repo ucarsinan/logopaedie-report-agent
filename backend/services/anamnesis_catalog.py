@@ -175,3 +175,41 @@ def next_slot(report_type: str, indikation: str | None, age_group: str | None, c
         if not value or value == [] or value == "":
             return slot
     return None
+
+
+# Human labels for composing the anamnesis narrative (subset of report_generator labels).
+_FIELD_LABELS: dict[str, str] = {
+    "motorische_entwicklung": "Motorische Entwicklung",
+    "sprachentwicklung": "Sprachentwicklung",
+    "hoervermögen": "Hörvermögen",
+    "mehrsprachigkeit": "Mehrsprachigkeit",
+    "anamnese_familie": "Familienanamnese",
+    "symptombeginn": "Symptombeginn",
+    "ursache": "Ursache",
+    "bisherige_behandlung": "Bisherige Behandlung",
+    "stimmbelastung": "Stimmbelastung",
+    "hno_befund": "HNO-Befund",
+    "kostform": "Kostform",
+    "aspirationszeichen": "Aspirationszeichen",
+    "auswirkung_alltag": "Auswirkung auf Alltag",
+}
+
+
+def options_line(slot: Slot) -> str | None:
+    """Return slot options joined with en-dash separators, or None when slot has no options."""
+    if not slot.options:
+        return None
+    return "– " + " – ".join(slot.options)
+
+
+def compose_anamnese_persoenlich(
+    report_type: str, indikation: str | None, age_group: str | None, collected: dict
+) -> str:
+    """Join filled anamnesis topic fields into one narrative string, in catalog order."""
+    parts: list[str] = []
+    for slot in _anamnese_block(indikation, age_group):
+        value = collected.get(slot.key)
+        if value and value != [] and value != "":
+            label = _FIELD_LABELS.get(slot.key, slot.key)
+            parts.append(f"{label}: {value}")
+    return ". ".join(parts)
