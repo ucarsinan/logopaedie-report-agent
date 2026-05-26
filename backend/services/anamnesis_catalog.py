@@ -59,3 +59,80 @@ CATEGORY_BY_INDIKATION: dict[str, str] = {
     "RE1": "redefluss",
     "RE2": "redefluss",
 }
+
+# ── Anamnesis topic slots per category, optionally per age group ─────────────
+# Each category provides "_default"; add an age key only where it differs.
+ANAMNESE: dict[str, dict[str, list[Slot]]] = {
+    "sprache_kind": {
+        "_default": [
+            Slot("motorische_entwicklung", "wie die motorische Entwicklung verlief (Krabbeln, Laufen)"),
+            Slot(
+                "sprachentwicklung",
+                "wie die Sprachentwicklung verlief (Lallen, erste Wörter, erste Sätze, Sprachverständnis)",
+            ),
+            Slot("hoervermögen", "nach Hörvermögen, HNO-Befunden und Paukenergüssen"),
+            Slot("mehrsprachigkeit", "ob Mehrsprachigkeit vorliegt (welche Sprachen, Verteilung)"),
+            Slot("anamnese_familie", "nach familiären Sprachauffälligkeiten"),
+            Slot(
+                "auswirkung_alltag", "nach Auswirkungen auf Kindergarten, Schule und die sozial-emotionale Entwicklung"
+            ),
+        ],
+    },
+    "neuro": {
+        "_default": [
+            Slot("symptombeginn", "seit wann die Symptome bestehen"),
+            Slot("ursache", "nach der Ursache (z. B. Schlaganfall, OP, Trauma)"),
+            Slot("bisherige_behandlung", "nach bisherigen Behandlungen und deren Ergebnissen"),
+            Slot("auswirkung_alltag", "nach Auswirkungen auf Alltag und Beruf"),
+        ],
+    },
+    "stimme": {
+        "_default": [
+            Slot("symptombeginn", "seit wann die Stimmprobleme bestehen"),
+            Slot("stimmbelastung", "nach der beruflichen Stimmbelastung (z. B. Lehrer, Sänger)"),
+            Slot("hno_befund", "nach dem HNO-/Stimmlippenbefund sowie Reflux, Allergien, Rauchen"),
+            Slot("auswirkung_alltag", "nach Auswirkungen auf Alltag und Beruf"),
+        ],
+    },
+    "dysphagie": {
+        "_default": [
+            Slot("ursache", "nach der Grunderkrankung (z. B. Schlaganfall, Parkinson, ALS)"),
+            Slot("kostform", "nach der aktuellen Kostform und Flüssigkeitskonsistenz"),
+            Slot("aspirationszeichen", "nach Aspirationszeichen (Husten beim Essen/Trinken)"),
+            Slot("hno_befund", "nach vorhandenen FEES- oder Videofluoroskopie-Befunden"),
+        ],
+    },
+    "redefluss": {
+        "_default": [
+            Slot("sprachentwicklung", "wie die Sprachentwicklung verlief"),
+            Slot("hoervermögen", "nach Hörvermögen und HNO-Befunden"),
+            Slot("symptombeginn", "seit wann die Redeflussstörung besteht und wie sie sich entwickelt hat"),
+            Slot("bisherige_behandlung", "nach bisherigen Diagnosen oder Behandlungen"),
+            Slot("anamnese_familie", "nach familiären Sprachauffälligkeiten"),
+            Slot("auswirkung_alltag", "nach Auswirkungen auf Alltag, Schule oder Beruf"),
+        ],
+    },
+}
+
+# Marker expanded by build_sequence() into the matching ANAMNESE block.
+_ANAMNESE_MARKER = Slot("__anamnese__", "")
+
+# ── Ordered required slots per report type (mirrors _REQUIRED_FIELDS) ────────
+REPORT_SEQUENCE: dict[str, list[Slot]] = {
+    "befundbericht": [*HEAD, _ANAMNESE_MARKER, Slot("diagnose_text", "nach der zusammenfassenden Diagnose")],
+    "therapiebericht_kurz": [*HEAD, Slot("therapieziele", "nach den aktuellen Therapiezielen")],
+    "therapiebericht_lang": [
+        *HEAD,
+        _ANAMNESE_MARKER,
+        Slot("diagnose_text", "nach der zusammenfassenden Diagnose"),
+        Slot("therapieinhalte", "nach den bisherigen Therapieinhalten und -methoden"),
+        Slot("fortschritte", "nach den Fortschritten seit Therapiebeginn"),
+    ],
+    "abschlussbericht": [
+        *HEAD,
+        Slot("therapieinhalte", "nach den bisherigen Therapieinhalten und -methoden"),
+        Slot("anzahl_sitzungen", "nach der Anzahl der durchgeführten Sitzungen"),
+        Slot("fortschritte", "nach den Fortschritten seit Therapiebeginn"),
+        Slot("kooperation", "nach der Kooperation und Mitarbeit des Patienten bzw. der Eltern"),
+    ],
+}
