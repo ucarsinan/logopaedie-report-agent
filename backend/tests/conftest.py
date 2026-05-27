@@ -12,6 +12,16 @@ import pytest
 # Ensure backend/ is on sys.path so imports resolve the same way as at runtime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+# Pin the rate limiter to in-memory storage for the whole test session. main.py
+# calls load_dotenv() at import, which leaks the production REDIS_URL into the
+# process; the limiter would then bind to real Upstash and _reset_rate_limiter
+# below would connect to (and wipe) it on every test. Clearing the vars and
+# importing rate_limiter here — before any fixture imports `main` — locks the
+# singleton to memory:// once, regardless of import order.
+for _redis_var in ("RATE_LIMIT_REDIS_URL", "REDIS_URL", "KV_URL"):
+    os.environ.pop(_redis_var, None)
+import middleware.rate_limiter  # noqa: E402,F401
+
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():
@@ -45,6 +55,9 @@ def mock_redis():
     mock.get = MagicMock(return_value=None)
     mock.delete = MagicMock(return_value=None)
     mock.scan = MagicMock(return_value=(0, []))
+    # Sane defaults for the demo-quota counter (overridable per test).
+    mock.incr = MagicMock(return_value=1)
+    mock.expire = MagicMock(return_value=None)
     with patch("services.session_store._get_redis", return_value=mock):
         yield mock
 

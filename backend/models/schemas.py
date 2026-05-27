@@ -138,6 +138,13 @@ class PhonologicalProcess(BaseModel):
     severity: str = "leicht"  # leicht | mittel | schwer
 
 
+class WordPair(BaseModel):
+    """A target word and the child's production of it, for phonological analysis."""
+
+    target: str
+    production: str
+
+
 class PhonologicalAnalysis(BaseModel):
     items: list[PhonologicalProcess] = Field(default_factory=list)
     summary: str = ""

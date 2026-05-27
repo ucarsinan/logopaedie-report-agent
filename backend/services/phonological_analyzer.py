@@ -76,7 +76,16 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt:
 - Analysiere JEDEN Lautunterschied zwischen Zielwort und Produktion
 - Benenne den konkreten Prozess mit IPA-Notation wo möglich
 - Schweregrad: leicht = 1 Prozess, mittel = 2-3 Prozesse, schwer = 4+ Prozesse oder schwere Abweichung
-- Erfinde KEINE Prozesse – nur was aus dem Vergleich ersichtlich ist
+
+## Faktentreue
+- Erfinde KEINE Prozesse – benenne nur, was aus dem Vergleich Zielwort↔Produktion
+  tatsächlich ableitbar ist. Presse eine Abweichung nicht in ein bekanntes Label,
+  wenn sie nicht passt (z.B. ist /h/→/t/ keine Vorverlagerung). Beschreibe sie dann
+  neutral als Substitution.
+- Beurteile `age_appropriate` ausschließlich anhand der typischen Abbaualter der
+  beobachteten Prozesse: Prozesse, die im angegebenen Alter normalerweise bereits
+  abgebaut sind, sind NICHT mehr altersgerecht. Ist kein Alter angegeben, bleibe
+  konservativ und kennzeichne die Unsicherheit im summary statt zu raten.
 """
 
 

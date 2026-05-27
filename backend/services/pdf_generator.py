@@ -104,14 +104,20 @@ def _build_styles() -> dict:
     }
 
 
+AI_DISCLAIMER = "KI-generierter Entwurf – vor Verwendung fachlich prüfen und freigeben."
+
+
 def _make_footer(canvas, doc) -> None:
-    """Draw page number + branding in the bottom margin on every page."""
+    """Draw the AI/draft disclaimer + page number/branding on every page."""
     canvas.saveState()
     width, _ = A4
     now = datetime.now(UTC).strftime("%d.%m.%Y")
     text = f"Erstellt am {now} | Logopädie Report Agent | Seite {doc.page}"
-    canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.grey)
+    # Disclaimer sits just above the branding line so it is visible on every page.
+    canvas.setFont("Helvetica-Oblique", 8)
+    canvas.drawCentredString(width / 2, 1.6 * cm, AI_DISCLAIMER)
+    canvas.setFont("Helvetica", 8)
     canvas.drawCentredString(width / 2, 1.2 * cm, text)
     canvas.restoreState()
 

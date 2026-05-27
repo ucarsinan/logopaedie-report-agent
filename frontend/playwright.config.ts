@@ -16,10 +16,10 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
-    {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
-    },
+    // Firefox was previously listed here but CI only installs the Chromium
+    // browser (see .github/workflows/ci.yml), so every Firefox spec errored
+    // on a missing binary. Re-add a firefox project only together with
+    // `playwright install firefox` in CI, otherwise the e2e job goes red.
   ],
   globalSetup: "./e2e/global-setup.ts",
   webServer: {

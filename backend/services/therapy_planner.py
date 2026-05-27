@@ -87,6 +87,13 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt:
 - Methoden müssen evidenzbasiert sein (z.B. P.O.P.T., TOLGS, Patholinguistik, PROMPT, etc.)
 - Berücksichtige das Alter und die Lebenssituation des Patienten
 - Plane realistisch (orientiere dich an der orientierenden Behandlungsmenge der HeilM-RL)
+
+## Faktentreue
+- Leite Ziele aus der gegebenen Diagnose ab. Erfinde KEINE Ausgangsbefunde,
+  Messwerte oder Prozentangaben und stelle sie nicht als gemessene Baseline dar
+  (z.B. nicht "Reduktion um 50 %", wenn kein Ausgangswert erhoben wurde).
+- Frequenz und Sitzungszahlen sind ein planerischer Richtwert/eine Empfehlung,
+  keine Tatsache – formuliere sie entsprechend (z.B. "empfohlen: …").
 """
 
 

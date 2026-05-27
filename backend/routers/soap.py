@@ -6,7 +6,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from database import get_db
 from dependencies import get_current_user, get_soap_generator
@@ -57,9 +57,7 @@ async def generate_soap_from_session(
     db: Session = Depends(get_db),
 ):
     _validate_session_id(session_id)
-    session = _store.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden.")
+    session = _store.get_authorized(session_id, str(current_user.id))
 
     collected_data = session.collected_data
     report = session.generated_report
@@ -122,7 +120,7 @@ async def get_soap_for_report(
     record = db.exec(
         select(SOAPRecord)
         .where(SOAPRecord.report_id == report_id, SOAPRecord.user_id == current_user.id)
-        .order_by(SOAPRecord.created_at.desc())
+        .order_by(col(SOAPRecord.created_at).desc())
     ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Keine SOAP-Notiz für diesen Bericht.")

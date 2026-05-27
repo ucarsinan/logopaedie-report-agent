@@ -26,8 +26,19 @@ logopädischen Bericht auf Deutsch.
 - Formuliere sachlich und präzise
 - Beachte §12 SGB V: Heilmittel müssen ausreichend, zweckmäßig und wirtschaftlich sein
 - Verwende Pseudonyme statt echter Patientennamen
-- Bei fehlenden Informationen schreibe "Nicht erhoben" oder "Keine Angaben"
 - Orientiere dich an ICF-Klassifikation wo möglich
+
+## WICHTIG — Keine erfundenen Fakten (Faktentreue)
+Dies ist ein medizinisch-rechtliches Dokument. Verwende AUSSCHLIESSLICH die unten
+gesammelten Anamnese-Daten. Erfinde oder rate NIEMALS konkrete Werte, die nicht
+ausdrücklich erhoben wurden — insbesondere:
+- **Therapiefrequenz** (z.B. "einmal wöchentlich") und **Therapiedauer** (z.B. "über 6 Monate")
+- **Sitzungszahlen** (z.B. "12 Sitzungen") und **Prozentangaben** (z.B. "Reduktion um 50 %")
+- **Testergebnisse, Messwerte, Diagnosedaten** oder Verlaufszahlen
+
+Wurde ein Wert nicht erhoben, lass das Feld neutral und ohne konkrete Zahl, oder
+schreibe ausdrücklich "Nicht erhoben" / "Keine Angaben". Eine allgemeine, qualitative
+Empfehlung ohne erfundene Zahlen ist einer falschen Präzision immer vorzuziehen.
 
 ## Gesammelte Anamnese-Daten
 {anamnesis_data}
@@ -49,7 +60,7 @@ Erstelle einen Befundbericht mit exakt dieser JSON-Struktur:
   "diagnose_text": "<Zusammenfassende Diagnose mit Bezug auf ICD-10 und Indikationsschlüssel>",
   "therapieindikation": "<Begründung der Therapienotwendigkeit und -dringlichkeit. Auswirkungen der Störung auf Kommunikation, Teilhabe, Schullaufbahn (bei Kindern) oder Beruf (bei Erwachsenen).>",
   "therapieziele": ["<Ziel 1>", "<Ziel 2>", "<...weitere Ziele>"],
-  "empfehlung": "<Empfehlung bezüglich Therapiefrequenz, -dauer und weiterem Vorgehen>"
+  "empfehlung": "<Empfehlung zum weiteren Vorgehen. Konkrete Therapiefrequenz/-dauer NUR nennen, wenn sie in den Anamnese-Daten erhoben wurden; andernfalls allgemein formulieren, ohne Zahlen zu erfinden.>"
 }}
 """
 )
@@ -147,14 +158,23 @@ def _format_anamnesis_data(data: dict) -> str:
     return "\n".join(lines) if lines else "Keine Daten gesammelt."
 
 
+# Per-material character budget for the prompt. Larger than the old 2000-char cap
+# so prior reports/diagnostics aren't gutted; when a cut is still needed it is
+# marked explicitly rather than dropping content silently (L-3).
+_MATERIAL_CHAR_BUDGET = 6000
+
+
 def _format_materials(session: Session) -> str:
     """Format uploaded materials into a string for the prompt."""
     if not session.materials:
         return "Keine Materialien hochgeladen."
     parts: list[str] = []
     for mat in session.materials:
-        text_preview = mat.extracted_text[:2000] if len(mat.extracted_text) > 2000 else mat.extracted_text
-        parts.append(f"### {mat.filename} ({mat.material_type})\n{text_preview}")
+        text = mat.extracted_text
+        if len(text) > _MATERIAL_CHAR_BUDGET:
+            omitted = len(text) - _MATERIAL_CHAR_BUDGET
+            text = f"{text[:_MATERIAL_CHAR_BUDGET]}\n[… gekürzt: {omitted} Zeichen ausgelassen]"
+        parts.append(f"### {mat.filename} ({mat.material_type})\n{text}")
     return "\n\n".join(parts)
 
 

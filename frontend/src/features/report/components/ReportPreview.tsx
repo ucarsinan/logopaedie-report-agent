@@ -22,6 +22,15 @@ export function ReportPreview({ report }: ReportPreviewProps) {
         </h2>
       </div>
 
+      {/* AI / draft disclaimer — these are AI-drafted documents needing review */}
+      <div
+        role="note"
+        className="px-6 py-3 bg-amber-50 text-amber-900 text-sm print:bg-white print:text-black"
+      >
+        <strong>KI-generierter Entwurf.</strong> Inhalte können fehlerhaft oder unvollständig
+        sein – vor Verwendung fachlich prüfen und freigeben.
+      </div>
+
       {/* Patient & Diagnose */}
       <ReportSection title="Patientendaten">
         <p><strong>Pseudonym:</strong> {report.patient.pseudonym}</p>

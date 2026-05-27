@@ -9,7 +9,6 @@ from sqlmodel import Session, col, select
 
 from database import get_db
 from dependencies import get_current_user, therapy_planner
-from exceptions import SessionNotFoundError
 from models.auth import User
 from models.schemas import TherapyPlan, TherapyPlanSaveRequest, TherapyPlanSummary
 from models.therapy_plan_record import TherapyPlanRecord
@@ -30,12 +29,10 @@ def _validate_session_id(session_id: str) -> None:
 @router.post("/sessions/{session_id}/therapy-plan")
 async def generate_therapy_plan(
     session_id: str,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> TherapyPlan:
     _validate_session_id(session_id)
-    session = store.get(session_id)
-    if not session:
-        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
+    session = store.get_authorized(session_id, str(current_user.id))
 
     return await therapy_planner.generate_plan(session)
 
@@ -43,13 +40,11 @@ async def generate_therapy_plan(
 @router.post("/therapy-plans", status_code=201)
 async def save_therapy_plan(
     req: TherapyPlanSaveRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TherapyPlanSummary:
     _validate_session_id(req.session_id)
-    session = store.get(req.session_id)
-    if not session:
-        raise SessionNotFoundError("Session nicht gefunden oder abgelaufen.")
+    session = store.get_authorized(req.session_id, str(current_user.id))
 
     if req.plan_data:
         plan_json = json.dumps(req.plan_data, ensure_ascii=False)
