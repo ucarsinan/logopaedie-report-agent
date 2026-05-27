@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +9,27 @@ from sqlmodel import Session, col, func, select
 
 from models.patient import Patient
 from services.encryption_service import EncryptionService
+
+
+def derive_age_group(birthdate: str) -> str | None:
+    """Map an ISO date of birth to a German logopedic age group.
+
+    Returns "kind" (<13), "jugendlich" (13-17) or "erwachsen" (18+), or None if
+    the birthdate cannot be parsed. Deriving from the DOB keeps the age group
+    clinically correct instead of relying on a static "erwachsen" default.
+    """
+    try:
+        dob = date.fromisoformat(birthdate.strip()[:10])
+    except (ValueError, AttributeError):
+        return None
+    today = datetime.now(UTC).date()
+    years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if years < 13:
+        return "kind"
+    if years < 18:
+        return "jugendlich"
+    return "erwachsen"
+
 
 _MAX_RETRIES = 5
 
@@ -55,7 +76,9 @@ class PatientService:
             email_enc=self._enc.encrypt(email),
             insurance_nr_enc=self._enc.encrypt(insurance_nr),
             gender=gender,
-            age_group=age_group,
+            # Birthdate is authoritative for the age group; fall back to the
+            # passed value only if the date can't be parsed (M-1).
+            age_group=derive_age_group(birthdate) or age_group,
             icd10_codes=icd10_codes or [],
             disorder_text=disorder_text,
             indikationsschluessel=indikationsschluessel,
