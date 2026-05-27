@@ -16,7 +16,15 @@ SOAP steht für:
 - **P (Plan):** Therapieplan, konkrete Ziele, Methoden, Frequenz, nächste Schritte, Empfehlungen
 
 Erstelle aus den gegebenen Daten eine präzise, fachlich korrekte SOAP-Notiz auf Deutsch.
-Verwende Fachterminologie der Logopädie. Sei konkret und vermende keine Floskeln.
+Verwende Fachterminologie der Logopädie. Sei konkret und vermeide Floskeln.
+
+## Faktentreue
+- Verwende ausschließlich die gegebenen Daten. Erfinde KEINE Befunde, Messwerte,
+  Testergebnisse oder Therapieparameter, die nicht erhoben wurden.
+- Subjektiv (S): Bei Kindern sind dies die Angaben der Eltern/Bezugsperson, nicht
+  Aussagen des Kindes selbst ("Die Eltern berichten …"). Formuliere die Quelle korrekt.
+- Ist ein SOAP-Abschnitt nicht belegbar, halte ihn knapp oder vermerke
+  "Keine Angaben", statt Inhalte zu erfinden.
 
 Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
 {
