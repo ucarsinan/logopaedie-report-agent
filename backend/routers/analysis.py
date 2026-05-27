@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from dependencies import get_current_user, phonological_analyzer, report_comparator
 from middleware.rate_limiter import ANALYSIS_LIMIT, limiter
 from models.auth import User
-from models.schemas import PhonologicalAnalysis, ReportComparison
+from models.schemas import PhonologicalAnalysis, ReportComparison, WordPair
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +54,12 @@ async def analyze_phonological(
 @limiter.limit(ANALYSIS_LIMIT)
 async def analyze_phonological_text(
     request: Request,
-    word_pairs: list[dict[str, str]],
+    word_pairs: list[WordPair],
     child_age: str | None = None,
     _: User = Depends(get_current_user),
 ) -> PhonologicalAnalysis:
     """Analyze phonological processes from text word pairs (no audio needed)."""
-    return await phonological_analyzer.analyze(word_pairs, child_age)
+    return await phonological_analyzer.analyze([wp.model_dump() for wp in word_pairs], child_age)
 
 
 @router.post("/compare")
