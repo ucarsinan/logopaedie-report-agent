@@ -158,14 +158,23 @@ def _format_anamnesis_data(data: dict) -> str:
     return "\n".join(lines) if lines else "Keine Daten gesammelt."
 
 
+# Per-material character budget for the prompt. Larger than the old 2000-char cap
+# so prior reports/diagnostics aren't gutted; when a cut is still needed it is
+# marked explicitly rather than dropping content silently (L-3).
+_MATERIAL_CHAR_BUDGET = 6000
+
+
 def _format_materials(session: Session) -> str:
     """Format uploaded materials into a string for the prompt."""
     if not session.materials:
         return "Keine Materialien hochgeladen."
     parts: list[str] = []
     for mat in session.materials:
-        text_preview = mat.extracted_text[:2000] if len(mat.extracted_text) > 2000 else mat.extracted_text
-        parts.append(f"### {mat.filename} ({mat.material_type})\n{text_preview}")
+        text = mat.extracted_text
+        if len(text) > _MATERIAL_CHAR_BUDGET:
+            omitted = len(text) - _MATERIAL_CHAR_BUDGET
+            text = f"{text[:_MATERIAL_CHAR_BUDGET]}\n[… gekürzt: {omitted} Zeichen ausgelassen]"
+        parts.append(f"### {mat.filename} ({mat.material_type})\n{text}")
     return "\n\n".join(parts)
 
 
