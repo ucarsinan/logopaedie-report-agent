@@ -31,12 +31,12 @@ def client_ip_key(request) -> str:  # Starlette Request (duck-typed)
     which would make a single shared rate-limit bucket. The first hop in X-Forwarded-For
     is the originating client.
     """
-    forwarded = request.headers.get("x-forwarded-for", "")
+    forwarded: str = request.headers.get("x-forwarded-for", "")
     if forwarded:
         first = forwarded.split(",")[0].strip()
         if first:
             return first
-    return get_remote_address(request)
+    return str(get_remote_address(request))
 
 
 def _build_limiter(storage_uri: str) -> Limiter:

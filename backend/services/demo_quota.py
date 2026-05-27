@@ -32,7 +32,7 @@ def within_demo_quota(identifier: str, redis) -> bool:
     fresh budget per day without a separate reset job.
     """
     key = _key(identifier)
-    count = redis.incr(key)
+    count = int(redis.incr(key))
     if count == 1:
         redis.expire(key, _DAY_SECONDS)
     return count <= demo_daily_limit()
