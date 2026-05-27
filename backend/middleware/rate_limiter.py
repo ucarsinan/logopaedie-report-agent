@@ -20,10 +20,7 @@ def _resolve_storage_uri() -> str:
     it must only ever be the fallback for local/test runs.
     """
     return (
-        os.environ.get("RATE_LIMIT_REDIS_URL")
-        or os.environ.get("REDIS_URL")
-        or os.environ.get("KV_URL")
-        or "memory://"
+        os.environ.get("RATE_LIMIT_REDIS_URL") or os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or "memory://"
     )
 
 
@@ -42,15 +39,29 @@ def client_ip_key(request) -> str:  # Starlette Request (duck-typed)
     return get_remote_address(request)
 
 
+def _build_limiter(storage_uri: str) -> Limiter:
+    """Construct the limiter with graceful degradation when storage is unreachable.
+
+    `in_memory_fallback_enabled` keeps rate limiting *functional* (per-instance,
+    in-memory) if the configured Redis backend errors out, and `swallow_errors`
+    guarantees a storage failure never escapes as a 500. Without these, a TLS or
+    network blip talking to Upstash would crash every rate-limited endpoint
+    (chat, audio, generate) instead of merely degrading the throttle.
+    """
+    return Limiter(
+        key_func=client_ip_key,
+        storage_uri=storage_uri,
+        strategy="fixed-window",
+        in_memory_fallback_enabled=True,
+        swallow_errors=True,
+    )
+
+
 storage_uri = _resolve_storage_uri()
 if storage_uri == "memory://":
     logger.warning("Rate limiter using in-memory storage — not distributed; set REDIS_URL in production.")
 
-limiter = Limiter(
-    key_func=client_ip_key,
-    storage_uri=storage_uri,
-    strategy="fixed-window",
-)
+limiter = _build_limiter(storage_uri)
 
 # ── Rate limit constants ─────────────────────────────────────────────────────
 CHAT_LIMIT = "30/minute"

@@ -57,3 +57,44 @@ def test_client_key_falls_back_to_remote_address():
 
     req = _fake_request({}, client_host="198.51.100.4")
     assert client_ip_key(req) == "198.51.100.4"
+
+
+def test_limiter_is_configured_to_degrade_gracefully():
+    """The production limiter must tolerate a storage outage, not crash on it.
+
+    `swallow_errors` stops a storage exception from escaping as a 500, and
+    `in_memory_fallback_enabled` keeps throttling functional per-instance while
+    the backend is down. Both are required to satisfy the regression below.
+    """
+    from middleware.rate_limiter import _build_limiter
+
+    limiter = _build_limiter("redis://127.0.0.1:6390")
+    assert limiter._in_memory_fallback_enabled is True, "in-memory fallback must be enabled"
+    assert limiter._swallow_errors is True
+
+
+def test_chat_does_not_500_when_rate_limit_backend_fails(client, session_id, mock_groq):
+    """Regression: a failing rate-limit backend 500'd every limited endpoint.
+
+    REDIS_URL points at Upstash; a TLS/network failure there raised an uncaught
+    ConnectionError before the handler ran. With graceful degradation the chat
+    request must still succeed (throttling falls back to in-memory).
+    """
+    from middleware.rate_limiter import limiter
+
+    mock_groq["json"].return_value = {"report_type": "befundbericht", "data": {}}
+    mock_groq["chat"].return_value = "Verstanden."
+
+    # Simulate the Upstash backend being unreachable on every limit check.
+    def boom(*args, **kwargs):
+        raise ConnectionError("simulated Upstash TLS failure")
+
+    original_hit = limiter.limiter.hit
+    limiter.limiter.hit = boom
+    try:
+        res = client.post(f"/sessions/{session_id}/chat", json={"message": "Befundbericht"})
+    finally:
+        limiter.limiter.hit = original_hit
+
+    assert res.status_code != 500, res.text
+    assert res.status_code == 200, res.text
