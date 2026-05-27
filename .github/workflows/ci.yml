@@ -118,7 +118,12 @@ jobs:
         working-directory: frontend
     env:
       GROQ_API_KEY: test-key-not-real
-      NEXT_PUBLIC_API_URL: http://localhost:8001
+      # No NEXT_PUBLIC_API_URL here on purpose: the app must build with its
+      # default base ("/backend-api"), which is the BFF proxy route the E2E
+      # specs mock via page.route("**/backend-api/**"). Pinning it to an
+      # absolute host (e.g. http://localhost:8001) bakes that host into the
+      # production bundle, so client requests bypass the /backend-api mocks
+      # and data-driven assertions (history, patients) time out.
       CI: true
     steps:
       - uses: actions/checkout@v4
