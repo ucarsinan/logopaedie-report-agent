@@ -10,15 +10,23 @@
 
 - **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Session focus:** CI bump — `actions/checkout`/`setup-node`/`setup-python` to v6 (Node-24-native), dropped the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env opt-in. Layered on top of the earlier demo-mode persistence fix.
+- **Session focus:** Follow-ups to the demo-mode fix surfaced by parallel code-review + repo-scan agents: centralize the `"demo_mode"` localStorage key in `useDemoMode`, reset the picker `dismissed` flag on module slug change, and extract a sibling `useOnboarding` hook for the `"logopaedie_onboarding_done"` key.
 
 ---
 
 ## Current Goal
 
-Two local commits ready to push: `ded7c1a` (demo-mode persistence fix in
-module router) and `4d1f0f6` (CI bump to v6 actions + drop the Node-24
-env opt-in). Both items are now off the `TASKS.md` "Next" column.
+Three new local commits ready to push (stacked on top of the previously
+pushed `a3ba15a`):
+
+- `129333c` — `refactor(frontend): centralize demo_mode access in useDemoMode`
+  (adds `getDemoMode`/`setDemoMode` exports, migrates `ReportModule` +
+  `LoginForm` + `useRegister` off direct `localStorage` writes, fixes
+  the fragile `window.location.search.includes("demo=true")` parse).
+- `cbf4d72` — `fix(frontend): reset dismissed picker state on module slug change`
+  (latent bug exposed by the original demo persistence fix `ded7c1a`).
+- `11540d1` — `refactor(frontend): extract useOnboarding hook from module layout`
+  (mirrors the `useDemoMode` pattern for `"logopaedie_onboarding_done"`).
 
 **M-6** (anamnesis completion logic) is still the remaining 2026-05-26
 audit item — confirm with the owner before picking it up, since the area
@@ -32,9 +40,13 @@ is owner-driven.
 main
 ```
 
-Local `main` is **2 commits ahead** of `origin/main` (`5bad1a7`):
-`ded7c1a` (demo-mode persistence) → `4d1f0f6` (CI v6 bump). Working tree
-carries only this state-file update.
+Local `main` is **3 commits ahead** of `origin/main` (`a3ba15a`):
+`129333c` (demo centralization) → `cbf4d72` (picker dismissed reset) →
+`11540d1` (useOnboarding extraction). Working tree carries only this
+state-file update plus owner-WIP in
+`frontend/src/lib/api.ts` + `frontend/src/features/report/__tests__/ReportModule.test.tsx`
+(an `ApiError` extraction with a stale-session 404 recovery test — not
+touched by this session's commits).
 
 ---
 
@@ -72,10 +84,28 @@ carries only this state-file update.
       `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag (no longer needed
       since all three majors ship Node 24 natively). YAML validated;
       `ubuntu-latest` runners auto-satisfy the v2.327.1+ requirement.
+- [x] Centralize demo-mode access in `useDemoMode` (`129333c`,
+      2026-05-28) — new `getDemoMode()` snapshot + `setDemoMode(value)`
+      setter with a same-tab `demo-mode-changed` event. `ReportModule`
+      (init read + `onDemo` setter), `LoginForm`, and `useRegister` all
+      migrated off direct `localStorage` access. Robust URL parse via
+      `URLSearchParams` replaces the fragile
+      `window.location.search.includes("demo=true")`. +7 vitest cases
+      (18 total on `useDemoMode`).
+- [x] Reset picker `dismissed` on slug change (`cbf4d72`, 2026-05-28) —
+      `ModuleContent` now clears the dismissed flag whenever `slug`
+      changes. Latent bug exposed once `ded7c1a` removed the URL-derived
+      re-evaluation; dismissing the picker on `/module/report` no
+      longer suppresses it on later `/module/*` visits.
+- [x] Extract `useOnboarding` hook (`11540d1`, 2026-05-28) — same
+      pattern as `useDemoMode` for `"logopaedie_onboarding_done"`:
+      `useSyncExternalStore`-backed hook plus `markOnboardingDone()` /
+      `resetOnboarding()` helpers. `module/layout.tsx` dropped the
+      `setTimeout(0)` + direct `localStorage` read. +5 vitest cases.
 
 ### In Progress
 
-- Nothing in progress. Two local commits pending push.
+- Nothing in progress. Three local commits pending push.
 
 ### Blocked
 
@@ -106,13 +136,14 @@ backend/tests/test_phonological_analyzer.py
 
 ```text
 Branch: main
-HEAD:   4d1f0f6 chore(ci): bump JS actions to v6 (Node-24-native)
+HEAD:   11540d1 refactor(frontend): extract useOnboarding hook from module layout
 Behind: 0
-Ahead:  2   (ded7c1a, 4d1f0f6)
+Ahead:  3   (129333c, cbf4d72, 11540d1)
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/HANDOFF.md
-  M docs/ai/TASKS.md
+  M frontend/src/features/report/__tests__/ReportModule.test.tsx   (owner WIP)
+  M frontend/src/lib/api.ts                                        (owner WIP)
 ```
 
 ---

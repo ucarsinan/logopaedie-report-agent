@@ -16,32 +16,50 @@
 
 ## Short Summary
 
-`main` is at `5bad1a7` on the remote; two local commits stacked on top:
-`ded7c1a` (demo-mode persistence fix in module router) and `4d1f0f6`
-(CI bump — JS actions to v6, Node-24-native, drop opt-in env flag). Both
-items are now off the `TASKS.md` "Next" column. The 2026-05-26 audit
-backlog is still down to **M-6** (anamnesis completion logic), blocked
-on owner-driven WIP in the anamnesis engine / phonological analyzer
-area (do not touch).
+`main` is at `a3ba15a` on the remote; three local commits stacked on
+top, all from the demo-mode follow-up work surfaced by the parallel
+code-review + repo-scan agents that ran after `ded7c1a`:
+
+- `129333c` — `refactor(frontend): centralize demo_mode access in useDemoMode`
+- `cbf4d72` — `fix(frontend): reset dismissed picker state on module slug change`
+- `11540d1` — `refactor(frontend): extract useOnboarding hook from module layout`
+
+The 2026-05-26 audit backlog is still down to **M-6** (anamnesis
+completion logic), blocked on owner-driven WIP in the anamnesis engine /
+phonological analyzer area (do not touch).
 
 ---
 
-Bumped the three JS-based actions in `.github/workflows/ci.yml` to v6
-(`actions/checkout@v4→v6`, `actions/setup-node@v4→v6`,
-`actions/setup-python@v5→v6`) and removed the
-`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag + its comment block.
-YAML validated locally. Two parallel agents (repo audit + v5→v6
-changelog review) confirmed (a) no other stale action pins or Node-20
-references in the repo, and (b) no breaking changes between v4/v5 and v6
-affect our specific usage (parameterless checkout; explicit `cache:` +
-`cache-dependency-path:` on setup-node and setup-python). Real CI
-verification pending push.
+## Last Action
 
-Prior step in the same session: `ded7c1a` swapped the inline
-`searchParams.get("demo") === "true"` check in
-`frontend/src/app/module/[slug]/page.tsx` for the shared `useDemoMode()`
-hook (URL **or** persisted localStorage). `tsc --noEmit` clean,
-`vitest run` 146/146 green.
+Three follow-ups, in order:
+
+1. **Centralized `"demo_mode"` access.** Added `getDemoMode()` (one-shot
+   snapshot, robust `URLSearchParams` parse — no more
+   `window.location.search.includes("demo=true")` matching `?xdemo=true`)
+   and `setDemoMode(value)` (writes + dispatches a same-tab
+   `demo-mode-changed` event so `useSyncExternalStore` consumers like
+   `DemoBanner` re-render). Migrated four call sites:
+   `features/report/ReportModule.tsx` (init read + `onDemo` setter),
+   `features/auth/components/LoginForm.tsx`, and
+   `features/auth/hooks/useRegister.ts`. +7 vitest cases on the hook.
+2. **Reset `dismissed` on slug change.** `ModuleContent` in
+   `app/module/[slug]/page.tsx` now calls
+   `useEffect(() => setDismissed(false), [slug])`. Latent issue exposed
+   by `ded7c1a` because the localStorage-backed `isDemo` no longer
+   re-evaluates on URL change.
+3. **Extracted `useOnboarding` hook.** Same shape as `useDemoMode`:
+   `useSyncExternalStore`-backed reactive hook + `markOnboardingDone()`
+   / `resetOnboarding()` helpers + same-tab `onboarding-changed` event.
+   `module/layout.tsx` dropped the `setTimeout(0)` workaround.
+   +5 vitest cases.
+
+`tsc --noEmit` clean across all three. Full vitest suite has 1
+unrelated failure in
+`features/report/__tests__/ReportModule.test.tsx > recovers from a
+stale-session 404 ...` — that test is owner WIP (depends on an unmerged
+`ApiError` extraction in `frontend/src/lib/api.ts`) and is left in the
+working tree for the owner to commit.
 
 ---
 
@@ -66,8 +84,18 @@ hook (URL **or** persisted localStorage). `tsc --noEmit` clean,
 | `docs/ai/CURRENT.md` | modified | this state-file sync |
 | `docs/ai/TASKS.md` | modified | this state-file sync |
 | `docs/ai/HANDOFF.md` | modified | this file |
-| `frontend/src/app/module/[slug]/page.tsx` | modified → committed (`ded7c1a`) | demo-mode persistence fix — swap URL-only check for `useDemoMode()` hook |
+| `frontend/src/app/module/[slug]/page.tsx` | modified → committed (`ded7c1a`, then `cbf4d72`) | demo-mode persistence fix; dismissed reset on slug change |
 | `.github/workflows/ci.yml` | modified → committed (`4d1f0f6`) | v6 action bump + drop `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag |
+| `frontend/src/hooks/useDemoMode.ts` | modified → committed (`129333c`) | added `getDemoMode` + `setDemoMode` exports, same-tab event dispatch |
+| `frontend/src/hooks/__tests__/useDemoMode.test.ts` | modified → committed (`129333c`) | +7 cases (11 → 18) |
+| `frontend/src/features/report/ReportModule.tsx` | modified → committed (`129333c`) | init read via `getDemoMode`, `onDemo` via `setDemoMode` |
+| `frontend/src/features/auth/components/LoginForm.tsx` | modified → committed (`129333c`) | clear via `setDemoMode(false)` |
+| `frontend/src/features/auth/hooks/useRegister.ts` | modified → committed (`129333c`) | clear via `setDemoMode(false)` |
+| `frontend/src/hooks/useOnboarding.ts` | added → committed (`11540d1`) | new hook + `markOnboardingDone` + `resetOnboarding` |
+| `frontend/src/hooks/__tests__/useOnboarding.test.ts` | added → committed (`11540d1`) | 5 cases |
+| `frontend/src/app/module/layout.tsx` | modified → committed (`11540d1`) | use the hook + helper instead of direct `localStorage` calls |
+| `frontend/src/lib/api.ts` | modified (uncommitted) | **owner WIP** — `ApiError` class extraction |
+| `frontend/src/features/report/__tests__/ReportModule.test.tsx` | modified (uncommitted) | **owner WIP** — stale-session 404 recovery test depending on `ApiError` |
 
 Plus three local branches deleted (`claude-security-fixes`,
 `feat/anamnese-slot-flow`, `security-audit-followup`) and the obsolete
@@ -92,6 +120,14 @@ Plus three local branches deleted (`claude-security-fixes`,
   `backend/tests/test_phonological_analyzer.py` — do **not** stage, commit,
   or modify these. They were untouched by every agent commit today and
   must remain so.
+- **Additional uncommitted owner WIP** in `frontend/src/lib/api.ts`
+  (adds an `ApiError` class) and
+  `frontend/src/features/report/__tests__/ReportModule.test.tsx`
+  (adds a stale-session 404 recovery test that depends on `ApiError`).
+  Surfaced mid-session; `129333c` was isolated so it does not bundle
+  this WIP. One vitest case currently fails because the matching
+  production-code change in `ReportModule.tsx` was not in the working
+  tree at commit time — owner is the one to land the full extraction.
 - **NEXT_PUBLIC_API_URL trap**: don't reintroduce an absolute host value in
   the frontend-e2e CI job — see the comment block in `.github/workflows/ci.yml`.
   It is baked into the production bundle at `npm run build` and breaks the
@@ -119,11 +155,16 @@ Plus three local branches deleted (`claude-security-fixes`,
 
 ## Next Concrete Action
 
-Push the two local commits (`ded7c1a` + `4d1f0f6`) to `origin/main`
-(`git push`). After that, wait for the owner's anamnesis WIP to settle
-or pick the next agent-safe item from `TASKS.md` "Next" column (UI
-loading skeletons, PDF export quality, or backend test coverage for
-therapy-plan / SOAP / compare — none touch the anamnesis files).
+Push the three local commits (`129333c` + `cbf4d72` + `11540d1`) to
+`origin/main` (`git push`). Decide separately how to land the
+uncommitted `ApiError`-extraction WIP in `frontend/src/lib/api.ts` +
+`features/report/__tests__/ReportModule.test.tsx` — the failing
+stale-session 404 test will turn green once the matching production-code
+change is reintroduced into `ReportModule.tsx`. After that, wait for
+the owner's anamnesis WIP to settle or pick the next agent-safe item
+from `TASKS.md` "Next" column (UI loading skeletons, PDF export quality,
+or backend test coverage for therapy-plan / SOAP / compare — none touch
+the anamnesis files).
 
 ---
 
@@ -132,11 +173,15 @@ therapy-plan / SOAP / compare — none touch the anamnesis files).
 ```text
 Read docs/ai/HANDOFF.md, docs/ai/CURRENT.md, and docs/ai/PROJECT.md first.
 
-Current situation: main is at 5bad1a7, fully in sync with origin/main,
-working tree clean. The 2026-05-26 audit backlog is down to M-6
+Current situation: main is 3 commits ahead of origin/main (a3ba15a) —
+129333c, cbf4d72, 11540d1 — all frontend follow-ups to the demo-mode
+persistence fix. The 2026-05-26 audit backlog is down to M-6
 (anamnesis completion logic). M-6 is blocked on owner WIP in
 backend/services/anamnesis_engine.py + phonological_analyzer.py — do NOT
-touch those files until I tell you the WIP is settled.
+touch those files until I tell you the WIP is settled. Also leave the
+uncommitted `ApiError` extraction in `frontend/src/lib/api.ts` +
+`features/report/__tests__/ReportModule.test.tsx` alone until handed
+over.
 
 Your task: <one of>
   (a) wait for me to hand off M-6 and confirm WIP is clear;
