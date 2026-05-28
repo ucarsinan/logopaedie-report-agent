@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -70,6 +70,10 @@ function ModuleContent({ slug }: { slug: string }) {
   const patientId = searchParams.get("patient");
   const { isDemo } = useDemoMode();
   const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    setDismissed(false);
+  }, [slug]);
 
   const showPicker =
     PATIENT_REQUIRED_SLUGS.has(slug) && !patientId && !isDemo && !dismissed;
