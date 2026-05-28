@@ -69,6 +69,35 @@ class TestAnalyzeText:
         assert result.recommended_focus == []
 
     @pytest.mark.asyncio
+    async def test_llm_returns_null_age_appropriate(self):
+        # Regression: when no child_age is provided, the LLM may emit
+        # `"age_appropriate": null` rather than omitting the key. The previous
+        # code (`data.get("age_appropriate", True)`) only defaulted on a
+        # missing key, so the None reached Pydantic and raised 500.
+        groq = MagicMock()
+        groq.json_completion = AsyncMock(
+            return_value={
+                "items": [
+                    {
+                        "target_word": "fisch",
+                        "production": "fis",
+                        "processes": [],
+                        "severity": "leicht",
+                    }
+                ],
+                "summary": "Ohne Altersangabe nicht abschließend beurteilbar.",
+                "age_appropriate": None,
+                "recommended_focus": [],
+            }
+        )
+        analyzer = PhonologicalAnalyzer(groq)
+
+        result = await analyzer.analyze(word_pairs=[{"target": "fisch", "production": "fis"}])
+
+        assert isinstance(result, PhonologicalAnalysis)
+        assert result.age_appropriate is True
+
+    @pytest.mark.asyncio
     async def test_severity_defaults(self):
         groq = MagicMock()
         groq.json_completion = AsyncMock(

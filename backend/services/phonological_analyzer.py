@@ -115,6 +115,13 @@ class PhonologicalAnalyzer:
 
         data = await self._groq.json_completion(messages, _SYSTEM_PROMPT)
 
+        # LLM may emit `"age_appropriate": null` when no child_age was provided
+        # (the prompt asks for conservative behaviour). `dict.get(..., True)`
+        # only defaults on a missing key, not on a present-but-None value, so
+        # the None would reach Pydantic's `bool` field and raise a 500.
+        raw_age = data.get("age_appropriate")
+        age_appropriate = raw_age if isinstance(raw_age, bool) else True
+
         return PhonologicalAnalysis(
             items=[
                 PhonologicalProcess(
@@ -126,7 +133,7 @@ class PhonologicalAnalyzer:
                 for item in data.get("items", [])
             ],
             summary=data.get("summary", ""),
-            age_appropriate=data.get("age_appropriate", True),
+            age_appropriate=age_appropriate,
             recommended_focus=data.get("recommended_focus", []),
         )
 
