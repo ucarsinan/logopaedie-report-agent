@@ -10,17 +10,26 @@
 
 - **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Session focus:** Audit follow-up — CI green-up, docs sync, Node 24 prep, AI state-file refresh
+- **Session focus:** Anamnesis pseudonym-verbatim rule + SSR/CSR hydration fix in useDemoMode
 
 ---
 
 ## Current Goal
 
-No active agent-driven feature work. The owner (Sinan) is currently iterating
-on the anamnesis flow himself (uncommitted WIP in
-`backend/services/anamnesis_engine.py` and
-`backend/services/phonological_analyzer.py` plus its test). Agents must NOT
-touch those files until that work is settled.
+No active agent-driven feature work. Two small fixes landed this session
+on local `main` (not yet pushed):
+
+- `feat(anamnesis): accept free-form pseudonyms verbatim` (`8879cad`) —
+  both anamnesis and therapy-plan prompts now accept short/free-form
+  pseudonyms (e.g. `ji`, `X`, `AB`) without re-asking. Pure prompt
+  change, no Python logic, all 383 backend tests green.
+- `fix(frontend): avoid SSR/CSR mismatch in useDemoMode` (`92bb84a`) —
+  `localStorage` read moved out of the render body into `useEffect`,
+  initial state `false`. 11/11 hook tests green.
+
+**M-6** (anamnesis completion logic) is still the remaining 2026-05-26
+audit item — confirm with the owner before picking it up, since the area
+is owner-driven.
 
 ---
 
@@ -30,9 +39,9 @@ touch those files until that work is settled.
 main
 ```
 
-`main` is at `9119077` (the last of three PRs that landed today). The local
-working tree carries the owner's WIP files (above) — those are not agent
-work and must not be staged or committed by an agent.
+Local `main` is **3 commits ahead** of `origin/main`:
+`8879cad` (anamnesis pseudonym verbatim) → `92bb84a` (useDemoMode SSR
+fix) → this state-file refresh. Working tree is clean.
 
 ---
 
@@ -50,12 +59,14 @@ work and must not be staged or committed by an agent.
       (`claude-security-fixes`, `feat/anamnese-slot-flow`,
       `security-audit-followup`) and the now-obsolete
       `project_security_quarantine_branch.md` memory entry.
+- [x] Anamnesis pseudonym verbatim rule (`8879cad`, 2026-05-28) —
+      both system + extraction prompts in `anamnesis_engine.py`.
+- [x] useDemoMode SSR/CSR hydration fix (`92bb84a`, 2026-05-28).
 
 ### In Progress
 
-- Owner-driven: anamnesis engine + phonological analyzer iterations
-  (uncommitted on local `main`). Agent-facing scope is paused on this area
-  until those files settle.
+- Nothing in progress. `main` carries three unpushed commits ready for
+  `git push`.
 
 ### Blocked
 
@@ -86,13 +97,10 @@ backend/tests/test_phonological_analyzer.py
 
 ```text
 Branch: main
-HEAD:   9119077 chore(ci): opt JS actions into Node.js 24 ahead of 2026-06-02 cutover (#6)
+HEAD:   92bb84a fix(frontend): avoid SSR/CSR mismatch in useDemoMode
 Behind: 0
-Ahead:  0
-Uncommitted (owner WIP, do not touch):
-  M backend/services/anamnesis_engine.py
-  M backend/services/phonological_analyzer.py
-  M backend/tests/test_phonological_analyzer.py
+Ahead:  3   (8879cad, 92bb84a, plus this CURRENT.md refresh)
+Uncommitted: none
 ```
 
 ---
