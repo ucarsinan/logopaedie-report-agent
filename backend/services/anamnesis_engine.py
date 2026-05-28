@@ -112,6 +112,17 @@ Passe die Fragen an das Störungsbild und die Altersgruppe an:
 Fasse alle gesammelten Informationen zusammen und bitte um Bestätigung
 oder Korrekturen. Frage, ob noch etwas ergänzt werden soll.
 
+## Regel für das Pseudonym
+Das Pseudonym ist ein beliebiger String, den die Therapeut:in frei wählt — beliebige
+Initialen, Kürzel, Codewörter, Zahlen oder Kombinationen davon. Übernimm die Eingabe
+**wörtlich** als Pseudonym. Niemals Eindeutigkeit, Länge, Format, Plausibilität oder
+Realismus prüfen oder anzweifeln. Auch 1–3 Zeichen (z. B. „X", „AB", „ji", „ok",
+„rew") sind gültige Pseudonyme — akzeptiere sie ohne Rückfrage.
+
+Nur dann nach Klärung fragen, wenn die Eingabe **leer** ist oder offenkundig keine
+Antwort auf die Frage darstellt (z. B. eine Gegenfrage der Therapeut:in). Frage
+niemals wegen „zu kurz", „nicht eindeutig" oder ähnlicher Format-Bedenken nach.
+
 ## Wichtige Regeln
 - **NIEMALS interne Feldnamen oder technische Bezeichner in Antworten zeigen.**
   Verboten sind u.a.: `age_group`, `report_type`, `patient_pseudonym`,
@@ -126,8 +137,9 @@ oder Korrekturen. Frage, ob noch etwas ergänzt werden soll.
   erkenne das und überspringe bereits beantwortete Fragen
 - Frage nie nach Feldern, die bereits erfasst sind
 - Gib am Ende jeder Nachricht KEINE JSON-Ausgabe – antworte rein im Gesprächston
-- Erfinde NIEMALS Informationen, Namen, Diagnosen oder Befunde.
-- Wenn du etwas nicht weißt: frage nach. Niemals raten oder interpolieren.
+- Erfinde NIEMALS klinische Informationen wie Diagnosen, Anamnese-Details
+  oder Befunde. (Diese Regel gilt nicht für das Pseudonym — siehe oben.)
+- Wenn ein klinisches Feld unklar ist: frage nach. Niemals raten oder interpolieren.
 - Wenn du Auswahloptionen anbietest, schreibe sie IMMER auf eine einzige Zeile direkt nach der Frage, im Format: – Option1 – Option2 – Option3
 
 ## Vorhandene Unterlagen
@@ -153,7 +165,7 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt mit diesen Feldern:
   "report_type": "<befundbericht|therapiebericht_kurz|therapiebericht_lang|abschlussbericht|null>",
   "collected_fields": ["<liste der bereits erfassten felder>"],
   "data": {{
-    "patient_pseudonym": "<string oder null>",
+    "patient_pseudonym": "<beliebiger String wörtlich aus der Antwort der Therapeut:in auf die Pseudonym-Frage; auch sehr kurz (1–3 Zeichen) gültig; null nur wenn das Gespräch noch keinen User-Turn zum Pseudonym enthält>",
     "age_group": "<kind|jugendlich|erwachsen|null>",
     "gender": "<string oder null>",
     "indikationsschluessel": "<z.B. SP1, ST2, SC1 oder null>",
@@ -185,6 +197,12 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt mit diesen Feldern:
 
 Setze Felder auf null wenn sie im Gespräch nicht erwähnt wurden.
 Erfinde KEINE Informationen – extrahiere nur was tatsächlich gesagt wurde.
+
+Regel für patient_pseudonym: Wenn die Therapeut:in irgendetwas als Antwort auf die
+Pseudonym-Frage gibt, übernimm es **wörtlich** als patient_pseudonym — auch sehr
+kurze Strings wie „ji", „ok", „X", „AB". Keine Format-, Längen- oder
+Eindeutigkeitsprüfung. Diese Verbatim-Regel gilt nur für patient_pseudonym, nicht
+für die anderen Felder.
 """
 
 
@@ -236,10 +254,23 @@ Sammle diese 4 Informationen (in dieser Reihenfolge, falls noch nicht vorhanden)
 Sobald alle 4 Felder gesammelt sind, fasse kurz zusammen und erkläre,
 dass der Therapieplan jetzt generiert werden kann.
 
+## Regel für das Pseudonym
+Das Pseudonym ist ein beliebiger String, den die Therapeut:in frei wählt — beliebige
+Initialen, Kürzel, Codewörter, Zahlen oder Kombinationen davon. Übernimm die Eingabe
+**wörtlich** als Pseudonym. Niemals Eindeutigkeit, Länge, Format, Plausibilität oder
+Realismus prüfen oder anzweifeln. Auch 1–3 Zeichen (z. B. „X", „AB", „ji", „ok",
+„rew") sind gültige Pseudonyme — akzeptiere sie ohne Rückfrage.
+
+Nur dann nach Klärung fragen, wenn die Eingabe **leer** ist oder offenkundig keine
+Antwort auf die Frage darstellt (z. B. eine Gegenfrage der Therapeut:in). Frage
+niemals wegen „zu kurz", „nicht eindeutig" oder ähnlicher Format-Bedenken nach.
+
 ## Aktueller Stand
 Bereits erfasst: {collected_fields}
 Noch fehlend: {missing_fields}
-- Erfinde NIEMALS Informationen. Wenn ein Feld unklar ist: frage konkret nach.
+- Erfinde NIEMALS Informationen zu Diagnose, Anamnese oder Befunden. Wenn ein
+  klinisches Feld unklar ist: frage konkret nach. (Diese Regel gilt nicht für das
+  Pseudonym — siehe oben.)
 """
 
 _THERAPY_PLAN_EXTRACTION_PROMPT = """\
@@ -250,7 +281,7 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt:
   "is_complete": <true wenn alle 4 Felder vorhanden, sonst false>,
   "collected_fields": ["<liste der erfassten felder>"],
   "data": {{
-    "patient_pseudonym": "<string oder null>",
+    "patient_pseudonym": "<beliebiger String wörtlich aus der Antwort der Therapeut:in auf die Pseudonym-Frage; auch sehr kurz (1–3 Zeichen) gültig; null nur wenn das Gespräch noch keinen User-Turn nach dem Greeting enthält>",
     "age_group": "<kind|jugendlich|erwachsen|null>",
     "diagnose_text": "<Diagnose/Störungsbild oder null>",
     "hauptproblematik": "<aktuelle Situation/Hauptproblematik oder null>"
@@ -259,6 +290,12 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt:
 
 Setze Felder auf null wenn nicht im Gespräch erwähnt.
 Erfinde KEINE Informationen.
+
+Regel für patient_pseudonym: Wenn die Therapeut:in irgendetwas als Antwort auf die
+Pseudonym-Frage gibt, übernimm es **wörtlich** als patient_pseudonym — auch sehr
+kurze Strings wie „ji", „ok", „X", „AB". Keine Format-, Längen- oder
+Eindeutigkeitsprüfung. Diese Verbatim-Regel gilt nur für patient_pseudonym, nicht
+für die anderen Felder.
 """
 
 _REQUIRED_FIELDS_THERAPY_PLAN = ["patient_pseudonym", "age_group", "diagnose_text", "hauptproblematik"]
