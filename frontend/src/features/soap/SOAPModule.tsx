@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { isStaleSessionError } from "@/lib/stale-session";
 import { useSession } from "@/providers/SessionProvider";
+import { Skeleton, SkeletonSection } from "@/components/Skeleton";
 import { REPORT_TYPE_LABELS } from "@/types";
 import type { SOAPNote, ReportSummary } from "@/types";
 
@@ -213,9 +214,32 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card">
-          <div className="h-5 w-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-muted-foreground">SOAP-Notiz wird generiert...</span>
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="SOAP-Notiz wird generiert"
+          data-testid="soap-generating-skeleton"
+          className="flex flex-col gap-4"
+        >
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+          {SOAP_SECTIONS.map(({ key }) => (
+            <section
+              key={key}
+              className="flex flex-col gap-2 p-4 rounded-lg border border-border bg-card"
+            >
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-3 w-2/3" />
+              <div className="mt-2">
+                <SkeletonSection
+                  headingWidth="w-1/5"
+                  lineWidths={["w-full", "w-11/12", "w-3/4"]}
+                />
+              </div>
+            </section>
+          ))}
         </div>
       )}
 

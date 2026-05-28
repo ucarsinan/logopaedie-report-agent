@@ -13,6 +13,7 @@ import type { ChatMsg, ReportSummary, TherapyPlanSummary } from "@/types";
 import type { TherapyPlanData } from "@/types/therapy-plan";
 import { WorkflowStepper } from "@/components/WorkflowStepper";
 import type { StepConfig } from "@/components/WorkflowStepper";
+import { Skeleton, SkeletonSection } from "@/components/Skeleton";
 
 type TpMode = "select" | "chat" | "from-report" | "generating" | "plan";
 
@@ -375,9 +376,50 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
 
       {/* Generating mode */}
       {tpMode === "generating" && (
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <div className="w-4 h-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-          Therapieplan wird generiert…
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Therapieplan wird generiert"
+          data-testid="therapy-plan-generating-skeleton"
+          className="flex flex-col gap-4"
+        >
+          <p className="text-sm text-muted-foreground">Therapieplan wird generiert…</p>
+
+          <div className="rounded-lg border border-border overflow-hidden divide-y divide-border">
+            <div className="flex flex-col gap-2 bg-surface px-6 py-4">
+              <Skeleton className="h-5 w-2/5" />
+              <Skeleton className="h-3 w-3/4" />
+              <div className="flex gap-4 mt-1">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            </div>
+
+            {[0, 1].map((pi) => (
+              <div key={pi} className="flex flex-col gap-4 bg-surface/60 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+                {[0, 1].map((gi) => (
+                  <div
+                    key={gi}
+                    className="flex flex-col gap-3 rounded-lg bg-surface-elevated/50 p-4"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Skeleton className="h-4 w-14 shrink-0" />
+                      <div className="flex-1">
+                        <SkeletonSection
+                          headingWidth="w-5/6"
+                          lineWidths={["w-3/4", "w-2/3"]}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -113,6 +113,30 @@ describe("SOAPModule", () => {
     });
   });
 
+  it("shows a layout-aware skeleton while generation is pending and swaps to the real content once it resolves", async () => {
+    let resolveGenerate: (value: typeof mockSOAPNote) => void = () => {};
+    const pending = new Promise<typeof mockSOAPNote>((res) => {
+      resolveGenerate = res;
+    });
+    vi.mocked(api.soap.generate).mockReturnValue(
+      pending as unknown as ReturnType<typeof api.soap.generate>,
+    );
+
+    render(<SOAPModule sessionId="abc123def456" />);
+    fireEvent.click(screen.getByText(/SOAP-Notiz generieren/i));
+
+    const skeleton = await screen.findByTestId("soap-generating-skeleton");
+    expect(skeleton).toBeInTheDocument();
+    expect(screen.queryByText("SOAP-Notiz")).not.toBeInTheDocument();
+
+    resolveGenerate(mockSOAPNote);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("soap-generating-skeleton")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("SOAP-Notiz")).toBeInTheDocument();
+  });
+
   it("recovers from a stale-session 404 on soap.generate by invoking the provider's handleStaleSession", async () => {
     // Backend signals the session no longer exists; component must NOT show a
     // plain error toast — it must delegate to the provider's recovery path.

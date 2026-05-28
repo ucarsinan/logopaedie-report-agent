@@ -1,10 +1,12 @@
+import { Skeleton, SkeletonSection } from "@/components/Skeleton";
+
 export function GeneratingView() {
   return (
     <div
-      className="flex flex-col gap-6"
       role="status"
       aria-live="polite"
       aria-label="Bericht wird generiert"
+      className="flex flex-col gap-6"
     >
       <div className="flex flex-col items-center gap-1.5 text-center">
         <p className="text-sm font-medium text-foreground">
@@ -15,19 +17,33 @@ export function GeneratingView() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 motion-reduce:[&_*]:animate-none">
-        <div className="h-5 w-2/5 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-5/6 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+      <div
+        data-testid="report-generating-skeleton"
+        className="overflow-hidden rounded-lg border border-border divide-y divide-border"
+      >
+        <div className="flex items-center justify-between gap-4 bg-surface px-6 py-4">
+          <Skeleton className="h-5 w-2/5" />
+          <Skeleton className="h-3 w-20" />
+        </div>
 
-        <div className="mt-3 h-4 w-1/3 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-full animate-pulse rounded bg-muted" />
-        <div className="h-3 w-11/12 animate-pulse rounded bg-muted" />
-
-        <div className="mt-3 h-4 w-1/4 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-4/5 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-3/5 animate-pulse rounded bg-muted" />
+        <div className="flex flex-col gap-6 bg-card px-6 py-5">
+          <SkeletonSection
+            headingWidth="w-1/4"
+            lineWidths={["w-3/4", "w-2/3"]}
+          />
+          <SkeletonSection
+            headingWidth="w-1/5"
+            lineWidths={["w-5/6", "w-3/5"]}
+          />
+          <SkeletonSection
+            headingWidth="w-1/3"
+            lineWidths={["w-full", "w-11/12", "w-4/5", "w-3/4"]}
+          />
+          <SkeletonSection
+            headingWidth="w-1/4"
+            lineWidths={["w-full", "w-5/6", "w-2/3"]}
+          />
+        </div>
       </div>
     </div>
   );
