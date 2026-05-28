@@ -10,22 +10,16 @@
 
 - **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Session focus:** Anamnesis pseudonym-verbatim rule + SSR/CSR hydration fix in useDemoMode
+- **Session focus:** Demo-mode persistence bug — patient picker re-appeared on `/module/*` after activating demo mode, because the page only checked `?demo=true` in the URL, not the persisted `useDemoMode()` state.
 
 ---
 
 ## Current Goal
 
-No active agent-driven feature work. Two small fixes landed this session
-on local `main` (not yet pushed):
-
-- `feat(anamnesis): accept free-form pseudonyms verbatim` (`8879cad`) —
-  both anamnesis and therapy-plan prompts now accept short/free-form
-  pseudonyms (e.g. `ji`, `X`, `AB`) without re-asking. Pure prompt
-  change, no Python logic, all 383 backend tests green.
-- `fix(frontend): avoid SSR/CSR mismatch in useDemoMode` (`92bb84a`) —
-  `localStorage` read moved out of the render body into `useEffect`,
-  initial state `false`. 11/11 hook tests green.
+Small bug fix landed locally on `main` (not yet pushed): module router
+now uses the shared `useDemoMode()` hook instead of reading the demo
+query param directly, so the patient picker stays dismissed across
+in-app navigation once demo mode is active.
 
 **M-6** (anamnesis completion logic) is still the remaining 2026-05-26
 audit item — confirm with the owner before picking it up, since the area
@@ -39,11 +33,11 @@ is owner-driven.
 main
 ```
 
-Local `main` is **5 commits ahead** of `origin/main`:
-`8879cad` (anamnesis pseudonym verbatim) → `92bb84a` (useDemoMode SSR
-fix) → `7258e27` (this state-file refresh) → `f326f95`
-(useSyncExternalStore refactor) → `02b5be0` (vercel.json noindex header
-moved into next.config.ts). Working tree is clean.
+Local `main` is **1 commit ahead** of `origin/main` (`5bad1a7`) once the
+demo-picker fix is committed. The previous batch of six commits
+(`8879cad`, `92bb84a`, `7258e27`, `f326f95`, `02b5be0`, `5bad1a7`) is on
+the remote. Working tree carries the pending demo fix + this state-file
+update.
 
 ---
 
@@ -69,11 +63,17 @@ moved into next.config.ts). Working tree is clean.
 - [x] Move preview noindex header out of `vercel.json` into
       `next.config.ts` (`02b5be0`, 2026-05-28) — vercel.json schema
       rejected `has.type: "env"`.
+- [x] Demo-mode persistence in module router (2026-05-28) —
+      `frontend/src/app/module/[slug]/page.tsx` now reads `isDemo` from
+      the shared `useDemoMode()` hook (URL **or** persisted localStorage)
+      instead of the URL-only `searchParams.get("demo")`. Fixes the
+      regression where the patient picker re-appeared after navigating
+      between `/module/*` slugs even though demo mode was active.
+      `tsc` clean, all 146 vitest tests green.
 
 ### In Progress
 
-- Nothing in progress. `main` carries five unpushed commits ready for
-  `git push`.
+- Nothing in progress. One local commit pending push.
 
 ### Blocked
 
@@ -104,10 +104,13 @@ backend/tests/test_phonological_analyzer.py
 
 ```text
 Branch: main
-HEAD:   02b5be0 fix(config): move preview noindex header out of vercel.json
+HEAD:   5bad1a7 docs(ai): refresh CURRENT.md to reflect 5 unpushed commits
 Behind: 0
-Ahead:  5   (8879cad, 92bb84a, 7258e27, f326f95, 02b5be0)
-Uncommitted: none
+Ahead:  0 → becomes 1 after the pending demo-fix commit
+Uncommitted:
+  M docs/ai/CURRENT.md
+  M docs/ai/HANDOFF.md
+  M frontend/src/app/module/[slug]/page.tsx
 ```
 
 ---

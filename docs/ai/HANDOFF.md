@@ -16,19 +16,25 @@
 
 ## Short Summary
 
-`main` is at `9119077`, working tree clean except for owner-driven WIP on
-the anamnesis engine / phonological analyzer (do not touch). Today's session
-landed three PRs and cleaned up repo + memory state. The 2026-05-26 audit
-backlog is now down to **M-6** (anamnesis completion logic), which is
-blocked on the in-progress owner work.
+`main` is at `5bad1a7` on the remote; one local fix is committed on top
+(see "Last Action"). Today's session fixed a demo-mode persistence bug
+in `frontend/src/app/module/[slug]/page.tsx`: the module router checked
+the URL only and ignored the `useDemoMode()` localStorage state, so the
+patient picker re-appeared after every in-app navigation. The 2026-05-26
+audit backlog is still down to **M-6** (anamnesis completion logic),
+blocked on owner-driven WIP in the anamnesis engine / phonological
+analyzer area (do not touch).
 
 ---
 
 ## Last Action
 
-Squash-merged PR #6 (`chore(ci): opt JS actions into Node.js 24 ahead of 2026-06-02 cutover`)
-into `main`, then synced these three state files
-(`CURRENT.md` / `TASKS.md` / `HANDOFF.md`) to reflect the day's work.
+Replaced the inline `searchParams.get("demo") === "true"` check in
+`frontend/src/app/module/[slug]/page.tsx` with the shared
+`useDemoMode()` hook (URL **or** persisted localStorage). Verified with
+`tsc --noEmit` (clean) and `vitest run` (146/146 green, including the 11
+existing `useDemoMode` tests). UI confirmation requires manual browser
+testing — the agent has no browser tool.
 
 ---
 
@@ -53,6 +59,7 @@ into `main`, then synced these three state files
 | `docs/ai/CURRENT.md` | modified | this state-file sync |
 | `docs/ai/TASKS.md` | modified | this state-file sync |
 | `docs/ai/HANDOFF.md` | modified | this file |
+| `frontend/src/app/module/[slug]/page.tsx` | modified | demo-mode persistence fix — swap URL-only check for `useDemoMode()` hook |
 
 Plus three local branches deleted (`claude-security-fixes`,
 `feat/anamnese-slot-flow`, `security-audit-followup`) and the obsolete
@@ -106,15 +113,11 @@ Plus three local branches deleted (`claude-security-fixes`,
 
 ## Next Concrete Action
 
-Wait for the owner's anamnesis WIP to settle (either get committed or
-explicitly handed over). Once unblocked, pick up **M-6** — see
-`docs/ai/AUDIT_2026-05-26.md` for the original audit framing, and the
-`TASKS.md` "Next" column for ordered priorities.
-
-If you proactively want to work without touching the WIP area, the next
-agent-safe items in `TASKS.md` are: UI loading skeletons for report
-generation, PDF export quality, or backend test coverage for therapy-plan
-/ SOAP / compare.
+Push the local demo-fix commit to `origin/main` (`git push`). After
+that, wait for the owner's anamnesis WIP to settle or pick the next
+agent-safe item from `TASKS.md` "Next" column (UI loading skeletons,
+PDF export quality, or backend test coverage for therapy-plan / SOAP /
+compare — none touch the anamnesis files).
 
 ---
 
@@ -123,8 +126,9 @@ generation, PDF export quality, or backend test coverage for therapy-plan
 ```text
 Read docs/ai/HANDOFF.md, docs/ai/CURRENT.md, and docs/ai/PROJECT.md first.
 
-Current situation: main is at 9119077 and the 2026-05-26 audit backlog is
-down to M-6 (anamnesis completion logic). M-6 is blocked on owner WIP in
+Current situation: main is at 5bad1a7, fully in sync with origin/main,
+working tree clean. The 2026-05-26 audit backlog is down to M-6
+(anamnesis completion logic). M-6 is blocked on owner WIP in
 backend/services/anamnesis_engine.py + phonological_analyzer.py — do NOT
 touch those files until I tell you the WIP is settled.
 

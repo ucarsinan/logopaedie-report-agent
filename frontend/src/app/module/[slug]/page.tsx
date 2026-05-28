@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useSession } from "@/providers/SessionProvider";
+import { useDemoMode } from "@/hooks/useDemoMode";
 import { PatientPickerModal } from "@/features/patients/PatientPickerModal";
 import { ReportModule } from "@/features/report/ReportModule";
 import { PhonologyModule } from "@/features/phonology/PhonologyModule";
@@ -67,7 +68,7 @@ function ModuleContent({ slug }: { slug: string }) {
   const searchParams = useSearchParams();
 
   const patientId = searchParams.get("patient");
-  const isDemo = searchParams.get("demo") === "true";
+  const { isDemo } = useDemoMode();
   const [dismissed, setDismissed] = useState(false);
 
   const showPicker =
