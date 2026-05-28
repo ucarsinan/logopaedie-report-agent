@@ -8,11 +8,13 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { AppShell } from "@/components/AppShell";
 import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { PatientContextBar } from "@/features/patients/PatientContextBar";
+import { useOnboarding, markOnboardingDone } from "@/hooks/useOnboarding";
 
 function ModuleShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const patientId = searchParams.get("patient");
   const { isSending, error, handleSoftReset, handleFullReset } = useSession();
+  const { isDone: onboardingDone } = useOnboarding();
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -23,11 +25,8 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setShowOnboarding(!localStorage.getItem("logopaedie_onboarding_done"));
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+    if (!onboardingDone) setShowOnboarding(true);
+  }, [onboardingDone]);
 
   const helpButton = (
     <button
@@ -58,7 +57,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
       {showOnboarding && (
         <OnboardingOverlay
           onComplete={() => {
-            localStorage.setItem("logopaedie_onboarding_done", "true");
+            markOnboardingDone();
             setShowOnboarding(false);
           }}
         />
