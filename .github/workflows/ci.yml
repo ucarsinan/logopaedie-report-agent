@@ -10,6 +10,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Opt JavaScript-based actions (actions/checkout@v4, actions/setup-node@v4, ...)
+# into the Node.js 24 runtime before GitHub forces it on 2026-06-02. See the
+# deprecation notice at:
+#   https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+# Once those actions are bumped to versions that ship Node 24 natively, this
+# variable becomes a no-op and can be removed.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   backend-lint:
     name: Backend Lint
