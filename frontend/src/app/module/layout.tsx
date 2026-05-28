@@ -16,7 +16,11 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
   const { isSending, error, handleSoftReset, handleFullReset } = useSession();
   const { isDone: onboardingDone } = useOnboarding();
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [overlayIntent, setOverlayIntent] = useState<"auto" | "manual" | "hidden">("auto");
+
+  const showOnboarding =
+    overlayIntent === "manual" ||
+    (overlayIntent === "auto" && !onboardingDone);
 
   useEffect(() => {
     const handler = () => setIsResetDialogOpen(true);
@@ -24,13 +28,9 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("request-reset", handler);
   }, []);
 
-  useEffect(() => {
-    if (!onboardingDone) setShowOnboarding(true);
-  }, [onboardingDone]);
-
   const helpButton = (
     <button
-      onClick={() => setShowOnboarding(true)}
+      onClick={() => setOverlayIntent("manual")}
       className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-full px-2.5 py-0.5 transition-colors"
       title="Einführung anzeigen"
     >
@@ -58,7 +58,7 @@ function ModuleShell({ children }: { children: React.ReactNode }) {
         <OnboardingOverlay
           onComplete={() => {
             markOnboardingDone();
-            setShowOnboarding(false);
+            setOverlayIntent("hidden");
           }}
         />
       )}
