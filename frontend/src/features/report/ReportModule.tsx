@@ -4,6 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import {
+  SESSION_STORAGE_KEY,
+  STALE_SESSION_TOAST,
+  isStaleSessionError,
+} from "@/lib/stale-session";
 import type { ChatMsg, UploadedFile, ReportData, AppPhase, PatientSummary } from "@/types";
 import { WorkflowStepper } from "@/components/WorkflowStepper";
 import type { StepConfig } from "@/components/WorkflowStepper";
@@ -13,8 +18,6 @@ import { ChatView } from "./components/ChatView";
 import { PreUploadView } from "./components/PreUploadView";
 import { GeneratingView } from "./components/GeneratingView";
 import { ReportPreview } from "./components/ReportPreview";
-
-const SESSION_STORAGE_KEY = "logopaedie_session_id";
 
 const REPORT_STEPS: StepConfig[] = [
   {
@@ -214,28 +217,6 @@ export function ReportModule({
     setPhase("chat");
   }
 
-  // Generate report
-  const generateReport = useCallback(async () => {
-    if (!sessionId) return;
-    setPhase("generating");
-    setError(null);
-    try {
-      const data = await api.sessions.generate(sessionId);
-      setReport(data);
-      if (data._db_id) {
-        setSavedReportId(data._db_id);
-        setSavedAt(Date.now());
-      }
-      setPhase("preview");
-      toast.success("Bericht erfolgreich generiert");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unbekannter Fehler.";
-      setError(msg);
-      toast.error("Bericht konnte nicht generiert werden");
-      setPhase("chat");
-    }
-  }, [sessionId, setError]);
-
   // Expose reset handler — called by parent
   // Reset internal state when parent signals reset
   const handleReset = useCallback(() => {
@@ -251,6 +232,37 @@ export function ReportModule({
     setSavedReportId(null);
     setSavedAt(null);
   }, []);
+
+  // Generate report
+  const generateReport = useCallback(async () => {
+    if (!sessionId) return;
+    setPhase("generating");
+    setError(null);
+    try {
+      const data = await api.sessions.generate(sessionId);
+      setReport(data);
+      if (data._db_id) {
+        setSavedReportId(data._db_id);
+        setSavedAt(Date.now());
+      }
+      setPhase("preview");
+      toast.success("Bericht erfolgreich generiert");
+    } catch (err) {
+      if (isStaleSessionError(err)) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        setSessionId(null);
+        handleReset();
+        onRequestReset();
+        setError(null);
+        toast.error(STALE_SESSION_TOAST);
+        return;
+      }
+      const msg = err instanceof Error ? err.message : "Unbekannter Fehler.";
+      setError(msg);
+      toast.error("Bericht konnte nicht generiert werden");
+      setPhase("chat");
+    }
+  }, [sessionId, setError, setSessionId, onRequestReset, handleReset]);
 
   // Allow parent to trigger reset via onRequestReset
   useEffect(() => {

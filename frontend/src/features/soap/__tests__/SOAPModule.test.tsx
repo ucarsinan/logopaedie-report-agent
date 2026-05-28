@@ -20,8 +20,25 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+const handleStaleSessionMock = vi.fn();
+vi.mock("@/providers/SessionProvider", () => ({
+  useSession: () => ({
+    handleStaleSession: handleStaleSessionMock,
+  }),
+}));
+
 import { api } from "@/lib/api";
 import { SOAPModule } from "../SOAPModule";
+
+/** Minimal ApiError stand-in: an Error with a numeric `status` field. */
+class TestApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "ApiError";
+  }
+}
 
 const mockSOAPNote = {
   id: 1,
@@ -94,5 +111,26 @@ describe("SOAPModule", () => {
     await waitFor(() => {
       expect(screen.getByText(/Verbindungsfehler/i)).toBeInTheDocument();
     });
+  });
+
+  it("recovers from a stale-session 404 on soap.generate by invoking the provider's handleStaleSession", async () => {
+    // Backend signals the session no longer exists; component must NOT show a
+    // plain error toast — it must delegate to the provider's recovery path.
+    vi.mocked(api.soap.generate).mockRejectedValue(
+      new TestApiError(404, "Session nicht gefunden oder abgelaufen."),
+    );
+
+    render(<SOAPModule sessionId="abc123def456" />);
+    fireEvent.click(screen.getByText(/SOAP-Notiz generieren/i));
+
+    await waitFor(() => {
+      expect(handleStaleSessionMock).toHaveBeenCalledTimes(1);
+    });
+
+    // The component must not surface the raw backend message as a local error,
+    // because handleStaleSession owns the user-facing toast + reset.
+    expect(
+      screen.queryByText(/Session nicht gefunden oder abgelaufen/i),
+    ).not.toBeInTheDocument();
   });
 });

@@ -32,11 +32,9 @@ interface StatusCarryingError extends Error {
  * exists server-side).
  */
 export function isStaleSessionError(err: unknown): err is StatusCarryingError {
-  return (
-    err instanceof Error &&
-    typeof (err as { status?: unknown }).status === "number" &&
-    (err as { status: number }).status === 404
-  );
+  if (!(err instanceof Error)) return false;
+  const status = (err as unknown as { status?: unknown }).status;
+  return typeof status === "number" && status === 404;
 }
 
 /**
