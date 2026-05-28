@@ -39,9 +39,11 @@ is owner-driven.
 main
 ```
 
-Local `main` is **3 commits ahead** of `origin/main`:
+Local `main` is **5 commits ahead** of `origin/main`:
 `8879cad` (anamnesis pseudonym verbatim) → `92bb84a` (useDemoMode SSR
-fix) → this state-file refresh. Working tree is clean.
+fix) → `7258e27` (this state-file refresh) → `f326f95`
+(useSyncExternalStore refactor) → `02b5be0` (vercel.json noindex header
+moved into next.config.ts). Working tree is clean.
 
 ---
 
@@ -61,11 +63,16 @@ fix) → this state-file refresh. Working tree is clean.
       `project_security_quarantine_branch.md` memory entry.
 - [x] Anamnesis pseudonym verbatim rule (`8879cad`, 2026-05-28) —
       both system + extraction prompts in `anamnesis_engine.py`.
-- [x] useDemoMode SSR/CSR hydration fix (`92bb84a`, 2026-05-28).
+- [x] useDemoMode SSR/CSR hydration fix (`92bb84a`, 2026-05-28),
+      refactored to `useSyncExternalStore` in `f326f95` (lint-clean,
+      handles cross-tab changes).
+- [x] Move preview noindex header out of `vercel.json` into
+      `next.config.ts` (`02b5be0`, 2026-05-28) — vercel.json schema
+      rejected `has.type: "env"`.
 
 ### In Progress
 
-- Nothing in progress. `main` carries three unpushed commits ready for
+- Nothing in progress. `main` carries five unpushed commits ready for
   `git push`.
 
 ### Blocked
@@ -97,9 +104,9 @@ backend/tests/test_phonological_analyzer.py
 
 ```text
 Branch: main
-HEAD:   92bb84a fix(frontend): avoid SSR/CSR mismatch in useDemoMode
+HEAD:   02b5be0 fix(config): move preview noindex header out of vercel.json
 Behind: 0
-Ahead:  3   (8879cad, 92bb84a, plus this CURRENT.md refresh)
+Ahead:  5   (8879cad, 92bb84a, 7258e27, f326f95, 02b5be0)
 Uncommitted: none
 ```
 
