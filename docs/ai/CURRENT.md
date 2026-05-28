@@ -10,16 +10,15 @@
 
 - **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Session focus:** Demo-mode persistence bug — patient picker re-appeared on `/module/*` after activating demo mode, because the page only checked `?demo=true` in the URL, not the persisted `useDemoMode()` state.
+- **Session focus:** CI bump — `actions/checkout`/`setup-node`/`setup-python` to v6 (Node-24-native), dropped the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env opt-in. Layered on top of the earlier demo-mode persistence fix.
 
 ---
 
 ## Current Goal
 
-Small bug fix landed locally on `main` (not yet pushed): module router
-now uses the shared `useDemoMode()` hook instead of reading the demo
-query param directly, so the patient picker stays dismissed across
-in-app navigation once demo mode is active.
+Two local commits ready to push: `ded7c1a` (demo-mode persistence fix in
+module router) and `4d1f0f6` (CI bump to v6 actions + drop the Node-24
+env opt-in). Both items are now off the `TASKS.md` "Next" column.
 
 **M-6** (anamnesis completion logic) is still the remaining 2026-05-26
 audit item — confirm with the owner before picking it up, since the area
@@ -33,11 +32,9 @@ is owner-driven.
 main
 ```
 
-Local `main` is **1 commit ahead** of `origin/main` (`5bad1a7`) once the
-demo-picker fix is committed. The previous batch of six commits
-(`8879cad`, `92bb84a`, `7258e27`, `f326f95`, `02b5be0`, `5bad1a7`) is on
-the remote. Working tree carries the pending demo fix + this state-file
-update.
+Local `main` is **2 commits ahead** of `origin/main` (`5bad1a7`):
+`ded7c1a` (demo-mode persistence) → `4d1f0f6` (CI v6 bump). Working tree
+carries only this state-file update.
 
 ---
 
@@ -63,17 +60,22 @@ update.
 - [x] Move preview noindex header out of `vercel.json` into
       `next.config.ts` (`02b5be0`, 2026-05-28) — vercel.json schema
       rejected `has.type: "env"`.
-- [x] Demo-mode persistence in module router (2026-05-28) —
+- [x] Demo-mode persistence in module router (`ded7c1a`, 2026-05-28) —
       `frontend/src/app/module/[slug]/page.tsx` now reads `isDemo` from
       the shared `useDemoMode()` hook (URL **or** persisted localStorage)
       instead of the URL-only `searchParams.get("demo")`. Fixes the
       regression where the patient picker re-appeared after navigating
       between `/module/*` slugs even though demo mode was active.
       `tsc` clean, all 146 vitest tests green.
+- [x] Bump JS actions to v6 (`4d1f0f6`, 2026-05-28) — checkout v4→v6,
+      setup-node v4→v6, setup-python v5→v6; dropped the
+      `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag (no longer needed
+      since all three majors ship Node 24 natively). YAML validated;
+      `ubuntu-latest` runners auto-satisfy the v2.327.1+ requirement.
 
 ### In Progress
 
-- Nothing in progress. One local commit pending push.
+- Nothing in progress. Two local commits pending push.
 
 ### Blocked
 
@@ -104,13 +106,13 @@ backend/tests/test_phonological_analyzer.py
 
 ```text
 Branch: main
-HEAD:   5bad1a7 docs(ai): refresh CURRENT.md to reflect 5 unpushed commits
+HEAD:   4d1f0f6 chore(ci): bump JS actions to v6 (Node-24-native)
 Behind: 0
-Ahead:  0 → becomes 1 after the pending demo-fix commit
+Ahead:  2   (ded7c1a, 4d1f0f6)
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/HANDOFF.md
-  M frontend/src/app/module/[slug]/page.tsx
+  M docs/ai/TASKS.md
 ```
 
 ---

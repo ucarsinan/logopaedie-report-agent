@@ -24,10 +24,6 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       anamnesis is complete, generate a structured handoff that wires into
       the report flow. Likely overlaps with the in-progress owner work →
       coordinate before starting.
-- [ ] Bump `actions/checkout` and `actions/setup-node` to versions that ship
-      Node 24 natively, then remove the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`
-      env flag added in PR #6. No urgency — flag becomes a no-op after
-      2026-06-02 either way.
 - [ ] Fix the pre-existing Vercel preview deploy failure (separate
       deployment-config issue; ignore for CI green-up).
 - [ ] Add UI loading skeletons for report generation (currently just spinner).
@@ -38,6 +34,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] Bump JS actions to v6 (Node-24-native), drop FORCE_JAVASCRIPT_ACTIONS_TO_NODE24
+      flag (`4d1f0f6`) — 2026-05-28
+- [x] Demo-mode persistence in module router (`ded7c1a`) — 2026-05-28
 - [x] Opt JS actions into Node 24 (PR #6) — 2026-05-28
 - [x] Sync CLAUDE.md + docs/ai/PROJECT.md with current architecture (PR #5, M-4) — 2026-05-28
 - [x] CI E2E green-up — drop NEXT_PUBLIC_API_URL override (PR #4) — 2026-05-27

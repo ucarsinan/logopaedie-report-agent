@@ -16,25 +16,32 @@
 
 ## Short Summary
 
-`main` is at `5bad1a7` on the remote; one local fix is committed on top
-(see "Last Action"). Today's session fixed a demo-mode persistence bug
-in `frontend/src/app/module/[slug]/page.tsx`: the module router checked
-the URL only and ignored the `useDemoMode()` localStorage state, so the
-patient picker re-appeared after every in-app navigation. The 2026-05-26
-audit backlog is still down to **M-6** (anamnesis completion logic),
-blocked on owner-driven WIP in the anamnesis engine / phonological
-analyzer area (do not touch).
+`main` is at `5bad1a7` on the remote; two local commits stacked on top:
+`ded7c1a` (demo-mode persistence fix in module router) and `4d1f0f6`
+(CI bump — JS actions to v6, Node-24-native, drop opt-in env flag). Both
+items are now off the `TASKS.md` "Next" column. The 2026-05-26 audit
+backlog is still down to **M-6** (anamnesis completion logic), blocked
+on owner-driven WIP in the anamnesis engine / phonological analyzer
+area (do not touch).
 
 ---
 
-## Last Action
+Bumped the three JS-based actions in `.github/workflows/ci.yml` to v6
+(`actions/checkout@v4→v6`, `actions/setup-node@v4→v6`,
+`actions/setup-python@v5→v6`) and removed the
+`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag + its comment block.
+YAML validated locally. Two parallel agents (repo audit + v5→v6
+changelog review) confirmed (a) no other stale action pins or Node-20
+references in the repo, and (b) no breaking changes between v4/v5 and v6
+affect our specific usage (parameterless checkout; explicit `cache:` +
+`cache-dependency-path:` on setup-node and setup-python). Real CI
+verification pending push.
 
-Replaced the inline `searchParams.get("demo") === "true"` check in
-`frontend/src/app/module/[slug]/page.tsx` with the shared
-`useDemoMode()` hook (URL **or** persisted localStorage). Verified with
-`tsc --noEmit` (clean) and `vitest run` (146/146 green, including the 11
-existing `useDemoMode` tests). UI confirmation requires manual browser
-testing — the agent has no browser tool.
+Prior step in the same session: `ded7c1a` swapped the inline
+`searchParams.get("demo") === "true"` check in
+`frontend/src/app/module/[slug]/page.tsx` for the shared `useDemoMode()`
+hook (URL **or** persisted localStorage). `tsc --noEmit` clean,
+`vitest run` 146/146 green.
 
 ---
 
@@ -59,7 +66,8 @@ testing — the agent has no browser tool.
 | `docs/ai/CURRENT.md` | modified | this state-file sync |
 | `docs/ai/TASKS.md` | modified | this state-file sync |
 | `docs/ai/HANDOFF.md` | modified | this file |
-| `frontend/src/app/module/[slug]/page.tsx` | modified | demo-mode persistence fix — swap URL-only check for `useDemoMode()` hook |
+| `frontend/src/app/module/[slug]/page.tsx` | modified → committed (`ded7c1a`) | demo-mode persistence fix — swap URL-only check for `useDemoMode()` hook |
+| `.github/workflows/ci.yml` | modified → committed (`4d1f0f6`) | v6 action bump + drop `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag |
 
 Plus three local branches deleted (`claude-security-fixes`,
 `feat/anamnese-slot-flow`, `security-audit-followup`) and the obsolete
@@ -70,10 +78,8 @@ Plus three local branches deleted (`claude-security-fixes`,
 ## Open Items
 
 - [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
-- [ ] Bump `actions/checkout` / `actions/setup-node` to Node-24-native major
-      versions, then remove the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env
-      flag from `.github/workflows/ci.yml` (no urgency — becomes a no-op
-      after 2026-06-02).
+- [ ] Optional follow-up: align `frontend/package.json` `@types/node` from
+      `^20` to `^22` (matches CI runtime; devDep only, not blocking).
 - [ ] Pre-existing Vercel preview deploy failure — not a CI job, separate
       deployment-config issue. Out of scope unless explicitly requested.
 
@@ -113,11 +119,11 @@ Plus three local branches deleted (`claude-security-fixes`,
 
 ## Next Concrete Action
 
-Push the local demo-fix commit to `origin/main` (`git push`). After
-that, wait for the owner's anamnesis WIP to settle or pick the next
-agent-safe item from `TASKS.md` "Next" column (UI loading skeletons,
-PDF export quality, or backend test coverage for therapy-plan / SOAP /
-compare — none touch the anamnesis files).
+Push the two local commits (`ded7c1a` + `4d1f0f6`) to `origin/main`
+(`git push`). After that, wait for the owner's anamnesis WIP to settle
+or pick the next agent-safe item from `TASKS.md` "Next" column (UI
+loading skeletons, PDF export quality, or backend test coverage for
+therapy-plan / SOAP / compare — none touch the anamnesis files).
 
 ---
 
