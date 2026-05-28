@@ -79,6 +79,10 @@ export function SOAPModule({ sessionId }: SOAPModuleProps) {
       setEditing(true);
       setStatus("SOAP-Notiz generiert. Bitte prüfen und speichern.");
     } catch (e: unknown) {
+      if (isStaleSessionError(e)) {
+        handleStaleSession();
+        return;
+      }
       setError(e instanceof Error ? e.message : "SOAP-Generierung fehlgeschlagen");
     } finally {
       setLoading(false);

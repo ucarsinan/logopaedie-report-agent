@@ -157,4 +157,42 @@ describe("SOAPModule", () => {
       screen.queryByText(/Session nicht gefunden oder abgelaufen/i),
     ).not.toBeInTheDocument();
   });
+
+  it("recovers from a stale-session 404 on soap.fromReport by invoking the provider's handleStaleSession", async () => {
+    // The report-path also hits a session-scoped backend route under the hood;
+    // when that session is gone, the catch must delegate to handleStaleSession
+    // instead of bubbling the raw backend detail as a local error.
+    vi.mocked(api.reports.list).mockResolvedValue({
+      items: [
+        {
+          id: 42,
+          pseudonym: "P-001",
+          report_type: "befundbericht",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      limit: 20,
+    } as unknown as Awaited<ReturnType<typeof api.reports.list>>);
+    vi.mocked(api.soap.fromReport).mockRejectedValue(
+      new TestApiError(404, "Session nicht gefunden oder abgelaufen."),
+    );
+
+    render(<SOAPModule sessionId={null} />);
+
+    const select = await screen.findByLabelText(
+      /Gespeicherten Bericht für SOAP-Notiz auswählen/i,
+    );
+    fireEvent.change(select, { target: { value: "42" } });
+    fireEvent.click(screen.getByText(/SOAP-Notiz generieren/i));
+
+    await waitFor(() => {
+      expect(handleStaleSessionMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(
+      screen.queryByText(/Session nicht gefunden oder abgelaufen/i),
+    ).not.toBeInTheDocument();
+  });
 });
