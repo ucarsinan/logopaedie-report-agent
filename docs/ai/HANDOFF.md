@@ -8,56 +8,86 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-10
+- **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Handoff to:** unspecified (project is stable, no active task)
+- **Handoff to:** unspecified — owner is currently driving work themselves on the anamnesis area
 
 ---
 
 ## Short Summary
 
-The project is stable and deployed on Vercel. All 32 Chromium e2e tests pass. CI is green. This session installed the ai-dev-workflow-template (AGENTS.md, GEMINI.md, docs/ai/, scripts/) and filled all template files with real project content. No feature work was done — this was purely a workflow infrastructure session.
+`main` is at `9119077`, working tree clean except for owner-driven WIP on
+the anamnesis engine / phonological analyzer (do not touch). Today's session
+landed three PRs and cleaned up repo + memory state. The 2026-05-26 audit
+backlog is now down to **M-6** (anamnesis completion logic), which is
+blocked on the in-progress owner work.
 
 ---
 
 ## Last Action
 
-Filled docs/ai/TASKS.md and docs/ai/HANDOFF.md with real content. Created AGENTS.md and GEMINI.md from .new files. Updated CLAUDE.md to import @AGENTS.md. Deleted .new files. Changes not yet committed.
+Squash-merged PR #6 (`chore(ci): opt JS actions into Node.js 24 ahead of 2026-06-02 cutover`)
+into `main`, then synced these three state files
+(`CURRENT.md` / `TASKS.md` / `HANDOFF.md`) to reflect the day's work.
 
 ---
 
-## Changed Files
+## Today's PRs (chronological)
 
-| File | Change type | Notes |
+| PR | Subject | Result |
 | --- | --- | --- |
-| AGENTS.md | created | Renamed from AGENTS.md.new — universal AI agent rules |
-| GEMINI.md | created | Renamed from GEMINI.md.new — Gemini CLI config |
-| CLAUDE.md | modified | Added @AGENTS.md import at top |
-| AGENTS.md.new | deleted | Replaced by AGENTS.md |
-| CLAUDE.md.new | deleted | Existing CLAUDE.md is richer; .new discarded |
-| GEMINI.md.new | deleted | Replaced by GEMINI.md |
-| docs/ai/PROJECT.md | modified | Filled with real project info |
-| docs/ai/CURRENT.md | modified | Filled with current state |
-| docs/ai/TASKS.md | modified | Filled with real task board |
-| docs/ai/HANDOFF.md | modified | This file |
-| docs/ai/DECISIONS.md | modified | Added real project ADRs |
-| scripts/ | created | 6 AI session helper scripts |
+| [#3](https://github.com/ucarsinan/logopaedie-report-agent/pull/3) | Security & quality audit fixes (C-1/C-2, H-1..H-4, M-1/2/3/5, L-2/3/4) | merged 2026-05-27 (`b33cf7e`) |
+| [#4](https://github.com/ucarsinan/logopaedie-report-agent/pull/4) | `fix(ci): drop NEXT_PUBLIC_API_URL override in E2E job` | merged 2026-05-27 (`5a00a3e`) — full E2E suite green |
+| [#5](https://github.com/ucarsinan/logopaedie-report-agent/pull/5) | `docs: sync CLAUDE.md and docs/ai/PROJECT.md with current architecture (M-4)` | merged 2026-05-28 (`e8fe12b`) |
+| [#6](https://github.com/ucarsinan/logopaedie-report-agent/pull/6) | `chore(ci): opt JS actions into Node.js 24 ahead of 2026-06-02 cutover` | merged 2026-05-28 (`9119077`) — all 7 jobs green on Node 24 |
+
+---
+
+## Changed Files (this session, beyond the per-PR diffs)
+
+| File | Change | Notes |
+| --- | --- | --- |
+| `.github/workflows/ci.yml` | modified | PR #4 (env removal) + PR #6 (Node 24 opt-in) |
+| `CLAUDE.md` | modified | PR #5 — synced with auth/patients/admin/BFF reality |
+| `docs/ai/PROJECT.md` | modified | PR #5 — same sync |
+| `docs/ai/CURRENT.md` | modified | this state-file sync |
+| `docs/ai/TASKS.md` | modified | this state-file sync |
+| `docs/ai/HANDOFF.md` | modified | this file |
+
+Plus three local branches deleted (`claude-security-fixes`,
+`feat/anamnese-slot-flow`, `security-audit-followup`) and the obsolete
+`project_security_quarantine_branch.md` memory entry removed.
 
 ---
 
 ## Open Items
 
-- [ ] Commit all workflow template files to git
-- [ ] Fill docs/ai/DECISIONS.md with remaining project ADRs (Groq choice, Redis for sessions, etc.)
-- [ ] Verify CI passes after commit
+- [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
+- [ ] Bump `actions/checkout` / `actions/setup-node` to Node-24-native major
+      versions, then remove the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env
+      flag from `.github/workflows/ci.yml` (no urgency — becomes a no-op
+      after 2026-06-02).
+- [ ] Pre-existing Vercel preview deploy failure — not a CI job, separate
+      deployment-config issue. Out of scope unless explicitly requested.
 
 ---
 
 ## Risks / Attention
 
-- CLAUDE.md now has both project-specific content AND @AGENTS.md import. If AGENTS.md rules conflict with project CLAUDE.md rules, CLAUDE.md takes precedence (it is more specific).
-- The Vercel `experimentalServices` feature used in vercel.json is beta — monitor for breaking changes.
-- E2E tests only run in Chromium — Firefox/Safari not covered.
+- **Owner WIP** in `backend/services/anamnesis_engine.py`,
+  `backend/services/phonological_analyzer.py`,
+  `backend/tests/test_phonological_analyzer.py` — do **not** stage, commit,
+  or modify these. They were untouched by every agent commit today and
+  must remain so.
+- **NEXT_PUBLIC_API_URL trap**: don't reintroduce an absolute host value in
+  the frontend-e2e CI job — see the comment block in `.github/workflows/ci.yml`.
+  It is baked into the production bundle at `npm run build` and breaks the
+  `**/backend-api/**` Playwright mocks (root cause of the recent E2E
+  failures fixed by PR #4).
+- **Node.js 20 → 24 forced cutover on 2026-06-02.** Currently mitigated by
+  the workflow-level env flag from PR #6. Bumping to Node-24-native action
+  versions before then makes the flag obsolete.
+- Vercel `experimentalServices` is beta and may change without notice.
 
 ---
 
@@ -65,17 +95,26 @@ Filled docs/ai/TASKS.md and docs/ai/HANDOFF.md with real content. Created AGENTS
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| `python -m pytest` | passed | 35 tests (as of 2026-05-09) |
-| `npx playwright test` | passed | 32 Chromium tests (as of 2026-05-09) |
-| `npm run lint` | passed | |
-| `npx tsc --noEmit` | passed | |
-| Manual smoke test | not done this session | No code changes made |
+| `python -m pytest` (backend) | passed in PR #6 CI (1m9s) | ~270 functions across ~60 files |
+| `npx playwright test` (E2E) | passed in PR #6 CI (1m15s) | 32 cases / 11 specs, chromium-only |
+| `npm test` (frontend unit) | passed in PR #6 CI (1m8s) | |
+| `npm run build` | passed | with `/backend-api` default, **not** absolute host |
+| `ruff check`, `mypy`, `eslint`, `tsc` | passed in PR #6 CI | |
+| Vercel deploy | **fails** (pre-existing) | separate from CI; ignore for green-up |
 
 ---
 
 ## Next Concrete Action
 
-Commit all workflow template files: `git add AGENTS.md GEMINI.md CLAUDE.md docs/ai/ scripts/ && git commit -m "chore: install ai-dev-workflow-template and fill project state files"`. Then verify CI passes.
+Wait for the owner's anamnesis WIP to settle (either get committed or
+explicitly handed over). Once unblocked, pick up **M-6** — see
+`docs/ai/AUDIT_2026-05-26.md` for the original audit framing, and the
+`TASKS.md` "Next" column for ordered priorities.
+
+If you proactively want to work without touching the WIP area, the next
+agent-safe items in `TASKS.md` are: UI loading skeletons for report
+generation, PDF export quality, or backend test coverage for therapy-plan
+/ SOAP / compare.
 
 ---
 
@@ -84,10 +123,18 @@ Commit all workflow template files: `git add AGENTS.md GEMINI.md CLAUDE.md docs/
 ```text
 Read docs/ai/HANDOFF.md, docs/ai/CURRENT.md, and docs/ai/PROJECT.md first.
 
-Current situation: The project is stable. This session installed the ai-dev-workflow-template.
-All docs/ai/ files have been filled with real content. Changes are uncommitted.
+Current situation: main is at 9119077 and the 2026-05-26 audit backlog is
+down to M-6 (anamnesis completion logic). M-6 is blocked on owner WIP in
+backend/services/anamnesis_engine.py + phonological_analyzer.py — do NOT
+touch those files until I tell you the WIP is settled.
 
-Your task: Commit all workflow template files, then pick the next task from docs/ai/TASKS.md.
+Your task: <one of>
+  (a) wait for me to hand off M-6 and confirm WIP is clear;
+  (b) pick the next agent-safe item from docs/ai/TASKS.md "Next" column
+      (UI skeletons, PDF quality, or backend test coverage — none touch
+      the anamnesis files);
+  (c) <my custom direction>.
 
-After completing the task, update docs/ai/CURRENT.md, docs/ai/TASKS.md, and docs/ai/HANDOFF.md.
+After completing the task, update docs/ai/CURRENT.md, docs/ai/TASKS.md, and
+docs/ai/HANDOFF.md before stopping.
 ```
