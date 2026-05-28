@@ -138,6 +138,36 @@ def client(mock_groq, mock_redis, fake_user, test_db):
 
 
 @pytest.fixture()
+def unauth_client(mock_groq, mock_redis, test_db):
+    """TestClient with get_current_user overridden to raise 401.
+
+    ``raise_server_exceptions=False`` keeps ``HTTPException(401)`` from
+    bubbling as a Python exception so tests can assert on the response.
+    """
+    from fastapi import HTTPException, status
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session
+
+    from database import get_db
+    from dependencies import get_current_user
+    from main import app
+
+    def _raise_401():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication_required")
+
+    def _db_override():
+        with Session(test_db) as session:
+            yield session
+
+    app.dependency_overrides[get_current_user] = _raise_401
+    app.dependency_overrides[get_db] = _db_override
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture()
 def session_id(client, mock_groq, mock_redis):
     """Create a session and return its ID."""
     mock_groq["chat"].return_value = "Willkommen! Welchen Berichtstyp möchten Sie erstellen?"

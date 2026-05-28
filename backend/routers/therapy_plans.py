@@ -60,6 +60,7 @@ async def save_therapy_plan(
         patient_pseudonym=patient_pseudonym,
         report_id=req.report_id,
         plan_data=plan_json,
+        user_id=current_user.id,
     )
     db.add(record)
     db.commit()
@@ -76,10 +77,14 @@ async def save_therapy_plan(
 
 @router.get("/therapy-plans")
 async def list_therapy_plans(
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[TherapyPlanSummary]:
-    records = db.exec(select(TherapyPlanRecord).order_by(col(TherapyPlanRecord.created_at).desc())).all()
+    records = db.exec(
+        select(TherapyPlanRecord)
+        .where(TherapyPlanRecord.user_id == current_user.id)
+        .order_by(col(TherapyPlanRecord.created_at).desc())
+    ).all()
     return [
         TherapyPlanSummary(
             id=r.id,
@@ -95,10 +100,15 @@ async def list_therapy_plans(
 @router.get("/therapy-plans/{plan_id}")
 async def get_therapy_plan(
     plan_id: int,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    record = db.get(TherapyPlanRecord, plan_id)
+    record = db.exec(
+        select(TherapyPlanRecord).where(
+            TherapyPlanRecord.id == plan_id,
+            TherapyPlanRecord.user_id == current_user.id,
+        )
+    ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Therapieplan nicht gefunden.")
     plan: dict = json.loads(record.plan_data)
@@ -111,10 +121,15 @@ async def get_therapy_plan(
 async def update_therapy_plan(
     plan_id: int,
     plan: dict,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TherapyPlanSummary:
-    record = db.get(TherapyPlanRecord, plan_id)
+    record = db.exec(
+        select(TherapyPlanRecord).where(
+            TherapyPlanRecord.id == plan_id,
+            TherapyPlanRecord.user_id == current_user.id,
+        )
+    ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Therapieplan nicht gefunden.")
     record.plan_data = json.dumps(plan, ensure_ascii=False)
