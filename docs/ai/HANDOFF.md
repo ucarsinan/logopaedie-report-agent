@@ -16,13 +16,19 @@
 
 ## Short Summary
 
-`main` is at `a3ba15a` on the remote; three local commits stacked on
-top, all from the demo-mode follow-up work surfaced by the parallel
-code-review + repo-scan agents that ran after `ded7c1a`:
+`main` is at `a3ba15a` on the remote; five local commits stacked on top,
+the three earlier demo-mode follow-ups plus two new ones from this
+session:
 
 - `129333c` — `refactor(frontend): centralize demo_mode access in useDemoMode`
 - `cbf4d72` — `fix(frontend): reset dismissed picker state on module slug change`
 - `11540d1` — `refactor(frontend): extract useOnboarding hook from module layout`
+- `fc2cab1` — `fix(frontend): derive onboarding overlay visibility instead of setState-in-effect`
+- `339b7a4` — `feat(frontend): handle stale-session 404 via SessionProvider helper`
+
+Working tree has four further uncommitted follow-ups to `339b7a4` (wire
+`ReportModule.generateReport` into the helper, polish SOAP coverage,
+refine `stale-session.ts`).
 
 The 2026-05-26 audit backlog is still down to **M-6** (anamnesis
 completion logic), blocked on owner-driven WIP in the anamnesis engine /
@@ -32,34 +38,44 @@ phonological analyzer area (do not touch).
 
 ## Last Action
 
-Three follow-ups, in order:
+Live `POST /backend-api/sessions/37b2eeabab65/generate` returned 404 in
+the dev UI. Direct backend probe confirmed the body
+`{"detail":"Session nicht gefunden oder abgelaufen."}` — the BFF proxy
+was fine, the Redis-backed session simply did not exist (TTL or restart).
+We hardened the UX so the next stale-session 404 recovers cleanly
+instead of dumping the raw backend message:
 
-1. **Centralized `"demo_mode"` access.** Added `getDemoMode()` (one-shot
-   snapshot, robust `URLSearchParams` parse — no more
-   `window.location.search.includes("demo=true")` matching `?xdemo=true`)
-   and `setDemoMode(value)` (writes + dispatches a same-tab
-   `demo-mode-changed` event so `useSyncExternalStore` consumers like
-   `DemoBanner` re-render). Migrated four call sites:
-   `features/report/ReportModule.tsx` (init read + `onDemo` setter),
-   `features/auth/components/LoginForm.tsx`, and
-   `features/auth/hooks/useRegister.ts`. +7 vitest cases on the hook.
-2. **Reset `dismissed` on slug change.** `ModuleContent` in
-   `app/module/[slug]/page.tsx` now calls
-   `useEffect(() => setDismissed(false), [slug])`. Latent issue exposed
-   by `ded7c1a` because the localStorage-backed `isDemo` no longer
-   re-evaluates on URL change.
-3. **Extracted `useOnboarding` hook.** Same shape as `useDemoMode`:
-   `useSyncExternalStore`-backed reactive hook + `markOnboardingDone()`
-   / `resetOnboarding()` helpers + same-tab `onboarding-changed` event.
-   `module/layout.tsx` dropped the `setTimeout(0)` workaround.
-   +5 vitest cases.
+1. **`ApiError` in `@/lib/api`.** `fetchApi` now throws an `ApiError`
+   carrying the HTTP `status` instead of a plain `Error`. Backwards
+   compatible — `ApiError extends Error`, so existing `err.message`
+   handlers keep working.
+2. **`@/lib/stale-session` util.** New module exposes
+   `SESSION_STORAGE_KEY`, `STALE_SESSION_TOAST`, `isStaleSessionError`
+   (duck-typed on numeric `status === 404` so HMR / loading order can't
+   break detection), and `clearStoredSession` (removes the persisted id
+   and fires the existing `__reportModuleReset` window bridge).
+3. **`SessionProvider.handleStaleSession`.** New callback exposed on
+   `useSession()` context: `clearStoredSession` + `setSessionId(null)` +
+   `setMessages([])` + toast. `handleSoftReset` routes 404 from
+   `api.sessions.newConversation` through it.
+4. **Call-sites updated.** `ChatView` (anamnesis send loop) and
+   `TherapyPlanModule` (both `chat` and `therapyPlan` catches) branch
+   on `isStaleSessionError` before the generic error path. New
+   regression test in `ReportModule.test.tsx` (mocks
+   `api.sessions.generate` rejecting with `ApiError(404)` and asserts
+   the recovery shape).
 
-`tsc --noEmit` clean across all three. Full vitest suite has 1
-unrelated failure in
-`features/report/__tests__/ReportModule.test.tsx > recovers from a
-stale-session 404 ...` — that test is owner WIP (depends on an unmerged
-`ApiError` extraction in `frontend/src/lib/api.ts`) and is left in the
-working tree for the owner to commit.
+`tsc --noEmit` clean, full vitest suite **159 passed / 0 failed across
+42 test files**. Lint clean on touched files (a single pre-existing
+`react-hooks/set-state-in-effect` warning in
+`app/module/[slug]/page.tsx` is not from this work).
+
+Working tree carries four uncommitted follow-ups (matching the items in
+`CURRENT.md`'s "Current Git State"): wire
+`ReportModule.generateReport` into the helper (using the same
+duck-typed `isStaleSessionError` / `STALE_SESSION_TOAST` from
+`@/lib/stale-session`), plus SOAP coverage and a `stale-session.ts`
+refinement.
 
 ---
 
@@ -94,8 +110,15 @@ working tree for the owner to commit.
 | `frontend/src/hooks/useOnboarding.ts` | added → committed (`11540d1`) | new hook + `markOnboardingDone` + `resetOnboarding` |
 | `frontend/src/hooks/__tests__/useOnboarding.test.ts` | added → committed (`11540d1`) | 5 cases |
 | `frontend/src/app/module/layout.tsx` | modified → committed (`11540d1`) | use the hook + helper instead of direct `localStorage` calls |
-| `frontend/src/lib/api.ts` | modified (uncommitted) | **owner WIP** — `ApiError` class extraction |
-| `frontend/src/features/report/__tests__/ReportModule.test.tsx` | modified (uncommitted) | **owner WIP** — stale-session 404 recovery test depending on `ApiError` |
+| `frontend/src/lib/api.ts` | modified → committed (`339b7a4`) | `ApiError` class carrying `status` |
+| `frontend/src/lib/stale-session.ts` | added → committed (`339b7a4`), further refined (uncommitted) | helper module: `isStaleSessionError`, `clearStoredSession`, constants |
+| `frontend/src/providers/SessionProvider.tsx` | modified → committed (`339b7a4`) | `handleStaleSession` callback on context |
+| `frontend/src/features/report/components/ChatView.tsx` | modified → committed (`339b7a4`) | `sendMessage` catch routes 404 through helper |
+| `frontend/src/features/therapy-plan/TherapyPlanModule.tsx` | modified → committed (`339b7a4`) | both `chat` + `therapyPlan` catches |
+| `frontend/src/features/report/__tests__/ReportModule.test.tsx` | modified → committed (`339b7a4`) | new regression case for `generate` 404 |
+| `frontend/src/features/report/ReportModule.tsx` | modified (uncommitted) | wires `generateReport` catch through `isStaleSessionError` + `STALE_SESSION_TOAST` |
+| `frontend/src/features/soap/SOAPModule.tsx` | modified (uncommitted) | `generateFromSession` 404 path |
+| `frontend/src/features/soap/__tests__/SOAPModule.test.tsx` | modified (uncommitted) | SOAP 404 regression case |
 
 Plus three local branches deleted (`claude-security-fixes`,
 `feat/anamnese-slot-flow`, `security-audit-followup`) and the obsolete
@@ -155,16 +178,16 @@ Plus three local branches deleted (`claude-security-fixes`,
 
 ## Next Concrete Action
 
-Push the three local commits (`129333c` + `cbf4d72` + `11540d1`) to
-`origin/main` (`git push`). Decide separately how to land the
-uncommitted `ApiError`-extraction WIP in `frontend/src/lib/api.ts` +
-`features/report/__tests__/ReportModule.test.tsx` — the failing
-stale-session 404 test will turn green once the matching production-code
-change is reintroduced into `ReportModule.tsx`. After that, wait for
-the owner's anamnesis WIP to settle or pick the next agent-safe item
-from `TASKS.md` "Next" column (UI loading skeletons, PDF export quality,
-or backend test coverage for therapy-plan / SOAP / compare — none touch
-the anamnesis files).
+Commit the four uncommitted follow-ups to `339b7a4` (`ReportModule.tsx`,
+`SOAPModule.tsx`, `SOAPModule.test.tsx`, `stale-session.ts`) — suggested
+message:
+`feat(frontend): wire ReportModule and SOAPModule into stale-session helper`.
+Then `git push` the five local commits (`129333c` + `cbf4d72` +
+`11540d1` + `fc2cab1` + `339b7a4` + the new one) to `origin/main`.
+After that, wait for the owner's anamnesis WIP to settle or pick the
+next agent-safe item from `TASKS.md` "Next" column (UI loading
+skeletons, PDF export quality, or backend test coverage for
+therapy-plan / SOAP / compare — none touch the anamnesis files).
 
 ---
 
@@ -173,22 +196,24 @@ the anamnesis files).
 ```text
 Read docs/ai/HANDOFF.md, docs/ai/CURRENT.md, and docs/ai/PROJECT.md first.
 
-Current situation: main is 3 commits ahead of origin/main (a3ba15a) —
-129333c, cbf4d72, 11540d1 — all frontend follow-ups to the demo-mode
-persistence fix. The 2026-05-26 audit backlog is down to M-6
-(anamnesis completion logic). M-6 is blocked on owner WIP in
-backend/services/anamnesis_engine.py + phonological_analyzer.py — do NOT
-touch those files until I tell you the WIP is settled. Also leave the
-uncommitted `ApiError` extraction in `frontend/src/lib/api.ts` +
-`features/report/__tests__/ReportModule.test.tsx` alone until handed
-over.
+Current situation: main is 5 commits ahead of origin/main (a3ba15a) —
+129333c, cbf4d72, 11540d1, fc2cab1, 339b7a4 — the demo-mode +
+onboarding follow-ups plus the stale-session 404 helper. Working tree
+has four uncommitted follow-ups to 339b7a4 (ReportModule.tsx wiring,
+SOAPModule.tsx + test, stale-session.ts refinement). 159/159 vitest +
+tsc clean. The 2026-05-26 audit backlog is down to M-6 (anamnesis
+completion logic), blocked on owner WIP in
+backend/services/anamnesis_engine.py + phonological_analyzer.py — do
+NOT touch those files until the owner explicitly hands them over.
 
 Your task: <one of>
-  (a) wait for me to hand off M-6 and confirm WIP is clear;
-  (b) pick the next agent-safe item from docs/ai/TASKS.md "Next" column
+  (a) bundle the four uncommitted follow-ups into one commit, then push
+      all six commits ahead of origin/main;
+  (b) wait for the owner to hand off M-6;
+  (c) pick the next agent-safe item from docs/ai/TASKS.md "Next" column
       (UI skeletons, PDF quality, or backend test coverage — none touch
       the anamnesis files);
-  (c) <my custom direction>.
+  (d) <my custom direction>.
 
 After completing the task, update docs/ai/CURRENT.md, docs/ai/TASKS.md, and
 docs/ai/HANDOFF.md before stopping.

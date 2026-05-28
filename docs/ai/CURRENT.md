@@ -10,23 +10,31 @@
 
 - **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Session focus:** Follow-ups to the demo-mode fix surfaced by parallel code-review + repo-scan agents: centralize the `"demo_mode"` localStorage key in `useDemoMode`, reset the picker `dismissed` flag on module slug change, and extract a sibling `useOnboarding` hook for the `"logopaedie_onboarding_done"` key.
+- **Session focus:** Diagnose a `POST /backend-api/sessions/{id}/generate` 404 in the running app, then harden the UX so stale-session 404s on session-scoped endpoints recover instead of dumping the raw backend detail in the UI.
 
 ---
 
 ## Current Goal
 
-Three new local commits ready to push (stacked on top of the previously
+Five new local commits ready to push (stacked on top of the previously
 pushed `a3ba15a`):
 
 - `129333c` — `refactor(frontend): centralize demo_mode access in useDemoMode`
-  (adds `getDemoMode`/`setDemoMode` exports, migrates `ReportModule` +
-  `LoginForm` + `useRegister` off direct `localStorage` writes, fixes
-  the fragile `window.location.search.includes("demo=true")` parse).
 - `cbf4d72` — `fix(frontend): reset dismissed picker state on module slug change`
-  (latent bug exposed by the original demo persistence fix `ded7c1a`).
 - `11540d1` — `refactor(frontend): extract useOnboarding hook from module layout`
-  (mirrors the `useDemoMode` pattern for `"logopaedie_onboarding_done"`).
+- `fc2cab1` — `fix(frontend): derive onboarding overlay visibility instead of setState-in-effect`
+- `339b7a4` — `feat(frontend): handle stale-session 404 via SessionProvider helper`
+  (introduces `ApiError` in `@/lib/api`, a new `@/lib/stale-session` util
+  module, and a `handleStaleSession` callback on the SessionProvider
+  context; `ChatView`, `TherapyPlanModule`, and `handleSoftReset` all
+  branch on `isStaleSessionError` before the generic error path; new
+  regression test for the `generate` 404 path).
+
+Working tree currently carries one further follow-up: the matching
+`ReportModule.generateReport` catch (uses `isStaleSessionError` +
+`STALE_SESSION_TOAST` from the helper) plus additional `SOAPModule` /
+`SOAPModule.test` polish and a `stale-session.ts` refinement that were
+not yet committed — see "Current Git State" below.
 
 **M-6** (anamnesis completion logic) is still the remaining 2026-05-26
 audit item — confirm with the owner before picking it up, since the area
@@ -40,13 +48,17 @@ is owner-driven.
 main
 ```
 
-Local `main` is **3 commits ahead** of `origin/main` (`a3ba15a`):
+Local `main` is **5 commits ahead** of `origin/main` (`a3ba15a`):
 `129333c` (demo centralization) → `cbf4d72` (picker dismissed reset) →
-`11540d1` (useOnboarding extraction). Working tree carries only this
-state-file update plus owner-WIP in
-`frontend/src/lib/api.ts` + `frontend/src/features/report/__tests__/ReportModule.test.tsx`
-(an `ApiError` extraction with a stale-session 404 recovery test — not
-touched by this session's commits).
+`11540d1` (useOnboarding extraction) → `fc2cab1` (derive onboarding
+overlay visibility) → `339b7a4` (stale-session 404 via SessionProvider).
+Working tree carries this state-file update plus four uncommitted
+follow-ups to `339b7a4`:
+`frontend/src/features/report/ReportModule.tsx` (wires
+`isStaleSessionError` into `generateReport`),
+`frontend/src/features/soap/SOAPModule.tsx` +
+`__tests__/SOAPModule.test.tsx` (extends the pattern + adds a regression
+case), and `frontend/src/lib/stale-session.ts` (refinement).
 
 ---
 
@@ -102,10 +114,21 @@ touched by this session's commits).
       `useSyncExternalStore`-backed hook plus `markOnboardingDone()` /
       `resetOnboarding()` helpers. `module/layout.tsx` dropped the
       `setTimeout(0)` + direct `localStorage` read. +5 vitest cases.
+- [x] Stale-session 404 via SessionProvider helper (`339b7a4`,
+      2026-05-28) — new `ApiError` class in `@/lib/api`,
+      `@/lib/stale-session` util (`isStaleSessionError`,
+      `clearStoredSession`, `SESSION_STORAGE_KEY`, `STALE_SESSION_TOAST`),
+      and a `handleStaleSession` callback on the SessionProvider context.
+      `ChatView`, `TherapyPlanModule`, and `handleSoftReset` branch on
+      `isStaleSessionError` before the generic error path. Diagnosed
+      after a live `POST /sessions/.../generate` 404 in the dev UI.
 
 ### In Progress
 
-- Nothing in progress. Three local commits pending push.
+- Uncommitted follow-ups to `339b7a4` in the working tree (see "Current
+  Git State"): wire `ReportModule.generateReport` to the helper and
+  finish the SOAP coverage. The full vitest suite (159/159), `tsc`, and
+  `eslint` (on touched files) are green against the current tree.
 
 ### Blocked
 
@@ -136,14 +159,16 @@ backend/tests/test_phonological_analyzer.py
 
 ```text
 Branch: main
-HEAD:   11540d1 refactor(frontend): extract useOnboarding hook from module layout
+HEAD:   339b7a4 feat(frontend): handle stale-session 404 via SessionProvider helper
 Behind: 0
-Ahead:  3   (129333c, cbf4d72, 11540d1)
+Ahead:  5   (129333c, cbf4d72, 11540d1, fc2cab1, 339b7a4)
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/HANDOFF.md
-  M frontend/src/features/report/__tests__/ReportModule.test.tsx   (owner WIP)
-  M frontend/src/lib/api.ts                                        (owner WIP)
+  M frontend/src/features/report/ReportModule.tsx
+  M frontend/src/features/soap/SOAPModule.tsx
+  M frontend/src/features/soap/__tests__/SOAPModule.test.tsx
+  M frontend/src/lib/stale-session.ts
 ```
 
 ---
