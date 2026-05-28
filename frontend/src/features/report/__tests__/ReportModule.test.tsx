@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { toast } from "sonner";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -16,22 +17,26 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("@/lib/api", () => ({
-  api: {
-    sessions: {
-      create: vi.fn(),
-      get: vi.fn(),
-      upload: vi.fn(),
-      consent: vi.fn(),
-      generate: vi.fn(),
-      chat: vi.fn(),
+vi.mock("@/lib/api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+  return {
+    ...actual,
+    api: {
+      sessions: {
+        create: vi.fn(),
+        get: vi.fn(),
+        upload: vi.fn(),
+        consent: vi.fn(),
+        generate: vi.fn(),
+        chat: vi.fn(),
+      },
+      patients: {
+        get: vi.fn(),
+        list: vi.fn(),
+      },
     },
-    patients: {
-      get: vi.fn(),
-      list: vi.fn(),
-    },
-  },
-}));
+  };
+});
 
 vi.mock("@/components/WorkflowStepper", () => ({
   WorkflowStepper: ({ currentStep }: { currentStep: number }) => (
@@ -48,7 +53,13 @@ vi.mock("@/features/chat/PatientSelector", () => ({
 }));
 
 vi.mock("../components/ChatView", () => ({
-  ChatView: () => <div data-testid="chat-view" />,
+  ChatView: ({ onGenerateReport }: { onGenerateReport: () => void }) => (
+    <div data-testid="chat-view">
+      <button data-testid="generate-button" onClick={onGenerateReport}>
+        Bericht generieren
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../components/PreUploadView", () => ({
@@ -63,7 +74,7 @@ vi.mock("../components/ReportPreview", () => ({
   ReportPreview: () => <div data-testid="report-preview" />,
 }));
 
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { ReportModule } from "../ReportModule";
 
 const defaultProps = {
@@ -148,6 +159,42 @@ describe("ReportModule", () => {
       // After restoring session, phase is set to "chat"
       expect(screen.getByTestId("workflow-stepper")).toBeInTheDocument();
     });
+  });
+
+  it("recovers from a stale-session 404 on generate by clearing local state and toasting", async () => {
+    const storedId = "abc123def456";
+    localStorage.setItem("logopaedie_session_id", storedId);
+    vi.mocked(api.sessions.get).mockResolvedValue({
+      session_id: storedId,
+      status: "anamnesis",
+      chat_history: [],
+      collected_data: {},
+      materials_consent: false,
+    } as unknown as ReturnType<typeof api.sessions.get> extends Promise<infer T> ? T : never);
+    vi.mocked(api.sessions.generate).mockRejectedValueOnce(
+      new ApiError(404, "Session nicht gefunden oder abgelaufen."),
+    );
+
+    const setSessionId = vi.fn();
+    const onRequestReset = vi.fn();
+    render(
+      <ReportModule
+        {...defaultProps}
+        sessionId={storedId}
+        setSessionId={setSessionId}
+        onRequestReset={onRequestReset}
+      />,
+    );
+
+    const button = await screen.findByTestId("generate-button");
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(setSessionId).toHaveBeenCalledWith(null);
+    });
+    expect(localStorage.getItem("logopaedie_session_id")).toBeNull();
+    expect(onRequestReset).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Sitzung abgelaufen. Bitte neu beginnen.");
   });
 
   it("calls api.sessions.get when stored session ID exists", async () => {

@@ -72,6 +72,15 @@ export async function apiCall(
 
 /* ═══════════════════════════════ Shared fetch helper ═════════════════════════ */
 
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function fetchApi<T>(
   path: string,
   init?: RequestInit,
@@ -79,7 +88,7 @@ async function fetchApi<T>(
   const res = await apiCall(`${API}${path}`, init);
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
-    throw new Error(detail?.detail ?? res.statusText);
+    throw new ApiError(res.status, detail?.detail ?? res.statusText);
   }
   return res.json();
 }

@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import {
+  STALE_SESSION_TOAST,
+  clearStoredSession,
+  isStaleSessionError,
+} from "@/lib/stale-session";
 import { REPORT_TYPE_LABELS } from "@/types";
 import type { ChatMsg, ReportSummary, TherapyPlanSummary } from "@/types";
 import type { TherapyPlanData } from "@/types/therapy-plan";
@@ -80,6 +86,15 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
     }
   }
 
+  function handleTpStaleSession() {
+    clearStoredSession();
+    setTpSessionId(null);
+    setTpMessages([]);
+    setTpIsComplete(false);
+    setTpMode("select");
+    toast.error(STALE_SESSION_TOAST);
+  }
+
   async function sendTpMessage() {
     if (!tpInput.trim() || !tpSessionId || tpIsSending) return;
     const msg = tpInput.trim();
@@ -92,6 +107,10 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
       setTpMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
       if (data.is_anamnesis_complete) setTpIsComplete(true);
     } catch (err) {
+      if (isStaleSessionError(err)) {
+        handleTpStaleSession();
+        return;
+      }
       setError(err instanceof Error ? err.message : "Fehler.");
     } finally {
       setTpIsSending(false);
@@ -107,6 +126,10 @@ export function TherapyPlanModule({}: TherapyPlanModuleProps) {
       if (rid) setTpReportId(rid);
       setTpMode("plan");
     } catch (err) {
+      if (isStaleSessionError(err)) {
+        handleTpStaleSession();
+        return;
+      }
       setError(err instanceof Error ? err.message : "Fehler.");
       setTpMode(tpSessionId ? "chat" : "from-report");
     }

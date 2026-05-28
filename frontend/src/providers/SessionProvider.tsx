@@ -1,7 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import {
+  SESSION_STORAGE_KEY,
+  STALE_SESSION_TOAST,
+  clearStoredSession,
+  isStaleSessionError,
+} from "@/lib/stale-session";
 import type { ChatMsg } from "@/types";
 
 interface SessionContextValue {
@@ -15,17 +22,28 @@ interface SessionContextValue {
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   handleSoftReset: () => Promise<void>;
   handleFullReset: () => Promise<void>;
+  /**
+   * Drop the stored/active session id and notify the user.
+   * Call from a `catch` after detecting a stale-session 404
+   * via `isStaleSessionError(err)`.
+   */
+  handleStaleSession: () => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
-
-const SESSION_STORAGE_KEY = "logopaedie_session_id";
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleStaleSession = useCallback(() => {
+    clearStoredSession();
+    setSessionId(null);
+    setMessages([]);
+    toast.error(STALE_SESSION_TOAST);
+  }, []);
 
   const handleSoftReset = useCallback(async () => {
     if (!sessionId) return;
@@ -41,11 +59,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const resetFn = (window as unknown as Record<string, unknown>).__reportModuleReset;
       if (typeof resetFn === "function") (resetFn as () => void)();
     } catch (err) {
+      if (isStaleSessionError(err)) {
+        handleStaleSession();
+        return;
+      }
       setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
     } finally {
       setIsSending(false);
     }
-  }, [sessionId]);
+  }, [sessionId, handleStaleSession]);
 
   const handleFullReset = useCallback(async () => {
     setIsSending(true);
@@ -81,6 +103,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setError,
         handleSoftReset,
         handleFullReset,
+        handleStaleSession,
       }}
     >
       {children}

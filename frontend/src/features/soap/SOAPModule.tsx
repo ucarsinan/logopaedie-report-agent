@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { isStaleSessionError } from "@/lib/stale-session";
+import { useSession } from "@/providers/SessionProvider";
 import { REPORT_TYPE_LABELS } from "@/types";
 import type { SOAPNote, ReportSummary } from "@/types";
 
@@ -17,6 +19,7 @@ interface SOAPModuleProps {
 }
 
 export function SOAPModule({ sessionId }: SOAPModuleProps) {
+  const { handleStaleSession } = useSession();
   const [mode, setMode] = useState<"session" | "report">(sessionId ? "session" : "report");
   const [soapNote, setSoapNote] = useState<SOAPNote | null>(null);
   const [loading, setLoading] = useState(false);

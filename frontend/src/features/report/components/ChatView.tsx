@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMsg } from "@/types";
 import { api } from "@/lib/api";
+import { isStaleSessionError } from "@/lib/stale-session";
+import { useSession } from "@/providers/SessionProvider";
 import { ChatBubble, TypingIndicator } from "@/features/chat/components/ChatBubble";
 import { ChatInput } from "@/features/chat/components/ChatInput";
 import { AnamnesisProgress } from "@/features/chat/components/AnamnesisProgress";
@@ -106,6 +108,7 @@ export function ChatView({
 }: ChatViewProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [hasStarted, setHasStarted] = useState(false);
+  const { handleStaleSession } = useSession();
 
   // Show welcome screen only when greeting phase + no user messages yet
   const showWelcome = currentPhase === "greeting" && inputMode === "select" && !hasStarted;
@@ -147,12 +150,16 @@ export function ChatView({
         setMissingFields(data.missing_fields ?? []);
       } catch (err) {
         setMessages((prev) => prev.slice(0, -1));
+        if (isStaleSessionError(err)) {
+          handleStaleSession();
+          return;
+        }
         setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
       } finally {
         setIsSending(false);
       }
     },
-    [sessionId, setError, setIsSending, setMessages, setCurrentPhase, setIsAnamnesisComplete, setCollectedFields, setMissingFields],
+    [sessionId, setError, setIsSending, setMessages, setCurrentPhase, setIsAnamnesisComplete, setCollectedFields, setMissingFields, handleStaleSession],
   );
 
   const handleSelectReportType = useCallback(
