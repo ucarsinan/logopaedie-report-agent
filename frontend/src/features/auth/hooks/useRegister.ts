@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { authApi } from "@/features/auth/api";
+import { setDemoMode } from "@/hooks/useDemoMode";
 
 export function useRegister() {
   const [loading, setLoading] = useState(false);
@@ -12,7 +13,7 @@ export function useRegister() {
     setError(null);
     try {
       const res = await authApi.register(email, password);
-      localStorage.removeItem("demo_mode");
+      setDemoMode(false);
       if (res.auto_verified) {
         try {
           await authApi.login(email, password);

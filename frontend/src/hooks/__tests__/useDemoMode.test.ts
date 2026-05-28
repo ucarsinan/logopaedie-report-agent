@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook } from "@testing-library/react";
-import { useDemoMode } from "../useDemoMode";
+import { renderHook, act } from "@testing-library/react";
+import { useDemoMode, setDemoMode, getDemoMode } from "../useDemoMode";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn(),
@@ -92,5 +92,61 @@ describe("useDemoMode", () => {
     const { result } = renderHook(() => useDemoMode());
     expect(result.current).toHaveProperty("isDemo");
     expect(typeof result.current.isDemo).toBe("boolean");
+  });
+});
+
+describe("setDemoMode", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(useSearchParams).mockReturnValue(mockParams());
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("writes 'true' to localStorage when called with true", () => {
+    setDemoMode(true);
+    expect(localStorage.getItem("demo_mode")).toBe("true");
+  });
+
+  it("removes the key from localStorage when called with false", () => {
+    localStorage.setItem("demo_mode", "true");
+    setDemoMode(false);
+    expect(localStorage.getItem("demo_mode")).toBeNull();
+  });
+
+  it("dispatches a demo-mode-changed event so same-tab subscribers re-render", () => {
+    const { result } = renderHook(() => useDemoMode());
+    expect(result.current.isDemo).toBe(false);
+    act(() => setDemoMode(true));
+    expect(result.current.isDemo).toBe(true);
+    act(() => setDemoMode(false));
+    expect(result.current.isDemo).toBe(false);
+  });
+});
+
+describe("getDemoMode", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("returns false when localStorage and URL are empty", () => {
+    expect(getDemoMode()).toBe(false);
+  });
+
+  it("returns true when localStorage has demo_mode=true", () => {
+    localStorage.setItem("demo_mode", "true");
+    expect(getDemoMode()).toBe(true);
+  });
+
+  it("returns false when localStorage has demo_mode=false", () => {
+    localStorage.setItem("demo_mode", "false");
+    expect(getDemoMode()).toBe(false);
   });
 });

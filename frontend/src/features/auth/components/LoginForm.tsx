@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLogin } from "../hooks/useLogin";
+import { setDemoMode } from "@/hooks/useDemoMode";
 import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
 export function LoginForm() {
@@ -26,7 +27,7 @@ export function LoginForm() {
       setChallengeId(res.challenge_id);
       return;
     }
-    localStorage.removeItem("demo_mode");
+    setDemoMode(false);
     window.location.href = getRedirectUrl();
   }
 
@@ -34,7 +35,7 @@ export function LoginForm() {
     if (!challengeId) return;
     const res = await submit2fa(challengeId, code);
     if (res && !("step" in res)) {
-      localStorage.removeItem("demo_mode");
+      setDemoMode(false);
       window.location.href = getRedirectUrl();
     }
   }

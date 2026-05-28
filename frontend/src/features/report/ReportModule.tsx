@@ -8,13 +8,13 @@ import type { ChatMsg, UploadedFile, ReportData, AppPhase, PatientSummary } from
 import { WorkflowStepper } from "@/components/WorkflowStepper";
 import type { StepConfig } from "@/components/WorkflowStepper";
 import { PatientSelector } from "@/features/chat/PatientSelector";
+import { getDemoMode, setDemoMode } from "@/hooks/useDemoMode";
 import { ChatView } from "./components/ChatView";
 import { PreUploadView } from "./components/PreUploadView";
 import { GeneratingView } from "./components/GeneratingView";
 import { ReportPreview } from "./components/ReportPreview";
 
 const SESSION_STORAGE_KEY = "logopaedie_session_id";
-const DEMO_STORAGE_KEY = "demo_mode";
 
 const REPORT_STEPS: StepConfig[] = [
   {
@@ -157,10 +157,7 @@ export function ReportModule({
           }
         }
 
-        const isDemo =
-          window.location.search.includes("demo=true") ||
-          localStorage.getItem(DEMO_STORAGE_KEY) === "true";
-        if (isDemo) {
+        if (getDemoMode()) {
           await startSession(null);
           return;
         }
@@ -271,7 +268,7 @@ export function ReportModule({
         loading={startingSession}
         onSelect={(patient) => startSession(patient)}
         onDemo={() => {
-          localStorage.setItem(DEMO_STORAGE_KEY, "true");
+          setDemoMode(true);
           startSession(null);
         }}
       />
