@@ -38,11 +38,7 @@ const THERAPY_PLAN_STEPS: StepConfig[] = [
   },
 ];
 
-interface TherapyPlanModuleProps {
-  sessionId: string | null;
-}
-
-export function TherapyPlanModule({}: TherapyPlanModuleProps) {
+export function TherapyPlanModule() {
   const [tpMode, setTpMode] = useState<TpMode>("select");
   const [tpSessionId, setTpSessionId] = useState<string | null>(null);
   const [tpReportId, setTpReportId] = useState<number | null>(null);

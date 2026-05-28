@@ -42,17 +42,17 @@ describe("TherapyPlanModule", () => {
   });
 
   it("renders without crash", () => {
-    render(<TherapyPlanModule sessionId={null} />);
+    render(<TherapyPlanModule />);
     expect(screen.getByText(/KI-gestützter Therapieplan/i)).toBeInTheDocument();
   });
 
   it("shows workflow stepper", () => {
-    render(<TherapyPlanModule sessionId={null} />);
+    render(<TherapyPlanModule />);
     expect(screen.getByTestId("workflow-stepper")).toBeInTheDocument();
   });
 
   it("shows mode selection buttons", async () => {
-    render(<TherapyPlanModule sessionId={null} />);
+    render(<TherapyPlanModule />);
     await waitFor(() => {
       expect(screen.getByText(/Neu \(Mini-Chat\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Aus Bericht/i)).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("TherapyPlanModule", () => {
   });
 
   it("fetches therapy plans and reports on mount", async () => {
-    render(<TherapyPlanModule sessionId={null} />);
+    render(<TherapyPlanModule />);
     await waitFor(() => {
       expect(vi.mocked(api.therapyPlans.list)).toHaveBeenCalledTimes(1);
       expect(vi.mocked(api.reports.list)).toHaveBeenCalledTimes(1);
@@ -121,7 +121,7 @@ describe("TherapyPlanModule", () => {
       pending as unknown as ReturnType<typeof api.sessions.therapyPlan>,
     );
 
-    render(<TherapyPlanModule sessionId={null} />);
+    render(<TherapyPlanModule />);
 
     fireEvent.click(await screen.findByText(/Aus Bericht/i));
 
@@ -152,7 +152,7 @@ describe("TherapyPlanModule", () => {
       },
     ] as unknown as ReturnType<typeof api.therapyPlans.list> extends Promise<infer T> ? T : never);
 
-    render(<TherapyPlanModule sessionId={null} />);
+    render(<TherapyPlanModule />);
     await waitFor(() => {
       expect(screen.getByText("Test-Patient")).toBeInTheDocument();
     });

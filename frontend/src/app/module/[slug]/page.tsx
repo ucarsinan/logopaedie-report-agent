@@ -112,9 +112,7 @@ function ModuleContent({ slug }: { slug: string }) {
         />
       )}
       {slug === "phonology" && <PhonologyModule />}
-      {slug === "therapy-plan" && (
-        <TherapyPlanModule sessionId={session.sessionId} />
-      )}
+      {slug === "therapy-plan" && <TherapyPlanModule />}
       {slug === "compare" && <CompareModule />}
       {slug === "suggest" && <SuggestModule />}
       {slug === "history" && <HistoryModule />}
