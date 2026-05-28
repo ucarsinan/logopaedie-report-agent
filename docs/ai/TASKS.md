@@ -11,7 +11,8 @@
 - [ ] **Owner-driven (not agent work):** anamnesis engine + phonological analyzer
       iterations (uncommitted WIP on `main`). Agents must not touch
       `backend/services/anamnesis_engine.py`,
-      `backend/services/phonological_analyzer.py`, or
+      `backend/services/phonological_analyzer.py`,
+      `backend/services/anamnesis_catalog.py`, or
       `backend/tests/test_phonological_analyzer.py` until this is settled.
 
 ---
@@ -24,16 +25,36 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       anamnesis is complete, generate a structured handoff that wires into
       the report flow. Likely overlaps with the in-progress owner work →
       coordinate before starting.
+- [ ] `backend/tests/test_pdf_disclaimer.py` future-proofing: the test
+      passes a `MagicMock` canvas, and `getattr(MagicMock, "_generated_at",
+      None)` returns a `MagicMock` (truthy). Today's assertions still
+      pass, but a future test asserting the branding-line text would see
+      `<MagicMock>` inside the string. Tighten the spec.
+- [ ] Move `frontend/src/features/report/components/GeneratingView.test.tsx`
+      to `frontend/src/features/report/__tests__/` for convention
+      alignment with the other feature tests.
 - [ ] Fix the pre-existing Vercel preview deploy failure (separate
       deployment-config issue; ignore for CI green-up).
-- [ ] Add UI loading skeletons for report generation (currently just spinner).
-- [ ] Improve PDF export quality (layout, fonts, report structure).
-- [ ] Expand backend test coverage for therapy-plan / SOAP / compare endpoints.
 
 ---
 
 ## Done
 
+- [x] TherapyPlanModule dead `sessionId` prop removal (`241f7fd`) — 2026-05-28
+- [x] SOAPModule.generateFromReport stale-session 404 recovery (`11ce3cd`) — 2026-05-28
+- [x] Therapy-plan ownership enforcement across GET-list / GET-by-id / PUT,
+      plus test-file consolidation (`9c27c7e`) — 2026-05-28
+- [x] PDF export typography, layout, and thread-safe per-render context
+      (`6840168`) — 2026-05-28
+- [x] Layout-aware loading skeletons for report / SOAP / therapy-plan
+      (`36c29d0`) — 2026-05-28
+- [x] Stale-session 404 wiring across modules (`c332a13`, `a56b1ef`) — 2026-05-28
+- [x] Stale-session 404 via SessionProvider helper (`339b7a4`) — 2026-05-28
+- [x] Derive onboarding overlay visibility instead of setState-in-effect
+      (`fc2cab1`) — 2026-05-28
+- [x] Extract `useOnboarding` hook (`11540d1`) — 2026-05-28
+- [x] Reset picker `dismissed` on slug change (`cbf4d72`) — 2026-05-28
+- [x] Centralize demo-mode access in `useDemoMode` (`129333c`) — 2026-05-28
 - [x] Bump JS actions to v6 (Node-24-native), drop FORCE_JAVASCRIPT_ACTIONS_TO_NODE24
       flag (`4d1f0f6`) — 2026-05-28
 - [x] Demo-mode persistence in module router (`ded7c1a`) — 2026-05-28

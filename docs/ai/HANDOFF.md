@@ -10,72 +10,211 @@
 
 - **Date:** 2026-05-28
 - **Updated by:** Claude Code
-- **Handoff to:** unspecified — owner is currently driving work themselves on the anamnesis area
+- **Handoff to:** next agent picking from `TASKS.md` "Next", otherwise the
+  owner driving anamnesis work themselves (M-6 still blocked).
 
 ---
 
-## Short Summary
+## Session Summary
 
-`main` is at `a3ba15a` on the remote; five local commits stacked on top,
-the three earlier demo-mode follow-ups plus two new ones from this
-session:
+**Agent:** Claude Code
+**Date:** 2026-05-28
+**Role(s):** Implementer + Reviewer + Scribe (with parallel sub-agents)
 
-- `129333c` — `refactor(frontend): centralize demo_mode access in useDemoMode`
-- `cbf4d72` — `fix(frontend): reset dismissed picker state on module slug change`
-- `11540d1` — `refactor(frontend): extract useOnboarding hook from module layout`
-- `fc2cab1` — `fix(frontend): derive onboarding overlay visibility instead of setState-in-effect`
-- `339b7a4` — `feat(frontend): handle stale-session 404 via SessionProvider helper`
+### What was done
 
-Working tree has four further uncommitted follow-ups to `339b7a4` (wire
-`ReportModule.generateReport` into the helper, polish SOAP coverage,
-refine `stale-session.ts`).
+- Dispatched three parallel sub-agents against the top three agent-safe
+  items from `TASKS.md` "Next" — UI loading skeletons, PDF export quality,
+  and backend test coverage for therapy-plan / SOAP / compare. Reviewed
+  each sub-agent's output in parallel, fixed reviewer-flagged
+  high-priority items (PDF thread safety in pass 2; three real
+  therapy-plan ownership bugs in pass 3), and landed the work as three
+  thematic commits pushed to `origin/main` in this order:
+  - `36c29d0` — `feat(frontend): add layout-aware loading skeletons for report/SOAP/therapy-plan`
+  - `6840168` — `feat(backend): improve PDF export typography, layout, and thread safety`
+  - `9c27c7e` — `feat(backend): enforce ownership on therapy-plan endpoints and consolidate tests`
+- Dispatched a second wave of three parallel sub-agents to address the
+  reviewer-flagged pre-existing items: a Scribe to refresh docs/ai, plus
+  two frontend fix agents. Both fixes landed and pushed:
+  - `11ce3cd` — `fix(frontend): wire SOAPModule.generateFromReport into stale-session helper`
+  - `241f7fd` — `refactor(frontend): drop unused sessionId prop from TherapyPlanModule`
+- Verified the full test + lint matrix after each commit: backend
+  pytest 399 passed, frontend vitest 164 passed, `ruff check` clean,
+  `mypy` clean, `tsc --noEmit` clean, `eslint` clean.
+- `main` is now at `241f7fd`, 0 ahead / 0 behind `origin/main` (once the
+  docs commit lands).
 
-The 2026-05-26 audit backlog is still down to **M-6** (anamnesis
-completion logic), blocked on owner-driven WIP in the anamnesis engine /
-phonological analyzer area (do not touch).
+### Files changed
 
----
+#### `36c29d0` — Layout-aware loading skeletons
 
-## Last Action
+- `frontend/src/components/Skeleton.tsx` (new) — shared skeleton primitive,
+  `role="status"` + `aria-live`, `motion-reduce:animate-none`.
+- `frontend/src/features/report/components/GeneratingView.tsx` — mirrors
+  the final report layout to avoid layout shift.
+- `frontend/src/features/report/components/GeneratingView.test.tsx`
+  (new, colocated next to component — minor convention drift flagged by
+  reviewer, not fixed in this commit; lives in `components/`, not
+  `__tests__/`).
+- `frontend/src/features/soap/SOAPModule.tsx` — SOAP skeleton variant.
+- `frontend/src/features/soap/__tests__/SOAPModule.test.tsx` — +1 vitest case.
+- `frontend/src/features/therapy-plan/TherapyPlanModule.tsx` — therapy-plan
+  skeleton variant.
+- `frontend/src/features/therapy-plan/__tests__/TherapyPlanModule.test.tsx`
+  — +1 vitest case.
 
-Live `POST /backend-api/sessions/37b2eeabab65/generate` returned 404 in
-the dev UI. Direct backend probe confirmed the body
-`{"detail":"Session nicht gefunden oder abgelaufen."}` — the BFF proxy
-was fine, the Redis-backed session simply did not exist (TTL or restart).
-We hardened the UX so the next stale-session 404 recovers cleanly
-instead of dumping the raw backend message:
+#### `6840168` — PDF export typography, layout, thread safety
 
-1. **`ApiError` in `@/lib/api`.** `fetchApi` now throws an `ApiError`
-   carrying the HTTP `status` instead of a plain `Error`. Backwards
-   compatible — `ApiError extends Error`, so existing `err.message`
-   handlers keep working.
-2. **`@/lib/stale-session` util.** New module exposes
-   `SESSION_STORAGE_KEY`, `STALE_SESSION_TOAST`, `isStaleSessionError`
-   (duck-typed on numeric `status === 404` so HMR / loading order can't
-   break detection), and `clearStoredSession` (removes the persisted id
-   and fires the existing `__reportModuleReset` window bridge).
-3. **`SessionProvider.handleStaleSession`.** New callback exposed on
-   `useSession()` context: `clearStoredSession` + `setSessionId(null)` +
-   `setMessages([])` + toast. `handleSoftReset` routes 404 from
-   `api.sessions.newConversation` through it.
-4. **Call-sites updated.** `ChatView` (anamnesis send loop) and
-   `TherapyPlanModule` (both `chat` and `therapyPlan` catches) branch
-   on `isStaleSessionError` before the generic error path. New
-   regression test in `ReportModule.test.tsx` (mocks
-   `api.sessions.generate` rejecting with `ApiError(404)` and asserts
-   the recovery shape).
+- `backend/services/pdf_generator.py` — restructured: typography hierarchy
+  (title / section / body), running header (patient pseudonym + report
+  type + `record.created_at`), "Seite X von Y" footer, A4 margins,
+  KeepTogether section blocks, HR accent under headings. Replaced
+  module-level `_HEADER_CTX` global with a `_PageContext` dataclass
+  captured per render via a closure-based `_make_on_page_hook` factory
+  (defensive against future `loop.run_in_executor` use).
+  `NumberedCanvas._generated_at` captures the timestamp once so first-pass
+  and overdraw-pass footers cannot disagree across the midnight UTC
+  boundary. Added empty-list guard to `_build_section`.
+- `backend/routers/exports.py` — 1-line change: now passes
+  `record.created_at` to `generate_pdf` so the header date matches the
+  report, not the PDF-generation time.
+- `backend/tests/test_pdf_generator.py` — new regression test
+  `test_generate_pdf_no_cross_call_state_leak` exercising the per-render
+  context via `ThreadPoolExecutor` (14 → 15 pdf tests; 397 → 399 backend
+  total).
 
-`tsc --noEmit` clean, full vitest suite **159 passed / 0 failed across
-42 test files**. Lint clean on touched files (a single pre-existing
-`react-hooks/set-state-in-effect` warning in
-`app/module/[slug]/page.tsx` is not from this work).
+#### `9c27c7e` — Therapy-plan ownership + test consolidation
 
-Working tree carries four uncommitted follow-ups (matching the items in
-`CURRENT.md`'s "Current Git State"): wire
-`ReportModule.generateReport` into the helper (using the same
-duck-typed `isStaleSessionError` / `STALE_SESSION_TOAST` from
-`@/lib/stale-session`), plus SOAP coverage and a `stale-session.ts`
-refinement.
+- `backend/routers/therapy_plans.py` — `GET /therapy-plans` now filters
+  on `user_id`; `GET /therapy-plans/{id}` and `PUT /therapy-plans/{id}`
+  now enforce ownership; all three return 404 (not 403) on miss, matching
+  the `reports.py` / `sessions.py` convention to avoid leaking existence.
+- `backend/models/therapy_plan_record.py` — added `user_id: UUID` FK
+  mirroring `SOAPRecord`.
+- `backend/alembic/versions/0010_therapy_plan_user_id.py` (new) —
+  create-or-alter pattern from 0005/0006: nullable column → delete
+  orphans → flip NOT NULL via `batch_alter_table` (SQLite-compatible).
+  **Destructive on rollout — see Risks.**
+- `backend/tests/test_soap.py` (deleted) — 2 cases were exact duplicates
+  of `test_soap_routes.py`, 8 unique cases absorbed.
+- `backend/tests/test_therapy_plans.py` (deleted) — all 4 cases
+  (`POST /sessions/{id}/therapy-plan`) absorbed into
+  `test_therapy_plans_routes.py` as a new
+  `TestGenerateTherapyPlanFromSession` class.
+- `backend/tests/conftest.py` — `unauth_client` fixture promoted here.
+- `backend/tests/test_soap_routes.py` — DB-shape assertions, 401,
+  ordering, and cross-user isolation cases absorbed.
+- `backend/tests/test_therapy_plans_routes.py` — `TestGenerateTherapyPlanFromSession`
+  class added; three new ownership-enforcement cases:
+  `test_list_does_not_leak_other_users_plans`,
+  `test_get_other_users_plan_returns_404`,
+  `test_update_other_users_plan_returns_404`.
+
+#### Docs (this scribe pass, uncommitted)
+
+- `docs/ai/CURRENT.md` — rewritten to reflect the three new commits and
+  drop the now-landed stale-session follow-up references.
+- `docs/ai/TASKS.md` — three "Next" items moved to "Done" with SHAs; new
+  "Next" items added for the four open reviewer findings.
+- `docs/ai/HANDOFF.md` — this rewrite.
+
+#### `11ce3cd` — SOAPModule stale-session
+
+- `frontend/src/features/soap/SOAPModule.tsx` — `generateFromReport`
+  catch branches on `isStaleSessionError` before the generic fallback,
+  matching the canonical `ChatView` / `TherapyPlanModule` pattern.
+- `frontend/src/features/soap/__tests__/SOAPModule.test.tsx` — +1 case
+  asserting `handleStaleSession` fires once on `api.soap.fromReport`
+  rejecting with `ApiError(404)`, and the raw backend detail does NOT
+  reach the DOM. 163 → 164.
+
+#### `241f7fd` — TherapyPlanModule dead prop removal
+
+- `frontend/src/features/therapy-plan/TherapyPlanModule.tsx` —
+  `TherapyPlanModuleProps` interface removed, function signature now
+  `export function TherapyPlanModule()`. The component manages its own
+  session via `tpSessionId`, never read the prop.
+- `frontend/src/app/module/[slug]/page.tsx` — `<TherapyPlanModule />`
+  call site updated.
+- `frontend/src/features/therapy-plan/__tests__/TherapyPlanModule.test.tsx`
+  — 6 `render(<TherapyPlanModule sessionId={null} />)` calls collapsed
+  to `render(<TherapyPlanModule />)`. No behavior change, 164/164.
+
+### What is NOT done yet
+
+- `backend/tests/test_pdf_disclaimer.py` passes a `MagicMock` canvas;
+  `getattr(MagicMock, "_generated_at", None)` returns a `MagicMock`
+  (truthy), so a future test asserting the branding-line text would see
+  `<MagicMock>` inside the string. Today's assertion (disclaimer string
+  draw) still passes. Low priority future-proofing.
+- `frontend/src/features/report/components/GeneratingView.test.tsx` lives
+  next to the component instead of in `frontend/src/features/report/__tests__/`.
+  Reviewer-flagged convention drift; not fixed in `36c29d0`.
+
+### Risks / Attention
+
+- **Migration `0010_therapy_plan_user_id.py` is destructive on rollout.**
+  It drops `therapyplanrecord` rows where `user_id IS NULL` before
+  flipping the column to NOT NULL. Acceptable for the current
+  portfolio/demo status; revisit before any production rollout where
+  real users may have orphan rows from the pre-ownership era.
+- **Commit `9c27c7e` message minor inaccuracy.** The message mentions a
+  "trivial import-sort fix in three alembic migration tests"; that change
+  was reverted by the pre-commit hook (`ruff format`) before it landed.
+  `ruff check` is clean across the suite regardless. Not amended because
+  the project rule is to prefer new commits over amend — flagged for
+  transparency only.
+- **`test_pdf_disclaimer.py` `MagicMock` edge** (see "What is NOT done
+  yet"). Future-proofing only.
+- **Owner WIP** in `backend/services/anamnesis_engine.py`,
+  `phonological_analyzer.py`, `anamnesis_catalog.py`, and
+  `backend/tests/test_phonological_analyzer.py` — do **not** stage,
+  commit, or modify these. M-6 stays blocked until the owner hands them
+  over.
+- **NEXT_PUBLIC_API_URL trap**: don't reintroduce an absolute host value
+  in the frontend-e2e CI job — see the comment block in
+  `.github/workflows/ci.yml`. It is baked into the production bundle at
+  `npm run build` and breaks the `**/backend-api/**` Playwright mocks.
+- Vercel `experimentalServices` is beta and may change without notice.
+- Vercel preview deploy still fails on every PR with a pre-existing
+  deployment-config error. Out of scope unless explicitly requested.
+
+### Next concrete action
+
+Wait for the owner to settle the anamnesis WIP and hand over M-6. If
+picking work proactively in the meantime, the next agent-safe item from
+`TASKS.md` "Next" is one of: `test_pdf_disclaimer.py` MagicMock spec
+tightening, or moving `GeneratingView.test.tsx` to
+`frontend/src/features/report/__tests__/` for convention alignment.
+
+### Ideal next prompt
+
+```text
+Read docs/ai/HANDOFF.md and docs/ai/CURRENT.md first, then docs/ai/PROJECT.md
+if you need architectural context.
+
+Current situation: main is at 241f7fd, even with origin/main. Five
+commits landed today (36c29d0 UI skeletons, 6840168 PDF quality +
+thread safety, 9c27c7e therapy-plan ownership + test consolidation,
+11ce3cd SOAPModule stale-session, 241f7fd TherapyPlanModule dead-prop
+cleanup). Backend pytest 399/399, frontend vitest 164/164, ruff / mypy
+/ tsc / eslint all clean.
+
+M-6 (anamnesis completion logic) remains blocked on owner WIP in
+backend/services/anamnesis_engine.py + phonological_analyzer.py +
+anamnesis_catalog.py — do NOT touch those files until the owner
+explicitly hands them over.
+
+Your task: <one of>
+  (a) wait for the owner to hand off M-6;
+  (b) pick the next agent-safe item from docs/ai/TASKS.md "Next"
+      column (test_pdf_disclaimer MagicMock tightening or
+      GeneratingView.test.tsx convention realignment are both small);
+  (c) <my custom direction>.
+
+After completing the task, update docs/ai/CURRENT.md, docs/ai/TASKS.md,
+and docs/ai/HANDOFF.md before stopping.
+```
 
 ---
 
@@ -84,82 +223,23 @@ refinement.
 | PR | Subject | Result |
 | --- | --- | --- |
 | [#3](https://github.com/ucarsinan/logopaedie-report-agent/pull/3) | Security & quality audit fixes (C-1/C-2, H-1..H-4, M-1/2/3/5, L-2/3/4) | merged 2026-05-27 (`b33cf7e`) |
-| [#4](https://github.com/ucarsinan/logopaedie-report-agent/pull/4) | `fix(ci): drop NEXT_PUBLIC_API_URL override in E2E job` | merged 2026-05-27 (`5a00a3e`) — full E2E suite green |
+| [#4](https://github.com/ucarsinan/logopaedie-report-agent/pull/4) | `fix(ci): drop NEXT_PUBLIC_API_URL override in E2E job` | merged 2026-05-27 (`5a00a3e`) |
 | [#5](https://github.com/ucarsinan/logopaedie-report-agent/pull/5) | `docs: sync CLAUDE.md and docs/ai/PROJECT.md with current architecture (M-4)` | merged 2026-05-28 (`e8fe12b`) |
-| [#6](https://github.com/ucarsinan/logopaedie-report-agent/pull/6) | `chore(ci): opt JS actions into Node.js 24 ahead of 2026-06-02 cutover` | merged 2026-05-28 (`9119077`) — all 7 jobs green on Node 24 |
+| [#6](https://github.com/ucarsinan/logopaedie-report-agent/pull/6) | `chore(ci): opt JS actions into Node.js 24 ahead of 2026-06-02 cutover` | merged 2026-05-28 (`9119077`) |
 
----
-
-## Changed Files (this session, beyond the per-PR diffs)
-
-| File | Change | Notes |
-| --- | --- | --- |
-| `.github/workflows/ci.yml` | modified | PR #4 (env removal) + PR #6 (Node 24 opt-in) |
-| `CLAUDE.md` | modified | PR #5 — synced with auth/patients/admin/BFF reality |
-| `docs/ai/PROJECT.md` | modified | PR #5 — same sync |
-| `docs/ai/CURRENT.md` | modified | this state-file sync |
-| `docs/ai/TASKS.md` | modified | this state-file sync |
-| `docs/ai/HANDOFF.md` | modified | this file |
-| `frontend/src/app/module/[slug]/page.tsx` | modified → committed (`ded7c1a`, then `cbf4d72`) | demo-mode persistence fix; dismissed reset on slug change |
-| `.github/workflows/ci.yml` | modified → committed (`4d1f0f6`) | v6 action bump + drop `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env flag |
-| `frontend/src/hooks/useDemoMode.ts` | modified → committed (`129333c`) | added `getDemoMode` + `setDemoMode` exports, same-tab event dispatch |
-| `frontend/src/hooks/__tests__/useDemoMode.test.ts` | modified → committed (`129333c`) | +7 cases (11 → 18) |
-| `frontend/src/features/report/ReportModule.tsx` | modified → committed (`129333c`) | init read via `getDemoMode`, `onDemo` via `setDemoMode` |
-| `frontend/src/features/auth/components/LoginForm.tsx` | modified → committed (`129333c`) | clear via `setDemoMode(false)` |
-| `frontend/src/features/auth/hooks/useRegister.ts` | modified → committed (`129333c`) | clear via `setDemoMode(false)` |
-| `frontend/src/hooks/useOnboarding.ts` | added → committed (`11540d1`) | new hook + `markOnboardingDone` + `resetOnboarding` |
-| `frontend/src/hooks/__tests__/useOnboarding.test.ts` | added → committed (`11540d1`) | 5 cases |
-| `frontend/src/app/module/layout.tsx` | modified → committed (`11540d1`) | use the hook + helper instead of direct `localStorage` calls |
-| `frontend/src/lib/api.ts` | modified → committed (`339b7a4`) | `ApiError` class carrying `status` |
-| `frontend/src/lib/stale-session.ts` | added → committed (`339b7a4`), further refined (uncommitted) | helper module: `isStaleSessionError`, `clearStoredSession`, constants |
-| `frontend/src/providers/SessionProvider.tsx` | modified → committed (`339b7a4`) | `handleStaleSession` callback on context |
-| `frontend/src/features/report/components/ChatView.tsx` | modified → committed (`339b7a4`) | `sendMessage` catch routes 404 through helper |
-| `frontend/src/features/therapy-plan/TherapyPlanModule.tsx` | modified → committed (`339b7a4`) | both `chat` + `therapyPlan` catches |
-| `frontend/src/features/report/__tests__/ReportModule.test.tsx` | modified → committed (`339b7a4`) | new regression case for `generate` 404 |
-| `frontend/src/features/report/ReportModule.tsx` | modified (uncommitted) | wires `generateReport` catch through `isStaleSessionError` + `STALE_SESSION_TOAST` |
-| `frontend/src/features/soap/SOAPModule.tsx` | modified (uncommitted) | `generateFromSession` 404 path |
-| `frontend/src/features/soap/__tests__/SOAPModule.test.tsx` | modified (uncommitted) | SOAP 404 regression case |
-
-Plus three local branches deleted (`claude-security-fixes`,
-`feat/anamnese-slot-flow`, `security-audit-followup`) and the obsolete
-`project_security_quarantine_branch.md` memory entry removed.
+Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
+`11540d1`, `fc2cab1`, `339b7a4`, `3b03124`, `c332a13`, `4a23a7c`,
+`a56b1ef`, `36c29d0`, `6840168`, `9c27c7e`, `11ce3cd`, `241f7fd`.
 
 ---
 
 ## Open Items
 
 - [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
-- [ ] Optional follow-up: align `frontend/package.json` `@types/node` from
-      `^20` to `^22` (matches CI runtime; devDep only, not blocking).
-- [ ] Pre-existing Vercel preview deploy failure — not a CI job, separate
-      deployment-config issue. Out of scope unless explicitly requested.
-
----
-
-## Risks / Attention
-
-- **Owner WIP** in `backend/services/anamnesis_engine.py`,
-  `backend/services/phonological_analyzer.py`,
-  `backend/tests/test_phonological_analyzer.py` — do **not** stage, commit,
-  or modify these. They were untouched by every agent commit today and
-  must remain so.
-- **Additional uncommitted owner WIP** in `frontend/src/lib/api.ts`
-  (adds an `ApiError` class) and
-  `frontend/src/features/report/__tests__/ReportModule.test.tsx`
-  (adds a stale-session 404 recovery test that depends on `ApiError`).
-  Surfaced mid-session; `129333c` was isolated so it does not bundle
-  this WIP. One vitest case currently fails because the matching
-  production-code change in `ReportModule.tsx` was not in the working
-  tree at commit time — owner is the one to land the full extraction.
-- **NEXT_PUBLIC_API_URL trap**: don't reintroduce an absolute host value in
-  the frontend-e2e CI job — see the comment block in `.github/workflows/ci.yml`.
-  It is baked into the production bundle at `npm run build` and breaks the
-  `**/backend-api/**` Playwright mocks (root cause of the recent E2E
-  failures fixed by PR #4).
-- **Node.js 20 → 24 forced cutover on 2026-06-02.** Currently mitigated by
-  the workflow-level env flag from PR #6. Bumping to Node-24-native action
-  versions before then makes the flag obsolete.
-- Vercel `experimentalServices` is beta and may change without notice.
+- [ ] `test_pdf_disclaimer.py` `MagicMock` spec tightening (future-proofing).
+- [ ] `GeneratingView.test.tsx` move to `__tests__/` (convention alignment).
+- [ ] Pre-existing Vercel preview deploy failure — separate deployment-config
+      issue. Out of scope unless explicitly requested.
 
 ---
 
@@ -167,54 +247,9 @@ Plus three local branches deleted (`claude-security-fixes`,
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| `python -m pytest` (backend) | passed in PR #6 CI (1m9s) | ~270 functions across ~60 files |
-| `npx playwright test` (E2E) | passed in PR #6 CI (1m15s) | 32 cases / 11 specs, chromium-only |
-| `npm test` (frontend unit) | passed in PR #6 CI (1m8s) | |
+| `python -m pytest` (backend) | 399 passed, locally green after `9c27c7e` | ~400 functions across ~60 files |
+| `npm test` (frontend unit) | 164 passed, locally green after `241f7fd` | 43 test files |
+| `npx playwright test` (E2E) | last green in PR #6 CI | 32 cases / 11 specs, chromium-only |
 | `npm run build` | passed | with `/backend-api` default, **not** absolute host |
-| `ruff check`, `mypy`, `eslint`, `tsc` | passed in PR #6 CI | |
+| `ruff check`, `mypy`, `eslint`, `tsc` | passed locally after each commit | |
 | Vercel deploy | **fails** (pre-existing) | separate from CI; ignore for green-up |
-
----
-
-## Next Concrete Action
-
-Commit the four uncommitted follow-ups to `339b7a4` (`ReportModule.tsx`,
-`SOAPModule.tsx`, `SOAPModule.test.tsx`, `stale-session.ts`) — suggested
-message:
-`feat(frontend): wire ReportModule and SOAPModule into stale-session helper`.
-Then `git push` the five local commits (`129333c` + `cbf4d72` +
-`11540d1` + `fc2cab1` + `339b7a4` + the new one) to `origin/main`.
-After that, wait for the owner's anamnesis WIP to settle or pick the
-next agent-safe item from `TASKS.md` "Next" column (UI loading
-skeletons, PDF export quality, or backend test coverage for
-therapy-plan / SOAP / compare — none touch the anamnesis files).
-
----
-
-## Ideal Next Prompt
-
-```text
-Read docs/ai/HANDOFF.md, docs/ai/CURRENT.md, and docs/ai/PROJECT.md first.
-
-Current situation: main is 5 commits ahead of origin/main (a3ba15a) —
-129333c, cbf4d72, 11540d1, fc2cab1, 339b7a4 — the demo-mode +
-onboarding follow-ups plus the stale-session 404 helper. Working tree
-has four uncommitted follow-ups to 339b7a4 (ReportModule.tsx wiring,
-SOAPModule.tsx + test, stale-session.ts refinement). 159/159 vitest +
-tsc clean. The 2026-05-26 audit backlog is down to M-6 (anamnesis
-completion logic), blocked on owner WIP in
-backend/services/anamnesis_engine.py + phonological_analyzer.py — do
-NOT touch those files until the owner explicitly hands them over.
-
-Your task: <one of>
-  (a) bundle the four uncommitted follow-ups into one commit, then push
-      all six commits ahead of origin/main;
-  (b) wait for the owner to hand off M-6;
-  (c) pick the next agent-safe item from docs/ai/TASKS.md "Next" column
-      (UI skeletons, PDF quality, or backend test coverage — none touch
-      the anamnesis files);
-  (d) <my custom direction>.
-
-After completing the task, update docs/ai/CURRENT.md, docs/ai/TASKS.md, and
-docs/ai/HANDOFF.md before stopping.
-```
