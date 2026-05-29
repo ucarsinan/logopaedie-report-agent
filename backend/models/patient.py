@@ -19,7 +19,15 @@ class Patient(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, sa_column=Column(GUID, primary_key=True))
     system_id: str = Field(index=True, unique=True)
-    pseudonym: str = Field(index=True)
+    # No index here: every read of `pseudonym` is scoped to user_id (see
+    # routers/patients.py list_patients), so the composite
+    # `idx_patients_user_active` (user_id, created_at DESC) WHERE deleted_at IS NULL
+    # from migration 0011 already covers the access path. The only other
+    # predicate is an ILIKE '%q%' search whose leading wildcard a plain B-tree
+    # cannot serve anyway — a trigram (gin_trgm_ops) index would be required if
+    # that ever becomes hot. Declaration history: had `index=True` until
+    # 2026-05-29, but no migration ever emitted `ix_patients_pseudonym`.
+    pseudonym: str = Field()
     user_id: UUID = Field(
         sa_column=Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     )

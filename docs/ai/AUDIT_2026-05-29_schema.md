@@ -66,6 +66,17 @@ def downgrade() -> None:
         op.drop_index("ix_patients_pseudonym", table_name="patients")
 ```
 
+**Resolved by model-declaration drop (2026-05-29).** Audit of the live query
+call sites (`routers/patients.py:113`, `routers/reports.py:57`,
+`services/patient_service.py`) showed every read of `pseudonym` is either
+scoped by `user_id` (so the composite `idx_patients_user_active` from 0011
+covers it) or uses `ILIKE '%q%'` (a leading-wildcard search that no plain
+B-tree index can serve — a trigram index would be required). The
+`index=True` was dead intent. Dropped from `backend/models/patient.py`;
+removed from `_MIGRATION_ONLY_INDEXES` in `backend/alembic/env.py`. Guarded
+by `test_patient_pseudonym_has_no_standalone_index` in
+`backend/tests/test_patient_model.py`. No 0013 migration written.
+
 ## Reverse drift — migration has it, model doesn't
 
 None found. Every column added by 0001–0011 is still declared on its

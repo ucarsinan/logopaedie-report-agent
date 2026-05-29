@@ -34,9 +34,7 @@ target_metadata = SQLModel.metadata
 # Migration-only composite indexes added for hot query paths in 0011. The model
 # doesn't declare them (they're query optimisations, not part of the schema
 # contract), so autogenerate / `alembic check` will otherwise see them as
-# "removed" on every run. The `ix_patients_pseudonym` exception is tracked in
-# docs/ai/AUDIT_2026-05-29_schema.md (deferred to a follow-up 0013_* index
-# alignment migration alongside the GUID/VARCHAR type fixes).
+# "removed" on every run.
 _MIGRATION_ONLY_INDEXES = frozenset(
     {
         "idx_reports_user_created",
@@ -44,7 +42,6 @@ _MIGRATION_ONLY_INDEXES = frozenset(
         "idx_patients_user_active",
         "idx_therapyplanrecord_user_created",
         "ix_reports_user_id",
-        "ix_patients_pseudonym",
     }
 )
 

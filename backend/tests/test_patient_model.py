@@ -41,6 +41,20 @@ def test_patient_can_be_created(engine):
     assert p.deleted_at is None
 
 
+def test_patient_pseudonym_has_no_standalone_index(engine):
+    """Guard against re-introducing `index=True` on Patient.pseudonym.
+
+    The composite `idx_patients_user_active` from migration 0011 already covers
+    the only access path that scopes by user_id; the search endpoint uses
+    `ILIKE '%q%'` which a plain B-tree cannot serve. Resolution recorded in
+    docs/ai/AUDIT_2026-05-29_schema.md.
+    """
+    indexes = SQLModel.metadata.tables["patients"].indexes
+    # No single-column index over only `pseudonym` should exist.
+    pseudonym_only = [ix for ix in indexes if {col.name for col in ix.columns} == {"pseudonym"}]
+    assert pseudonym_only == [], f"Patient.pseudonym should not declare a standalone index; found {pseudonym_only}"
+
+
 def test_consent_links_to_patient(engine):
     user_id = uuid4()
     with Session(engine) as db:
