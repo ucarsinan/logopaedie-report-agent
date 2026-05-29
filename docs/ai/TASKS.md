@@ -26,41 +26,21 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       the report flow. Likely overlaps with the in-progress owner work →
       coordinate before starting.
 
-### From 2026-05-29 security audit (High)
+### From 2026-05-29 security audit (still open)
 
 - [ ] Restrict `X-Forwarded-For` trust in `backend/middleware/rate_limiter.py:27-39`
       to known proxy CIDRs, or assert `TRUSTED_PROXY` is configured at startup.
       Right now any client can spoof the header and bypass IP rate limits.
-- [ ] Add `@limiter.limit("3/hour")` to `POST /auth/resend-verification`
-      (`backend/routers/auth.py:251-260`) — currently unlimited email-flooding vector.
-- [ ] Add `@limiter.limit("10/hour")` to `POST /auth/password/reset/confirm`
-      (`backend/routers/auth.py:210-223`) — defense-in-depth on the reset path.
-- [ ] Add `@limiter.limit("5/minute")` to `POST /auth/2fa/enable` and
-      `POST /auth/2fa/disable` (`backend/routers/auth.py:284-309`).
-- [ ] Add rate limits to `verify-email` and `password/change` endpoints
-      (`backend/routers/auth.py:109-122` and `:226-248`).
-- [ ] Remove `auto_verified` field from `POST /auth/register` response
-      (`backend/routers/auth.py:106`) — leaks production config state to
-      unauthenticated callers.
 - [ ] Harden `ServiceTokenMiddleware` fail-open behavior
       (`backend/middleware/service_token.py:20-22`): assert `SERVICE_TOKEN`
       is set when `ENV=production`, raise on missing rather than passing all
       requests through.
-- [ ] Cap `offset` on `GET /admin/audit` (`backend/routers/auth_admin.py:26-31`)
-      — admin pagination can trigger unbounded scans as the audit table grows.
+- [ ] Drop dead `res.auto_verified` branch from
+      `frontend/src/features/auth/hooks/useRegister.ts` (backend field was
+      removed in `c44de76`; UI auto-login path is unreachable now).
 
-### From 2026-05-29 performance audit (High)
+### From 2026-05-29 performance audit (still open)
 
-- [ ] Replace per-call Redis client construction in `backend/services/session_store.py:48-53`
-      with a module-level singleton — currently rebuilt 2-3× per session-touching request.
-- [ ] Remove duplicate `SessionStore()` in `backend/routers/soap.py:23`;
-      import and reuse the singleton from `services.session_store`.
-- [ ] Add migration: `CREATE INDEX idx_reports_user_created ON reports(user_id, created_at DESC)`
-      and `CREATE INDEX idx_reports_patient_id ON reports(patient_id)` — current
-      list/stats endpoints fall back to full index scans for users with many reports.
-- [ ] Add migration: partial composite index on `patients(user_id, created_at DESC) WHERE deleted_at IS NULL`.
-- [ ] Add migration: composite `(user_id, created_at DESC)` on `therapyplanrecord`
-      (migration 0010 only added single-column `user_id` index).
 - [ ] Add `limit`/`offset` pagination to `GET /patients/{id}/history`
       (`backend/routers/patients.py:205-227`) — currently returns all reports unbounded.
 - [ ] Wrap `EmailService._send()` (`backend/services/email_service.py:22`)
@@ -71,28 +51,17 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 - [ ] Evaluate `get_optional_user` (`backend/dependencies.py:140-148`):
       JWT payload already has user id + role, the per-request DB fetch is
       unnecessary on most endpoints.
+- [ ] After Postgres EXPLAIN confirms the composite indexes from migration 0011
+      are picked, drop the now-redundant single-column `ix_reports_user_id`,
+      `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
-### From 2026-05-29 a11y audit (High)
+### From 2026-05-29 a11y audit (still open)
 
-- [ ] Add `aria-current="page"` to nav links in `AppShell` and `MobileSidebar`.
-- [ ] Add `aria-label="Aufnahme stoppen"` and `aria-label="Transkription läuft"`
-      to `DictationButton` icon-only buttons (`frontend/src/features/chat/components/DictationButton.tsx:28-43`).
-- [ ] Add `motion-reduce:animate-none` to `TypingIndicator` bounce dots
-      (`frontend/src/features/chat/components/ChatBubble.tsx:89-91`) and
-      `TypingDemo` blink/pulse (`frontend/src/components/landing/TypingDemo.tsx:32,39`).
-- [ ] Add `<label>` / `aria-label` to unlabelled inputs: `TherapyPlanModule`
-      mini-chat (`TherapyPlanModule.tsx:304`), `SuggestModule` textarea
-      (`SuggestModule.tsx:103`), `PhonologyModule` word-pair rows
-      (`PhonologyModule.tsx:88-116`).
-- [ ] Add `scope="col"` to `<th>` cells in `AuditLogTable.tsx:88-96`.
 - [ ] Move `role="dialog" aria-modal="true"` from the backdrop to the inner panel
       `<div ref={dialogRef}>` in `PatientPickerModal.tsx:73-93`.
 - [ ] Add skip-to-main-content link before `<header>` in `AppShell.tsx`.
 - [ ] Wrap `WorkflowStepper` in `<nav aria-label="Arbeitsschritte">` and add
       `aria-current="step"` + step-number labels (`WorkflowStepper.tsx:31-53`).
-- [ ] Add `aria-hidden="true"` to decorative AI robot SVGs in `ChatBubble.tsx:27-30,82-85`.
-- [ ] Change `ReportPreview` AI disclaimer from `role="note"` to `role="alert"`
-      so it announces on report load (`ReportPreview.tsx:27-32`).
 - [ ] Audit dark-mode `--muted-foreground` (#64748b) contrast on `--surface`
       (#1e293b) — currently ~3.7:1 for small text, below AA.
 
@@ -105,6 +74,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] A11y batch: nav `aria-current="page"`, icon-button labels, `motion-reduce` guards, input labels in TherapyPlanModule/SuggestModule/PhonologyModule, AuditLogTable `scope="col"`, ChatBubble SVG `aria-hidden`, ReportPreview disclaimer `role="alert"` (`f715700`) — 2026-05-29
+- [x] Redis client singleton + duplicate SessionStore removal + migration 0011 with composite/partial indexes on reports/patients/therapyplanrecord (`5af7c4a`) — 2026-05-29
+- [x] Security batch: rate limits on 6 previously-unlimited auth endpoints, `auto_verified` leak removed, audit offset capped (`c44de76`) — 2026-05-29
 - [x] OnboardingOverlay real dialog with focus trap + Escape + focus rings (`5672716`) — 2026-05-29
 - [x] PDF render offloaded to worker thread via `asyncio.to_thread` (`bbbe5ce`) — 2026-05-29
 - [x] Logout BFF actually revokes backend session by forwarding `refresh_token` (`24eef4e`) — 2026-05-29
