@@ -103,10 +103,11 @@ def register(
     ip, ua = _client(request)
     with contextlib.suppress(ValueError):
         svc.register(db, email_addr=body.email, password=body.password, ip=ip, ua=ua)
-    return {"message": GENERIC_REGISTER_MSG, "auto_verified": svc.auto_verify}
+    return {"message": GENERIC_REGISTER_MSG}
 
 
 @router.post("/verify-email")
+@limiter.limit("10/minute")
 def verify_email(
     body: VerifyIn,
     request: Request,
@@ -208,6 +209,7 @@ def reset_request(
 
 
 @router.post("/password/reset/confirm")
+@limiter.limit("10/hour")
 def reset_confirm(
     body: ResetConfirmIn,
     request: Request,
@@ -224,6 +226,7 @@ def reset_confirm(
 
 
 @router.post("/password/change")
+@limiter.limit("5/minute")
 def password_change(
     body: PasswordChangeIn,
     request: Request,
@@ -249,6 +252,7 @@ def password_change(
 
 
 @router.post("/resend-verification")
+@limiter.limit("3/hour")
 def resend(
     body: ResendIn,
     request: Request,
@@ -282,6 +286,7 @@ class TwoFaDisableBody(BaseModel):
 
 
 @router.post("/2fa/disable")
+@limiter.limit("5/minute")
 def twofa_disable(
     body: TwoFaDisableBody,
     request: Request,
@@ -295,6 +300,7 @@ def twofa_disable(
 
 
 @router.post("/2fa/enable")
+@limiter.limit("5/minute")
 def twofa_enable(
     body: TwoFaEnableBody,
     request: Request,

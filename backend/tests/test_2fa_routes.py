@@ -440,3 +440,33 @@ def test_2fa_enable_already_enabled_rejected(client):
     new_code = pyotp.TOTP(secret).now()
     res = client.post("/auth/2fa/enable", json={"code": new_code}, headers=auth_headers(tokens))
     assert res.status_code == 400
+
+
+# ── Rate-limit regressions ────────────────────────────────────────────────────
+
+
+def test_rate_limit_2fa_enable_5_per_min(client):
+    """slowapi limit 5/minute/IP on /auth/2fa/enable — 6th call returns 429."""
+    tokens = register_and_login(client, "rlena@example.com", "correct horse battery 21")
+    client.post("/auth/2fa/setup", headers=auth_headers(tokens))
+    for _ in range(5):
+        client.post("/auth/2fa/enable", json={"code": "000000"}, headers=auth_headers(tokens))
+    res = client.post("/auth/2fa/enable", json={"code": "000000"}, headers=auth_headers(tokens))
+    assert res.status_code == 429
+
+
+def test_rate_limit_2fa_disable_5_per_min(client):
+    """slowapi limit 5/minute/IP on /auth/2fa/disable — 6th call returns 429."""
+    tokens = register_and_login(client, "rldis@example.com", "correct horse battery 22")
+    for _ in range(5):
+        client.post(
+            "/auth/2fa/disable",
+            json={"current_password": "wrong", "code": "000000"},
+            headers=auth_headers(tokens),
+        )
+    res = client.post(
+        "/auth/2fa/disable",
+        json={"current_password": "wrong", "code": "000000"},
+        headers=auth_headers(tokens),
+    )
+    assert res.status_code == 429

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import update as sa_update
 from sqlmodel import Session
@@ -23,7 +23,7 @@ def list_audit(
     event: str | None = None,
     user_id: UUID | None = None,
     limit: int = 50,
-    offset: int = 0,
+    offset: int = Query(default=0, ge=0, le=10000),
     _: User = Depends(get_admin_user),
     audit: AuditService = Depends(get_audit_service),
     db: Session = Depends(get_db),

@@ -111,6 +111,13 @@ def test_admin_audit_pagination(client):
     assert {r["id"] for r in first}.isdisjoint({r["id"] for r in second})
 
 
+def test_admin_audit_offset_exceeding_cap_rejected(client):
+    """offset above 10_000 must be rejected by Pydantic validation (422)."""
+    admin = make_admin(client, "admincap@example.com", "correct horse battery a99")
+    res = client.get("/admin/audit?offset=10001", headers=auth_headers(admin))
+    assert res.status_code == 422
+
+
 # ── Task 5.9 ──────────────────────────────────────────────────────────────────
 
 

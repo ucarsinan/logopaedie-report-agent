@@ -156,3 +156,51 @@ def test_rate_limit_login_5_per_min(client):
         c.post("/auth/login", json={"email": "rl@example.com", "password": "wrongpassword12"})
     res = c.post("/auth/login", json={"email": "rl@example.com", "password": "wrongpassword12"})
     assert res.status_code == 429
+
+
+def test_rate_limit_verify_email_10_per_min(client):
+    """slowapi limit 10/minute/IP on /auth/verify-email — 11th call returns 429."""
+    c, _ = client
+    for _ in range(10):
+        c.post("/auth/verify-email", json={"token": "garbage"})
+    res = c.post("/auth/verify-email", json={"token": "garbage"})
+    assert res.status_code == 429
+
+
+def test_rate_limit_resend_verification_3_per_hour(client):
+    """slowapi limit 3/hour/IP on /auth/resend-verification — 4th call returns 429."""
+    c, _ = client
+    for _ in range(3):
+        c.post("/auth/resend-verification", json={"email": "rv@example.com"})
+    res = c.post("/auth/resend-verification", json={"email": "rv@example.com"})
+    assert res.status_code == 429
+
+
+def test_rate_limit_password_reset_confirm_10_per_hour(client):
+    """slowapi limit 10/hour/IP on /auth/password/reset/confirm — 11th call returns 429."""
+    c, _ = client
+    for _ in range(10):
+        c.post("/auth/password/reset/confirm", json={"token": "garbage", "new_password": "longpassword12"})
+    res = c.post("/auth/password/reset/confirm", json={"token": "garbage", "new_password": "longpassword12"})
+    assert res.status_code == 429
+
+
+def test_rate_limit_password_change_5_per_min(client):
+    """slowapi limit 5/minute/IP on /auth/password/change — 6th call returns 429."""
+    c, email = client
+    c.post("/auth/register", json={"email": "pwch@example.com", "password": "longpassword12"})
+    c.post("/auth/verify-email", json={"token": email.sent[-1][2]})
+    tokens = c.post("/auth/login", json={"email": "pwch@example.com", "password": "longpassword12"}).json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    for _ in range(5):
+        c.post(
+            "/auth/password/change",
+            json={"current_password": "wrong", "new_password": "longpassword12"},
+            headers=headers,
+        )
+    res = c.post(
+        "/auth/password/change",
+        json={"current_password": "wrong", "new_password": "longpassword12"},
+        headers=headers,
+    )
+    assert res.status_code == 429
