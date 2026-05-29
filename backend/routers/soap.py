@@ -13,14 +13,13 @@ from dependencies import get_current_user, get_soap_generator
 from models.auth import User
 from models.report_record import ReportRecord
 from models.soap_record import SOAPRecord
-from services.session_store import SessionStore
+from services.session_store import store
 from services.soap_generator import SOAPGenerator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["soap"])
 
-_store = SessionStore()
 _SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 
 
@@ -57,7 +56,7 @@ async def generate_soap_from_session(
     db: Session = Depends(get_db),
 ):
     _validate_session_id(session_id)
-    session = _store.get_authorized(session_id, str(current_user.id))
+    session = store.get_authorized(session_id, str(current_user.id))
 
     collected_data = session.collected_data
     report = session.generated_report

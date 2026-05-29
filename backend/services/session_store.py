@@ -45,12 +45,28 @@ def _decrypt(data: str) -> str:
     return data
 
 
+_REDIS_CLIENT: Redis | None = None
+
+
 def _get_redis() -> Redis:
+    # Reuse a single Redis client per process — every request previously paid the
+    # construction cost twice (once in get, once in save). The Upstash client is
+    # a thin REST wrapper, so it is safe to share across requests.
+    global _REDIS_CLIENT
+    if _REDIS_CLIENT is not None:
+        return _REDIS_CLIENT
     url = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")
     token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
     if not url or not token:
         raise RuntimeError("KV_REST_API_URL and KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL/TOKEN) must be set.")
-    return Redis(url=url, token=token)
+    _REDIS_CLIENT = Redis(url=url, token=token)
+    return _REDIS_CLIENT
+
+
+def reset_redis_for_tests() -> None:
+    """Drop the cached Redis client so the next call re-reads env vars."""
+    global _REDIS_CLIENT
+    _REDIS_CLIENT = None
 
 
 class Session:
