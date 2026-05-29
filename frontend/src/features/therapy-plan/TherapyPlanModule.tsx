@@ -307,6 +307,7 @@ export function TherapyPlanModule() {
               onChange={(e) => setTpInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendTpMessage()}
               placeholder="Ihre Antwort…"
+              aria-label="Antwort eingeben"
               disabled={tpIsSending}
               className="flex-1 rounded-lg border border-border bg-surface px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40"
             />

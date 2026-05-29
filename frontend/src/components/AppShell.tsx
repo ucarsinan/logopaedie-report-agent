@@ -88,6 +88,7 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
             <Link
               href="/patienten"
               title="Patienten verwalten"
+              aria-current={isPatientenSection ? "page" : undefined}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isPatientenSection
                   ? "border-accent text-accent-text"
@@ -97,20 +98,24 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
               Patienten
             </Link>
             <div className="mx-2 my-2 w-px bg-border shrink-0" />
-            {MODULE_TABS.map(([key, label, tooltip]) => (
-              <Link
-                key={key}
-                href={`/module/${key}`}
-                title={tooltip}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  !isPatientenSection && activeSlug === key
-                    ? "border-accent text-accent-text"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border-strong"
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
+            {MODULE_TABS.map(([key, label, tooltip]) => {
+              const isActive = !isPatientenSection && activeSlug === key;
+              return (
+                <Link
+                  key={key}
+                  href={`/module/${key}`}
+                  title={tooltip}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    isActive
+                      ? "border-accent text-accent-text"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border-strong"
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </header>

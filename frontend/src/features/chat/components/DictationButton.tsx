@@ -26,7 +26,11 @@ export function DictationButton({ onTranscript, disabled }: DictationButtonProps
 
   if (isPending) {
     return (
-      <button disabled className="px-3 py-2 rounded-lg bg-surface-elevated text-foreground/40 text-sm">
+      <button
+        disabled
+        aria-label="Transkription läuft"
+        className="px-3 py-2 rounded-lg bg-surface-elevated text-foreground/40 text-sm"
+      >
         {"\u23f3"}
       </button>
     );
@@ -35,6 +39,7 @@ export function DictationButton({ onTranscript, disabled }: DictationButtonProps
   return isRecording ? (
     <button
       onClick={stopRecording}
+      aria-label="Aufnahme stoppen"
       className="px-3 py-2 rounded-lg bg-red-600 text-white motion-safe:animate-pulse text-sm"
       title="Aufnahme stoppen"
     >

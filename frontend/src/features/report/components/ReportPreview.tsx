@@ -22,9 +22,9 @@ export function ReportPreview({ report }: ReportPreviewProps) {
         </h2>
       </div>
 
-      {/* AI / draft disclaimer — these are AI-drafted documents needing review */}
+      {/* AI / draft disclaimer — safety warning for AI-generated clinical content */}
       <div
-        role="note"
+        role="alert"
         className="px-6 py-3 bg-amber-50 text-amber-900 text-sm print:bg-white print:text-black"
       >
         <strong>KI-generierter Entwurf.</strong> Inhalte können fehlerhaft oder unvollständig

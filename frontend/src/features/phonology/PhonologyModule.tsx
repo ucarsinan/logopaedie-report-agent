@@ -103,17 +103,25 @@ export function PhonologyModule() {
               value={pair.target}
               onChange={(e) => updatePair(i, "target", e.target.value)}
               placeholder="Zielwort"
+              aria-label={`Zielwort ${i + 1}`}
               className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-ring"
             />
-            <span className="text-muted">{"\u2192"}</span>
+            <span aria-hidden="true" className="text-muted">{"\u2192"}</span>
             <input
               type="text"
               value={pair.production}
               onChange={(e) => updatePair(i, "production", e.target.value)}
               placeholder="Produktion"
+              aria-label={`Produktion ${i + 1}`}
               className="flex-1 rounded-lg bg-surface border border-border-strong px-3 py-2 text-sm focus:outline-none focus:border-ring"
             />
-            <button onClick={() => removePair(i)} className="text-muted hover:text-red-400 text-sm px-2">{"\u2715"}</button>
+            <button
+              onClick={() => removePair(i)}
+              aria-label={`Wortpaar ${i + 1} entfernen`}
+              className="text-muted hover:text-red-400 text-sm px-2"
+            >
+              {"\u2715"}
+            </button>
           </div>
         ))}
         <button onClick={addPair} className="self-start text-sm text-accent-text hover:text-accent-text">+ Weiteres Wortpaar</button>

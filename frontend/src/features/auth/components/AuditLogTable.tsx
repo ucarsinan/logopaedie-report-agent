@@ -88,10 +88,10 @@ export function AuditLogTable() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b">
-              <th className="py-2">Zeit</th>
-              <th>Event</th>
-              <th>User</th>
-              <th>IP</th>
+              <th scope="col" className="py-2">Zeit</th>
+              <th scope="col">Event</th>
+              <th scope="col">User</th>
+              <th scope="col">IP</th>
             </tr>
           </thead>
           <tbody>

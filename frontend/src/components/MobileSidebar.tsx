@@ -47,6 +47,7 @@ export function MobileSidebar({ isOpen, activeSlug, onClose }: MobileSidebarProp
           <Link
             href="/patienten"
             onClick={onClose}
+            aria-current={activeSlug === "patienten" ? "page" : undefined}
             className={`flex items-center rounded-md px-3 py-2.5 text-sm transition-colors ${
               activeSlug === "patienten"
                 ? "bg-accent-muted text-accent-text font-semibold border-l-2 border-accent"
@@ -55,20 +56,24 @@ export function MobileSidebar({ isOpen, activeSlug, onClose }: MobileSidebarProp
           >
             Patienten
           </Link>
-          {MODULE_TABS.map(([key, label]) => (
-            <Link
-              key={key}
-              href={`/module/${key}`}
-              onClick={onClose}
-              className={`flex items-center rounded-md px-3 py-2.5 text-sm transition-colors ${
-                activeSlug === key
-                  ? "bg-accent-muted text-accent-text font-semibold border-l-2 border-accent"
-                  : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground"
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+          {MODULE_TABS.map(([key, label]) => {
+            const isActive = activeSlug === key;
+            return (
+              <Link
+                key={key}
+                href={`/module/${key}`}
+                onClick={onClose}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex items-center rounded-md px-3 py-2.5 text-sm transition-colors ${
+                  isActive
+                    ? "bg-accent-muted text-accent-text font-semibold border-l-2 border-accent"
+                    : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground"
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
     </>

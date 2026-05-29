@@ -100,7 +100,11 @@ export function SuggestModule() {
 
       {/* Text editor */}
       <div className="relative">
+        <label htmlFor="suggest-textarea" className="sr-only">
+          Texteingabe
+        </label>
         <textarea
+          id="suggest-textarea"
           value={text}
           onChange={(e) => onTextChange(e.target.value)}
           rows={8}
