@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { GeneratingView } from "./GeneratingView";
+import { GeneratingView } from "../components/GeneratingView";
 
 describe("GeneratingView", () => {
   it("renders a layout-aware skeleton with an accessible live region", () => {
