@@ -185,9 +185,12 @@ def test_log_in_background_swallows_db_failure_and_logs(engine, monkeypatch, cap
     # migration-related tests earlier in the suite) defaults to
     # ``disable_existing_loggers=True``, which leaves ``services.audit_service``
     # in a disabled state. Re-enable + force-propagate so caplog can capture.
+    # Use monkeypatch so the mutation is restored at test teardown — leaking
+    # ``disabled=False`` into later tests would silently re-enable a logger
+    # alembic intentionally disabled.
     audit_logger = logging.getLogger("services.audit_service")
-    audit_logger.disabled = False
-    audit_logger.propagate = True
+    monkeypatch.setattr(audit_logger, "disabled", False)
+    monkeypatch.setattr(audit_logger, "propagate", True)
 
     # Drive the queued task directly. ``BackgroundTask`` exposes ``func``,
     # ``args``, ``kwargs`` — calling those mirrors what Starlette does at
