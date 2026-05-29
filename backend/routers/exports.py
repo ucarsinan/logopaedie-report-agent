@@ -1,5 +1,6 @@
 """PDF export endpoints."""
 
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,7 +29,7 @@ async def download_report_pdf(
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden.")
 
     content = json.loads(record.content_json)
-    pdf_bytes = generate_pdf(content, created_at=record.created_at)
+    pdf_bytes = await asyncio.to_thread(generate_pdf, content, created_at=record.created_at)
 
     filename = f"bericht_{record.pseudonym}_{record.report_type}.pdf"
     return Response(
