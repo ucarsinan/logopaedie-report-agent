@@ -109,7 +109,14 @@ class AuthService:
 
         Both ``background`` and ``db_factory`` must be present to take the
         deferred path — they are wired together at the route layer.
+
+        A partial wiring (one passed but not the other) would silently fall
+        back to the sync path and re-introduce the per-request commit we just
+        removed; assert here so misuse fails loud instead of degrading quietly.
         """
+        assert (background is None) == (db_factory is None), (
+            "auth_service._audit: pass both background and db_factory, or neither"
+        )
         if background is not None and db_factory is not None:
             self.audit.log_in_background(
                 background,
