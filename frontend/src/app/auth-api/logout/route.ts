@@ -2,22 +2,12 @@ import { NextResponse } from "next/server";
 import {
   AUTH_REFRESH_PATH,
   backendTarget,
+  readCookie,
 } from "../../_lib/backend-proxy";
 
 const IS_PROD = process.env.NODE_ENV === "production";
 
-export async function POST(req: Request): Promise<Response> {
-  const cookieHeader = req.headers.get("cookie") ?? "";
-  await fetch(backendTarget(req, "/auth/logout"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      cookie: cookieHeader,
-    },
-    body: JSON.stringify({}),
-  }).catch(() => null);
-
-  const res = NextResponse.json({ ok: true });
+function clearCookies(res: NextResponse): NextResponse {
   const clearOpts = {
     httpOnly: true,
     secure: IS_PROD,
@@ -35,4 +25,29 @@ export async function POST(req: Request): Promise<Response> {
     maxAge: 0,
   });
   return res;
+}
+
+export async function POST(req: Request): Promise<Response> {
+  const refresh = readCookie(req.headers.get("cookie"), "refresh_token");
+
+  if (refresh) {
+    try {
+      const upstream = await fetch(backendTarget(req, "/auth/logout"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refresh }),
+      });
+      if (!upstream.ok && !IS_PROD) {
+        console.warn(
+          `[auth-api/logout] backend revocation failed: ${upstream.status}`,
+        );
+      }
+    } catch (err) {
+      if (!IS_PROD) {
+        console.warn("[auth-api/logout] backend revocation threw", err);
+      }
+    }
+  }
+
+  return clearCookies(NextResponse.json({ ok: true }));
 }
