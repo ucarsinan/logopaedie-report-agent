@@ -79,7 +79,84 @@ def test_get_history_empty(client):
     pid = client.post("/patients", json=_payload()).json()["id"]
     res = client.get(f"/patients/{pid}/history")
     assert res.status_code == 200
-    assert res.json()["items"] == []
+    body = res.json()
+    assert body["items"] == []
+    assert body["total"] == 0
+    assert body["page"] == 1
+    assert body["limit"] == 50
+
+
+def _seed_reports(client, patient_id: str, count: int) -> None:
+    """Insert ``count`` reports for ``patient_id`` directly via the test DB.
+
+    No public endpoint mints persisted reports, so we write straight to the
+    SQLModel table the route reads from, reusing the ``get_db`` dependency
+    override that ``client`` installed (so we hit the same in-memory engine).
+    """
+    from datetime import UTC, datetime, timedelta
+    from uuid import UUID
+
+    from sqlmodel import Session
+
+    from database import get_db
+    from main import app
+    from models.report_record import ReportRecord
+
+    db_dep = app.dependency_overrides[get_db]
+    gen = db_dep()
+    session: Session = next(gen)
+    try:
+        base_time = datetime.now(UTC)
+        for i in range(count):
+            session.add(
+                ReportRecord(
+                    pseudonym=f"PAT-{i}",
+                    report_type="befundbericht",
+                    content_json="{}",
+                    user_id=client.fake_user.id,
+                    patient_id=UUID(patient_id),
+                    created_at=base_time + timedelta(seconds=i),
+                )
+            )
+        session.commit()
+    finally:
+        gen.close()
+
+
+def test_get_history_pagination_default_caps_items(client):
+    """Default limit (50) returns at most 50 items even when more exist."""
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    _seed_reports(client, pid, 60)
+    res = client.get(f"/patients/{pid}/history")
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["items"]) == 50
+    assert body["total"] == 60
+    assert body["limit"] == 50
+    assert body["page"] == 1
+
+
+def test_get_history_pagination_second_page(client):
+    """Page 2 with limit=50 returns the remaining items."""
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    _seed_reports(client, pid, 60)
+    res = client.get(f"/patients/{pid}/history?page=2&limit=50")
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["items"]) == 10
+    assert body["total"] == 60
+    assert body["page"] == 2
+
+
+def test_get_history_total_reflects_full_count_not_page_size(client):
+    """``total`` is the unfiltered row count, not the size of the page."""
+    pid = client.post("/patients", json=_payload()).json()["id"]
+    _seed_reports(client, pid, 25)
+    res = client.get(f"/patients/{pid}/history?limit=10")
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["items"]) == 10
+    assert body["total"] == 25
 
 
 def test_get_progress_no_reports(client):

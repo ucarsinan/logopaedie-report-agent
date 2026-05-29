@@ -1,4 +1,16 @@
+import inspect
+
 from services.email_service import EmailService, FakeEmailService
+
+
+def test_send_is_coroutine_function():
+    """_send must be awaitable so the blocking Resend call runs off the loop.
+
+    Even though the public send_* wrappers are sync, _send is the unit that
+    awaits asyncio.to_thread around the Resend SDK; an async caller can move
+    to ``await self._send(...)`` later without changing _send itself.
+    """
+    assert inspect.iscoroutinefunction(EmailService._send)
 
 
 def test_email_service_console_fallback_when_no_api_key(capsys, monkeypatch):

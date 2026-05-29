@@ -205,15 +205,21 @@ def delete_patient(
 @router.get("/patients/{patient_id}/history")
 def get_history(
     patient_id: UUID,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(50, ge=1, le=200, description="Items per page"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    """Paginated patient history (reports).
+
+    Response shape mirrors ``GET /reports`` and ``GET /patients``:
+    ``{items, total, page, limit}``. ``total`` is the unfiltered count, not
+    ``len(items)``, so the caller can drive pagination.
+    """
     _get_active_or_404(patient_id, current_user.id, db)
-    reports = db.exec(
-        select(ReportRecord)
-        .where(ReportRecord.patient_id == patient_id, ReportRecord.user_id == current_user.id)
-        .order_by(col(ReportRecord.created_at).desc())
-    ).all()
+    base = select(ReportRecord).where(ReportRecord.patient_id == patient_id, ReportRecord.user_id == current_user.id)
+    total = db.exec(select(func.count()).select_from(base.subquery())).one()
+    reports = db.exec(base.order_by(col(ReportRecord.created_at).desc()).offset((page - 1) * limit).limit(limit)).all()
     items = [
         {
             "type": "report",
@@ -224,7 +230,7 @@ def get_history(
         }
         for r in reports
     ]
-    return {"items": items, "total": len(items)}
+    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
 @router.get("/patients/{patient_id}/progress")
