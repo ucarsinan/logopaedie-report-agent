@@ -30,15 +30,30 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 - [ ] Move `audit_service.log()` writes (`backend/services/audit_service.py:32`)
       to BackgroundTasks to eliminate the second per-request `db.commit()`.
-- [ ] Evaluate `get_optional_user` (`backend/dependencies.py:140-148`):
-      JWT payload already has user id + role, the per-request DB fetch is
-      unnecessary on most endpoints.
 - [ ] After Postgres EXPLAIN confirms the composite indexes from migration 0011
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
-- [ ] Convert `backend/routers/auth.py` route handlers to `async def` and call
-      `await self.email.send_*(...)` directly so the `_send` async seam from
-      `64800ce` actually unblocks the event loop on every auth email.
+
+### From 2026-05-29 schema audit (`AUDIT_2026-05-29_schema.md`)
+
+- [ ] **Land `0012_align_declared_fks` migration** — sketch ready in
+      `docs/ai/AUDIT_2026-05-29_schema.md`. Conditional inspector pattern
+      makes it a no-op on Neon for `therapyplanrecord.user_id` and additive
+      on every other declared-but-not-enforced FK. Owner decision before
+      apply.
+- [ ] **Add `alembic check` CI step** — sketched in
+      `docs/ai/AUDIT_2026-05-29_schema.md`. Would catch the next
+      column-vs-FK split at PR time, structurally preventing the
+      2026-05-29 incident class.
+- [ ] **`ix_patients_pseudonym` index** — declared `index=True` on model,
+      never created by migration 0007. Low severity, additive.
+- [ ] **Type-encoding cleanup (`VARCHAR(36)` → `UUID`)** across 13
+      legacy-id columns. Low priority; cosmetic until alembic autogenerate
+      is on.
+- [ ] **Fix `test_no_api_key_references` exclusion** — one-line: add
+      `"worktrees"` to the exclusion tuple at
+      `backend/tests/test_no_api_key_references.py:17`. Currently false-fails
+      when `.claude/worktrees/` is present.
 
 ### Other
 
@@ -49,6 +64,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] Schema-vs-migrations static audit (parallel sub-agent A3) — report at `docs/ai/AUDIT_2026-05-29_schema.md`; sketches `0012_align_declared_fks` migration + `alembic check` CI step (no code commit) — 2026-05-29
+- [x] Auth email path async end-to-end: `register` / `reset_request` / `resend` handlers + `AuthService.register` / `request_password_reset` / `resend_verification` + `EmailService.send_*` all async; `_run_send` sync bridge dropped (`0467587`) — 2026-05-29
+- [x] `get_optional_user` JWT optimization: new `AuthIdentity` dataclass; per-request DB fetch removed from session-router endpoints; `get_current_user` chains on it for routers that need the full `User` row (`c0980ab`) — 2026-05-29
 - [x] `GET /patients/{id}/history` pagination + `EmailService._send` async seam (`64800ce`) — 2026-05-29
 - [x] Production assertions: `TRUSTED_PROXY` for rate-limiter, `SERVICE_TOKEN` for service-token middleware; flaky rate-limit tests hardened via unique per-test `X-Forwarded-For` IPs (`4117ae9`) — 2026-05-29
 - [x] A11y/cleanup batch: skip-link, WorkflowStepper nav semantics, PatientPickerModal role placement, dark-mode `--muted-foreground` contrast, `useRegister` dead branch (`d8ea14e`) — 2026-05-29

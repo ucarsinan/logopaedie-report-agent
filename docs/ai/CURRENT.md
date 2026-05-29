@@ -8,28 +8,26 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-28
+- **Date:** 2026-05-29 (PM)
 - **Updated by:** Claude Code
-- **Session focus:** Dispatched three parallel agents for UI loading skeletons, PDF export quality, and backend test coverage; reviewed each in parallel; fixed reviewer-flagged high-priority items (PDF thread safety + therapy-plan ownership bugs); merged and pushed three thematic commits.
+- **Session focus:** Dispatched three parallel sub-agents (A1, A2, A3) in worktree isolation: A1 trimmed the per-request DB fetch out of `get_optional_user`, A2 flipped the auth email path to async end-to-end, A3 produced a static schema-vs-migrations audit. Two perf commits landed and were pushed; A3's report is persisted to `docs/ai/AUDIT_2026-05-29_schema.md`.
 
 ---
 
 ## Current Goal
 
-No agent-driven goal active. The three "Next" items from the 2026-05-26
-audit-followup backlog (UI skeletons, PDF export quality, therapy-plan /
-SOAP / compare test coverage) landed today as `36c29d0`, `6840168`, and
-`9c27c7e` and were pushed to `origin/main`.
+No agent-driven goal active for the rest of this session. The two perf
+items A1 + A2 from `TASKS.md` "Next" landed today as `c0980ab` and `0467587`
+and were pushed to `origin/main`. A3's read-only audit produced a sketched
+`0012_align_declared_fks` migration + `alembic check` CI step — both
+unapplied, owner-decision pending.
 
-**M-6** (anamnesis completion logic) remains the only outstanding
-audit item and is still blocked on owner-driven WIP in
+**M-6** (anamnesis completion logic) remains the outstanding
+audit item and was blocked on owner-driven WIP in
 `backend/services/anamnesis_engine.py`, `phonological_analyzer.py`, and
-`anamnesis_catalog.py`. Do not touch those files until the owner
+`anamnesis_catalog.py`. Earlier 2026-05-29 sessions did not surface any
+new commits in those files; treat them as untouchable until the owner
 explicitly hands them over.
-
-Two sibling agents are running concurrently against the same working
-tree on follow-ups to today's commits (SOAP stale-session branch +
-TherapyPlanModule dead-prop investigation) — see "In Progress".
 
 ---
 
@@ -39,20 +37,17 @@ TherapyPlanModule dead-prop investigation) — see "In Progress".
 main
 ```
 
-Local `main` is **at `origin/main`** (`9c27c7e`, 0 ahead / 0 behind).
-The three thematic commits pushed earlier today are:
+Local `main` is **at `origin/main`** (`0467587`, 0 ahead / 0 behind).
+Today's afternoon thematic commits are:
 
-- `36c29d0` — `feat(frontend): add layout-aware loading skeletons for report/SOAP/therapy-plan`
-- `6840168` — `feat(backend): improve PDF export typography, layout, and thread safety`
-- `9c27c7e` — `feat(backend): enforce ownership on therapy-plan endpoints and consolidate tests`
+- `c0980ab` — `perf(backend): skip per-request DB fetch in get_optional_user; add AuthIdentity`
+- `0467587` — `perf(backend): make auth email path async end-to-end`
 
-Two follow-up commits landed after the three above and were pushed in
-the same session:
+A3 (schema audit) produced no code commit; its deliverable is the new
+`docs/ai/AUDIT_2026-05-29_schema.md` plus the proposed
+`0012_align_declared_fks` migration sketched inside it.
 
-- `11ce3cd` — `fix(frontend): wire SOAPModule.generateFromReport into stale-session helper`
-- `241f7fd` — `refactor(frontend): drop unused sessionId prop from TherapyPlanModule`
-
-Working tree currently carries only this state-file refresh.
+Working tree carries the docs/ai state-file refresh for this session.
 
 ---
 
@@ -60,6 +55,33 @@ Working tree currently carries only this state-file refresh.
 
 ### Done (recent — see `TASKS.md` "Done" for the full log)
 
+- [x] **Schema-vs-migrations static audit** (A3, 2026-05-29 PM) — no
+      missing-column drift found (0010 closed that class); persistent
+      risk is FK constraints declared on models but never emitted by
+      migrations (6 columns + the manually-hotfixed
+      `therapyplanrecord.user_id`). Report at
+      `docs/ai/AUDIT_2026-05-29_schema.md`; sketched
+      `0012_align_declared_fks` migration uses the conditional
+      `inspector.get_foreign_keys` pattern so it's a no-op on Neon for the
+      hotfixed row and additive elsewhere. Recommends `alembic check` as
+      a CI guard. No code commit.
+- [x] **Auth email path async end-to-end** (`0467587`, 2026-05-29 PM) —
+      A2 flipped `register` / `reset_request` / `resend` to `async def`,
+      made the corresponding `AuthService` methods async, dropped
+      `EmailService._run_send`, and turned `send_verify_email` /
+      `send_password_reset` into coroutines that `await self._send`.
+      `FakeEmailService.send_*` mirrored. Tests adjusted to async + await
+      (pytest-asyncio already in auto mode). 13 other handlers stayed
+      sync — no email/no async dep, so no event-loop benefit. 419/419.
+- [x] **`get_optional_user` JWT optimization** (`c0980ab`, 2026-05-29 PM)
+      — A1 introduced `AuthIdentity` (`id`, `role`, `sid`) frozen-slots
+      dataclass built from `request.state.user`; removed `Depends(get_db)`
+      from `get_optional_user`. The 9 endpoints in
+      `backend/routers/sessions.py` only ever read `user.id` so this is
+      behavior-preserving. `get_current_user` chains on the optional dep,
+      still returns the full `User` row for routers that need it; accepts
+      `AuthIdentity | User` so existing `dependency_overrides[…] = lambda:
+      fake_user` test fixtures keep working via `isinstance`. 418 → 418.
 - [x] Layout-aware loading skeletons for report / SOAP / therapy-plan
       (`36c29d0`, 2026-05-28) — new shared `frontend/src/components/Skeleton.tsx`
       primitive; layout-mirroring skeletons in `GeneratingView`, `SOAPModule`,
@@ -163,13 +185,14 @@ backend/tests/test_phonological_analyzer.py  — owner WIP, do not touch
 
 ```text
 Branch: main
-HEAD:   241f7fd refactor(frontend): drop unused sessionId prop from TherapyPlanModule
+HEAD:   0467587 perf(backend): make auth email path async end-to-end
 Behind: 0
 Ahead:  0
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/TASKS.md
   M docs/ai/HANDOFF.md
+  ? docs/ai/AUDIT_2026-05-29_schema.md
 ```
 
 ---
@@ -212,18 +235,29 @@ Uncommitted:
 
 ## Next Step
 
-If the owner hands over: pick from `TASKS.md` "Next" column. Otherwise wait.
+The natural next item is the schema-audit follow-up: land
+`0012_align_declared_fks` (sketch ready in
+`docs/ai/AUDIT_2026-05-29_schema.md`) AND add the `alembic check` CI
+guard. Both are explicitly carved out in the audit because the FK
+additions change behavior on DELETE — needs owner sign-off before the
+migration runs against Neon.
 
-If picking work proactively, prefer items that do **not** touch
-`backend/services/anamnesis_engine.py`, `phonological_analyzer.py`,
-`anamnesis_catalog.py`, or the sibling-agent files listed under
-"In Progress" until those settle.
+Otherwise pick from `TASKS.md` "Next" column. Remaining agent-safe
+items: `audit_service.log()` → `BackgroundTasks` migration, dropping
+redundant single-column `ix_*_user_id` indexes after EXPLAIN
+verification, fixing the `test_no_api_key_references` worktree
+exclusion. Don't touch `anamnesis_engine.py`, `phonological_analyzer.py`,
+`anamnesis_catalog.py`, or `test_phonological_analyzer.py` until the
+owner explicitly hands them over.
 
 ---
 
 ## Notes for Next Agent
 
-- Read this file plus `HANDOFF.md` first; both are current as of 2026-05-28.
+- Read this file plus `HANDOFF.md` first; both are current as of 2026-05-29 (PM).
+  For the schema-drift context behind the A3 audit, see the earlier
+  2026-05-29 entry in `HANDOFF.md` ("Previous session — earlier
+  2026-05-29 — schema-drift hotfix").
 - The full architectural picture is in `PROJECT.md`.
 - Don't trust the cached "9 routers / 11 services / 6 CI jobs / 35 tests"
   numbers if you see them in older docs — they are pre-auth-rollout. The

@@ -8,14 +8,257 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-28
+- **Date:** 2026-05-29 (PM)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent picking from `TASKS.md` "Next", otherwise the
-  owner driving anamnesis work themselves (M-6 still blocked).
+- **Handoff to:** next agent picking from `TASKS.md` "Next" — specifically the
+  `0012_align_declared_fks` migration + `alembic check` CI guard sketched in
+  `docs/ai/AUDIT_2026-05-29_schema.md`.
 
 ---
 
 ## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-05-29 (PM)
+**Role(s):** Coordinator + Implementer + Scribe (three parallel sub-agents)
+
+### What was done
+
+- Dispatched three parallel sub-agents in worktree isolation against three
+  open follow-ups from `TASKS.md` "Next" + the schema-drift trap surfaced in
+  the earlier 2026-05-29 hotfix:
+  - **A1**: `get_optional_user` JWT optimization. Sub-agent introduced an
+    `AuthIdentity` (`id`, `role`, `sid`) `frozen=True, slots=True` dataclass
+    built straight from the JWT payload that `JWTAuthMiddleware` drops onto
+    `request.state.user`. `get_optional_user` no longer takes
+    `Depends(get_db)` and no longer does a `SELECT … FROM users` on every
+    authenticated session-router request. The 9 endpoints in
+    `backend/routers/sessions.py` only ever read `user.id`, so this is
+    behavior-preserving. `get_current_user` chains on the optional dep, still
+    returns the full `User` (DB-backed) for routers that read more than id
+    (auth/admin/patients/reports/soap/exports/therapy_plans/analysis/
+    suggestions/legacy). Override compatibility preserved via
+    `isinstance(identity, User)` so existing test fixtures that
+    `dependency_overrides[get_optional_user] = lambda: fake_user_object`
+    keep working. Landed as **`c0980ab`**.
+  - **A2**: auth email path async end-to-end. Sub-agent flipped three auth
+    handlers (`register`, `reset_request`, `resend`) to `async def`, made the
+    three corresponding `AuthService` methods async, dropped
+    `EmailService._run_send` (the `asyncio.run` bridge that would refuse to
+    run from inside a live event loop), and turned `send_verify_email` /
+    `send_password_reset` into coroutines that `await self._send`.
+    `FakeEmailService.send_*` mirrored to async so prod/fake stay
+    swap-compatible. The other 13 auth handlers stayed sync (no email side
+    effect, no async dep, no event-loop benefit — FastAPI runs sync routes
+    in the threadpool anyway). Tests updated to `async def` + `await`;
+    pytest-asyncio is already in auto mode. Landed as **`0467587`**.
+  - **A3**: static schema-vs-migrations audit. Read-only pass over
+    `backend/models/*.py` vs. `backend/alembic/versions/0001..0011`. No
+    missing-column drift found — `0010` closed that bug class. Highest
+    remaining risk is **missing FK constraints on Neon for 6 declared FKs**
+    plus the manually-hotfixed `therapyplanrecord.user_id` FK that exists on
+    Neon but not in alembic (so a fresh prod env from migrations would not
+    recreate it). Report persisted to `docs/ai/AUDIT_2026-05-29_schema.md`
+    with a sketched `0012_align_declared_fks.py` migration using the
+    conditional `inspector.get_foreign_keys` pattern (no-op on Neon for the
+    therapyplanrecord FK, additive everywhere else). A3 also recommends
+    `alembic check` as a CI guard so the next column-vs-FK split is caught
+    at PR time.
+- Verified before push: backend `python -m pytest -q` → **419 passed**, full
+  suite. `ruff check` clean on touched files (3 pre-existing import-sort
+  errors in alembic migration tests remain — unchanged from baseline at
+  `96f3fa6`). `mypy` clean on touched files (3 pre-existing errors in
+  `alembic/versions/0010`/`0011` remain).
+- Pre-push hook ran `backend·pytest + frontend·eslint + frontend·vitest`,
+  all green. Push: `96f3fa6..0467587 main → main`.
+
+### Files changed
+
+#### `c0980ab` — get_optional_user JWT optimization
+
+- `backend/dependencies.py` — new `AuthIdentity` frozen-slots dataclass +
+  `_identity_from_request` helper; rewritten `get_optional_user`
+  (no `Depends(get_db)`); rewritten `get_current_user` chaining on
+  `get_optional_user` and accepting `AuthIdentity | User` for override
+  transparency.
+- `backend/routers/sessions.py` — type-annotation swap `User | None` →
+  `AuthIdentity | None` across 9 endpoints + `_uid` helper; dropped unused
+  `from models.auth import User` import.
+
+#### `0467587` — auth email path async end-to-end
+
+- `backend/routers/auth.py` — `register`, `reset_request`, `resend` flipped
+  to `async def`; each `await`s the corresponding svc method.
+- `backend/services/auth_service.py` — `register`,
+  `request_password_reset`, `resend_verification` flipped to `async def`;
+  each `await`s `self.email.send_*(…)` directly.
+- `backend/services/email_service.py` — `_run_send` sync bridge removed;
+  `send_verify_email` and `send_password_reset` now `async`, `await
+  self._send`. `FakeEmailService.send_*` mirrored to `async`.
+- `backend/tests/test_auth_service.py` — affected test functions flipped to
+  `async def`; helper `_make_verified_user` made async; calls to
+  `svc.register` / `svc.request_password_reset` `await`ed.
+- `backend/tests/test_email_service.py` — affected test functions flipped to
+  `async def`; new assertions that `EmailService.send_*` and
+  `FakeEmailService.send_*` are coroutine functions (locks in the async-seam
+  contract).
+
+#### A3 (no code commit — audit only)
+
+- `docs/ai/AUDIT_2026-05-29_schema.md` — schema audit report + proposed
+  `0012_align_declared_fks.py` sketch + proposed `alembic check` CI step.
+
+### What is NOT done yet
+
+- **`0012_align_declared_fks` not landed.** A3 produced the sketch but
+  intentionally did not write it; the FK additions change production behavior
+  on DELETE and want explicit owner approval before applying. Lives in
+  `AUDIT_2026-05-29_schema.md`. Owner decision.
+- **`alembic check` CI step not added.** Recommended in A3. Single block to
+  insert into `.github/workflows/ci.yml`; sketched in the audit file.
+- **Type-encoding drift (`VARCHAR(36)` vs. `UUID`)** across 13 columns is
+  unfixed — A3 classified as LOW (SQLAlchemy's implicit casts make INSERTs
+  work). Cosmetic until autogenerate is turned on.
+- **Other open perf items from the 2026-05-29 audit:** `audit_service.log()`
+  → `BackgroundTasks` migration, and dropping the now-redundant
+  single-column indexes after EXPLAIN confirms the composite from 0011 is
+  picked. Both still in `TASKS.md` "Next".
+- **`test_no_api_key_references` is fragile in worktree mode.** It scans the
+  whole repo for `\bAPI_KEY\b` but the exclusion list misses
+  `.claude/worktrees/`. A future agent dispatch with worktree isolation will
+  trip it again until cleanup. One-line fix: add `"worktrees"` to the
+  exclusion tuple at `backend/tests/test_no_api_key_references.py:17`. Not
+  fixed in this session — out of scope of A1/A2/A3.
+
+### Risks / Attention
+
+- **A2 changed `EmailService.send_*` from sync to async** — any third-party
+  caller of those public methods (none found in repo) would break. Internal
+  callers (`AuthService`, tests) were updated in the same commit.
+- **A1 changed the type returned by `get_optional_user`** from `User | None`
+  to `AuthIdentity | None`. Any caller outside `routers/sessions.py` that
+  imported it would break — none found, but flagged for future audits.
+- **A3 surfaced a dev/prod schema split.** Local dev (`create_all`) emits
+  the declared FKs; live Neon does not have them (except the one manual
+  hotfix on therapyplanrecord). A foreign-key cascade test passing locally
+  is not proof Neon cascades on DELETE.
+- Owner WIP from earlier sessions (`anamnesis_engine` /
+  `phonological_analyzer` / `anamnesis_catalog` /
+  `test_phonological_analyzer`) — none of A1/A2/A3 touched these files.
+
+### Next concrete action
+
+Decide on the `0012_align_declared_fks` migration sketched in
+`docs/ai/AUDIT_2026-05-29_schema.md`. Two parts:
+  (i) Land the migration as alembic 0012 so a fresh prod env from migrations
+      alone would reproduce Neon's state (additive on every other Neon
+      table).
+  (ii) Add the `alembic check` CI step from the audit file so the next
+       column-vs-FK split fails at PR time.
+
+After that, the remaining open perf items in `TASKS.md` "Next" are
+agent-safe.
+
+### Ideal next prompt
+
+```text
+Read docs/ai/HANDOFF.md (latest "Session Summary"), then
+docs/ai/AUDIT_2026-05-29_schema.md.
+
+Current situation: main is at 0467587, 0 ahead of origin/main. Two perf
+commits landed today (c0980ab get_optional_user JWT opt, 0467587 auth email
+async). Schema audit report persisted but no schema-changing migration yet
+written.
+
+Your task is to land the alembic 0012_align_declared_fks migration sketched
+in AUDIT_2026-05-29_schema.md (the conditional inspector pattern means it's
+a no-op on Neon for therapyplanrecord and additive everywhere else), AND
+add the alembic check CI step from the same file. After that, update
+docs/ai/CURRENT.md / TASKS.md / HANDOFF.md and commit.
+```
+
+---
+
+## Previous session — 2026-05-29 (earlier — schema-drift hotfix)
+
+**Agent:** Claude Code
+**Date:** 2026-05-29
+**Role(s):** Debugger + Operator + Scribe
+
+### What was done
+
+- Diagnosed a 500 on `POST /backend-api/therapy-plans` (save endpoint at
+  `backend/routers/therapy_plans.py:40-67`). Backend log showed
+  `psycopg2.errors.UndefinedColumn: column "user_id" of relation
+  "therapyplanrecord" does not exist`.
+- Root cause: schema drift. The auth multi-user refactor added
+  `TherapyPlanRecord.user_id` (NOT NULL FK → users.id) but the live
+  Neon table was created earlier without that column. The project
+  bootstraps schemas via `SQLModel.metadata.create_all()` in
+  `backend/database.py:33`, which only creates missing tables — it
+  never ALTERs existing ones. There is no `alembic/versions/`
+  directory, so no migration would have caught this.
+- Verified the table was empty (`SELECT count(*) → 0`), then applied
+  the missing column on Neon in one transaction:
+
+  ```sql
+  ALTER TABLE therapyplanrecord
+    ADD COLUMN user_id UUID NOT NULL
+    REFERENCES users(id) ON DELETE CASCADE;
+  CREATE INDEX IF NOT EXISTS ix_therapyplanrecord_user_id
+    ON therapyplanrecord(user_id);
+  ```
+
+- Post-migration verification on Neon:
+  - Column `user_id uuid NOT NULL` present.
+  - Index `ix_therapyplanrecord_user_id` present.
+  - FK `therapyplanrecord_user_id_fkey → users(id) ON DELETE CASCADE`
+    present.
+
+### Files changed
+
+- (Neon only — no repo files changed for the hotfix.)
+- `docs/ai/HANDOFF.md` — this entry.
+
+### What is NOT done yet
+
+- **No alembic migration** representing this change exists in the
+  repo. Local-sqlite developers and any fresh Neon environment still
+  rely on `create_all`, which now produces the correct schema for new
+  tables but would NOT bring an existing out-of-date table into sync.
+- A second drift incident is structurally possible for any model that
+  predated multi-user. `report_record`, `patient`, `soap_record`, and
+  `auth` all have `user_id`, but only `therapyplanrecord` was hit
+  today. A targeted schema audit against the live DB has NOT been done.
+
+### Risks / Attention
+
+- **Same class of bug can recur.** Without alembic versions, every
+  future column add to a pre-existing table will silently miss the
+  prod table and only surface as a 500 in production traffic. Strongly
+  recommend introducing `alembic init` + autogenerate before the next
+  schema change. Tracking in `TASKS.md` would be sensible.
+- No data was destroyed: the affected table was empty before the
+  ALTER. If it had not been, a backfill from `reports.user_id` via
+  `report_id` would have been required.
+
+### Next concrete action
+
+Retry `POST /therapy-plans` from the UI — the original 500 should now
+return 201. After that, decide whether to introduce alembic so this
+class of drift is structurally impossible going forward.
+
+### Ideal next prompt
+
+> Audit the live Neon schema vs. the SQLModel definitions for
+> `report_record`, `patient`, `soap_record`, and `auth`. For each
+> model column missing in the table, generate the ALTER statement.
+> Do not apply — return the diff so I can review. Then propose how to
+> introduce alembic without disrupting `dev.sh`.
+
+---
+
+## Previous session — 2026-05-28
 
 **Agent:** Claude Code
 **Date:** 2026-05-28
@@ -236,8 +479,20 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 ## Open Items
 
 - [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
-- [ ] `test_pdf_disclaimer.py` `MagicMock` spec tightening (future-proofing).
-- [ ] `GeneratingView.test.tsx` move to `__tests__/` (convention alignment).
+- [ ] **`0012_align_declared_fks` migration** — sketched in
+      `docs/ai/AUDIT_2026-05-29_schema.md`. Owner decision pending.
+- [ ] **`alembic check` CI guard** — sketched in
+      `docs/ai/AUDIT_2026-05-29_schema.md`. Would catch the next
+      column-vs-FK split at PR time.
+- [ ] **Type-encoding drift (`VARCHAR(36)` vs. `UUID`)** across 13 columns
+      (`reports.user_id`, `patients.id`/`user_id`, `consent_records.*`,
+      `users.id`, `user_sessions.*`, `email_tokens.*`, `audit_log.*`).
+      Cosmetic until autogenerate is on.
+- [ ] `audit_service.log()` → `BackgroundTasks` (open perf-audit item).
+- [ ] Drop redundant single-column `ix_*_user_id` indexes after Postgres
+      EXPLAIN confirms 0011 composites are picked.
+- [ ] `test_no_api_key_references` exclusion misses `.claude/worktrees/` —
+      one-line fix at `backend/tests/test_no_api_key_references.py:17`.
 - [ ] Pre-existing Vercel preview deploy failure — separate deployment-config
       issue. Out of scope unless explicitly requested.
 
@@ -247,9 +502,9 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| `python -m pytest` (backend) | 399 passed, locally green after `9c27c7e` | ~400 functions across ~60 files |
-| `npm test` (frontend unit) | 164 passed, locally green after `241f7fd` | 43 test files |
+| `python -m pytest` (backend) | **419 passed**, locally green after `0467587` | full suite |
+| `npm test` (frontend unit) | green via pre-push hook on `0467587` | 43 test files |
 | `npx playwright test` (E2E) | last green in PR #6 CI | 32 cases / 11 specs, chromium-only |
 | `npm run build` | passed | with `/backend-api` default, **not** absolute host |
-| `ruff check`, `mypy`, `eslint`, `tsc` | passed locally after each commit | |
+| `ruff check`, `mypy`, `eslint`, `tsc` | passed locally on touched files; 3 pre-existing ruff errors in alembic migration tests + 3 pre-existing mypy errors in `alembic/versions/0010`/`0011` remain unchanged from baseline | |
 | Vercel deploy | **fails** (pre-existing) | separate from CI; ignore for green-up |
