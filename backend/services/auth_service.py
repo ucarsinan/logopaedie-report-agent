@@ -85,7 +85,7 @@ class AuthService:
 
     # ---------- register + verify ----------
 
-    def register(self, db: Session, *, email_addr: str, password: str, ip: str | None, ua: str | None) -> None:
+    async def register(self, db: Session, *, email_addr: str, password: str, ip: str | None, ua: str | None) -> None:
         normalized = email_addr.strip().lower()
         if len(password) < 12:
             raise ValueError("password_too_short")
@@ -123,7 +123,7 @@ class AuthService:
             )
         )
         db.commit()
-        self.email.send_verify_email(normalized, plain)
+        await self.email.send_verify_email(normalized, plain)
 
     def verify_email(self, db: Session, *, token: str, ip: str | None, ua: str | None) -> None:
         token_hash = _sha256(token)
@@ -319,7 +319,7 @@ class AuthService:
 
     # ---------- password reset ----------
 
-    def request_password_reset(self, db: Session, *, email_addr: str, ip: str | None, ua: str | None) -> None:
+    async def request_password_reset(self, db: Session, *, email_addr: str, ip: str | None, ua: str | None) -> None:
         normalized = email_addr.strip().lower()
         user = db.exec(select(User).where(User.email == normalized)).first()
         self.audit.log(
@@ -342,7 +342,7 @@ class AuthService:
             )
         )
         db.commit()
-        self.email.send_password_reset(normalized, plain)
+        await self.email.send_password_reset(normalized, plain)
 
     def confirm_password_reset(
         self, db: Session, *, token: str, new_password: str, ip: str | None, ua: str | None
@@ -417,7 +417,7 @@ class AuthService:
 
     # ---------- resend verification ----------
 
-    def resend_verification(self, db: Session, *, email_addr: str, ip: str | None, ua: str | None) -> None:
+    async def resend_verification(self, db: Session, *, email_addr: str, ip: str | None, ua: str | None) -> None:
         normalized = email_addr.strip().lower()
         user = db.exec(select(User).where(User.email == normalized)).first()
         self.audit.log(
@@ -440,7 +440,7 @@ class AuthService:
             )
         )
         db.commit()
-        self.email.send_verify_email(normalized, plain)
+        await self.email.send_verify_email(normalized, plain)
 
     # ---------- 2FA setup / enable / disable ----------
 

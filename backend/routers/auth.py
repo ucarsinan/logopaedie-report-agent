@@ -94,7 +94,7 @@ def _err(exc: Exception, response: Response) -> dict:
 
 @router.post("/register")
 @limiter.limit("3/minute")
-def register(
+async def register(
     request: Request,
     body: RegisterIn,
     db: Session = Depends(get_db),
@@ -102,7 +102,7 @@ def register(
 ):
     ip, ua = _client(request)
     with contextlib.suppress(ValueError):
-        svc.register(db, email_addr=body.email, password=body.password, ip=ip, ua=ua)
+        await svc.register(db, email_addr=body.email, password=body.password, ip=ip, ua=ua)
     return {"message": GENERIC_REGISTER_MSG}
 
 
@@ -197,14 +197,14 @@ def me(user: User = Depends(get_current_user)):
 
 @router.post("/password/reset/request")
 @limiter.limit("3/hour")
-def reset_request(
+async def reset_request(
     request: Request,
     body: ResetRequestIn,
     db: Session = Depends(get_db),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
-    svc.request_password_reset(db, email_addr=body.email, ip=ip, ua=ua)
+    await svc.request_password_reset(db, email_addr=body.email, ip=ip, ua=ua)
     return {"message": GENERIC_REGISTER_MSG}
 
 
@@ -253,14 +253,14 @@ def password_change(
 
 @router.post("/resend-verification")
 @limiter.limit("3/hour")
-def resend(
+async def resend(
     body: ResendIn,
     request: Request,
     db: Session = Depends(get_db),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
-    svc.resend_verification(db, email_addr=body.email, ip=ip, ua=ua)
+    await svc.resend_verification(db, email_addr=body.email, ip=ip, ua=ua)
     return {"message": GENERIC_REGISTER_MSG}
 
 
