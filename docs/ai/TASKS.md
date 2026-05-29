@@ -28,32 +28,23 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ### From 2026-05-29 performance audit (still open)
 
-- [ ] Move `audit_service.log()` writes (`backend/services/audit_service.py:32`)
-      to BackgroundTasks to eliminate the second per-request `db.commit()`.
 - [ ] After Postgres EXPLAIN confirms the composite indexes from migration 0011
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
 ### From 2026-05-29 schema audit (`AUDIT_2026-05-29_schema.md`)
 
-- [ ] **Land `0012_align_declared_fks` migration** — sketch ready in
-      `docs/ai/AUDIT_2026-05-29_schema.md`. Conditional inspector pattern
-      makes it a no-op on Neon for `therapyplanrecord.user_id` and additive
-      on every other declared-but-not-enforced FK. Owner decision before
-      apply.
-- [ ] **Add `alembic check` CI step** — sketched in
-      `docs/ai/AUDIT_2026-05-29_schema.md`. Would catch the next
-      column-vs-FK split at PR time, structurally preventing the
-      2026-05-29 incident class.
 - [ ] **`ix_patients_pseudonym` index** — declared `index=True` on model,
-      never created by migration 0007. Low severity, additive.
+      never created by migration 0007. Currently excluded from
+      `alembic check` via the `_MIGRATION_ONLY_INDEXES` filter in
+      `backend/alembic/env.py`; land a `0013_*` to either create it on Neon
+      (if the slow `pseudonym` lookup actually matters) or drop the
+      declaration on the model side. Low severity.
 - [ ] **Type-encoding cleanup (`VARCHAR(36)` → `UUID`)** across 13
-      legacy-id columns. Low priority; cosmetic until alembic autogenerate
-      is on.
-- [ ] **Fix `test_no_api_key_references` exclusion** — one-line: add
-      `"worktrees"` to the exclusion tuple at
-      `backend/tests/test_no_api_key_references.py:17`. Currently false-fails
-      when `.claude/worktrees/` is present.
+      legacy-id columns. Suppressed via `compare_type=False` in
+      `backend/alembic/env.py` so `alembic check` stays green; the real
+      alignment should mirror the 0008/0009 dialect-gated `ALTER TYPE`
+      pattern. Low priority.
 
 ### Other
 
@@ -64,6 +55,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] `test_no_api_key_references` exclusion fix (parallel sub-agent B3): switched from absolute `path.parts` to `relative_to(root).parts`; added `.claude` + `worktrees` to the exclusion set so agent-worktree dispatch no longer false-fails the suite (`33c542e`) — 2026-05-29
+- [x] `0012_align_declared_fks` migration + `alembic check` CI guard (parallel sub-agent B2): emits 7 declared-but-missing FKs idempotently (no-op on Neon for therapyplanrecord), tunes `alembic/env.py` (add `models.patient` import, `compare_type=False`, `include_object` filter), CI step runs after pytest (`6e31983`) — 2026-05-29
+- [x] `audit_service.log()` writes deferred via FastAPI BackgroundTasks (parallel sub-agent B1): new `log_in_background` + `get_db_factory` plumbing in `database.py`; sync `log()` preserved for test direct-callers; routes in auth/auth_admin/patients wire the deferred path (`6c18482`) — 2026-05-29
 - [x] Schema-vs-migrations static audit (parallel sub-agent A3) — report at `docs/ai/AUDIT_2026-05-29_schema.md`; sketches `0012_align_declared_fks` migration + `alembic check` CI step (no code commit) — 2026-05-29
 - [x] Auth email path async end-to-end: `register` / `reset_request` / `resend` handlers + `AuthService.register` / `request_password_reset` / `resend_verification` + `EmailService.send_*` all async; `_run_send` sync bridge dropped (`0467587`) — 2026-05-29
 - [x] `get_optional_user` JWT optimization: new `AuthIdentity` dataclass; per-request DB fetch removed from session-router endpoints; `get_current_user` chains on it for routers that need the full `User` row (`c0980ab`) — 2026-05-29

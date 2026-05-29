@@ -8,25 +8,26 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (PM)
+- **Date:** 2026-05-29 (evening)
 - **Updated by:** Claude Code
-- **Session focus:** Dispatched three parallel sub-agents (A1, A2, A3) in worktree isolation: A1 trimmed the per-request DB fetch out of `get_optional_user`, A2 flipped the auth email path to async end-to-end, A3 produced a static schema-vs-migrations audit. Two perf commits landed and were pushed; A3's report is persisted to `docs/ai/AUDIT_2026-05-29_schema.md`.
+- **Session focus:** Second parallel-agent wave (B1, B2, B3) — B1 deferred audit_service writes to BackgroundTasks, B2 landed `0012_align_declared_fks` + `alembic check` CI guard, B3 fixed the `test_no_api_key_references` worktree footgun. Three commits pushed; the schema-drift bug class is now structurally prevented at PR time.
 
 ---
 
 ## Current Goal
 
-No agent-driven goal active for the rest of this session. The two perf
-items A1 + A2 from `TASKS.md` "Next" landed today as `c0980ab` and `0467587`
-and were pushed to `origin/main`. A3's read-only audit produced a sketched
-`0012_align_declared_fks` migration + `alembic check` CI step — both
-unapplied, owner-decision pending.
+No agent-driven goal active. The three follow-ups dispatched this evening
+(B1, B2, B3) all landed and were pushed to `origin/main`:
+`6c18482` / `6e31983` / `33c542e`. The remaining open `TASKS.md` "Next"
+items are all LOW-severity (`ix_patients_pseudonym`, `VARCHAR(36)→UUID`
+type alignment, dropping redundant single-column `ix_*_user_id` indexes
+after EXPLAIN, and extending the BackgroundTasks audit wiring to the
+remaining routers).
 
-**M-6** (anamnesis completion logic) remains the outstanding
-audit item and was blocked on owner-driven WIP in
+**M-6** (anamnesis completion logic) remains the outstanding audit item
+and is still blocked on owner-driven WIP in
 `backend/services/anamnesis_engine.py`, `phonological_analyzer.py`, and
-`anamnesis_catalog.py`. Earlier 2026-05-29 sessions did not surface any
-new commits in those files; treat them as untouchable until the owner
+`anamnesis_catalog.py`. Treat them as untouchable until the owner
 explicitly hands them over.
 
 ---
@@ -37,17 +38,18 @@ explicitly hands them over.
 main
 ```
 
-Local `main` is **at `origin/main`** (`0467587`, 0 ahead / 0 behind).
-Today's afternoon thematic commits are:
+Local `main` is **at `origin/main`** (`33c542e`, 0 ahead / 0 behind).
+Today's commits (newest first):
 
-- `c0980ab` — `perf(backend): skip per-request DB fetch in get_optional_user; add AuthIdentity`
+- `33c542e` — `fix(tests): scope test_no_api_key_references exclusion to repo-relative parts`
+- `6e31983` — `feat(backend): land 0012_align_declared_fks migration + alembic check CI guard`
+- `6c18482` — `perf(backend): defer audit_service.log() writes to BackgroundTasks`
+- `1a53f79` — `docs(ai): record A1/A2 commits and persist A3 schema audit`
 - `0467587` — `perf(backend): make auth email path async end-to-end`
+- `c0980ab` — `perf(backend): skip per-request DB fetch in get_optional_user; add AuthIdentity`
 
-A3 (schema audit) produced no code commit; its deliverable is the new
-`docs/ai/AUDIT_2026-05-29_schema.md` plus the proposed
-`0012_align_declared_fks` migration sketched inside it.
-
-Working tree carries the docs/ai state-file refresh for this session.
+Working tree carries the docs/ai state-file refresh for this evening
+session.
 
 ---
 
@@ -55,6 +57,34 @@ Working tree carries the docs/ai state-file refresh for this session.
 
 ### Done (recent — see `TASKS.md` "Done" for the full log)
 
+- [x] **`test_no_api_key_references` scoped exclusions** (B3,
+      `33c542e`, 2026-05-29 evening) — switched from absolute
+      `path.parts` to `relative_to(root).parts`; added `.claude` +
+      `worktrees` to the exclusion set. Latent bug: the absolute-path
+      comparison would have silently passed on *every* file when run
+      from inside `.claude/worktrees/<agent-id>/` if `.claude` was
+      naively added to the existing tuple. 419/419.
+- [x] **`0012_align_declared_fks` + `alembic check` CI guard** (B2,
+      `6e31983`, 2026-05-29 evening) — migration emits 7 declared FKs
+      idempotently via `inspector.get_foreign_keys()` guards (no-op on
+      Neon for the manually-hotfixed `therapyplanrecord.user_id`).
+      `env.py` gets missing `models.patient` import + `compare_type=False`
+      + `_MIGRATION_ONLY_INDEXES` filter excluding the 0011 composites
+      and `ix_patients_pseudonym` (both deferred to a future 0013).
+      `.github/workflows/ci.yml` runs `alembic upgrade head && alembic
+      check` after pytest. New `test_migration_0012.py` covers upgrade /
+      idempotency / downgrade. 422/422 (419 + 3 new).
+- [x] **`audit_service.log()` → BackgroundTasks** (B1, `6c18482`,
+      2026-05-29 evening) — new `audit_service.log_in_background(...)`
+      schedules `_persist_with_fresh_session` after the response; new
+      `database.get_db_factory(request)` resolves
+      `dependency_overrides[get_db]` at request time so the background
+      task opens its own session against the same engine (including test
+      overrides). `AuthService` methods gain optional `(background,
+      db_factory)` kwargs + internal `_audit()` router. Routes in
+      `routers/auth.py`, `routers/auth_admin.py`, `routers/patients.py`
+      wire the deferred path; remaining routers still take the sync
+      path (follow-up).
 - [x] **Schema-vs-migrations static audit** (A3, 2026-05-29 PM) — no
       missing-column drift found (0010 closed that class); persistent
       risk is FK constraints declared on models but never emitted by
@@ -185,14 +215,13 @@ backend/tests/test_phonological_analyzer.py  — owner WIP, do not touch
 
 ```text
 Branch: main
-HEAD:   0467587 perf(backend): make auth email path async end-to-end
+HEAD:   33c542e fix(tests): scope test_no_api_key_references exclusion to repo-relative parts
 Behind: 0
 Ahead:  0
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/TASKS.md
   M docs/ai/HANDOFF.md
-  ? docs/ai/AUDIT_2026-05-29_schema.md
 ```
 
 ---
@@ -235,29 +264,32 @@ Uncommitted:
 
 ## Next Step
 
-The natural next item is the schema-audit follow-up: land
-`0012_align_declared_fks` (sketch ready in
-`docs/ai/AUDIT_2026-05-29_schema.md`) AND add the `alembic check` CI
-guard. Both are explicitly carved out in the audit because the FK
-additions change behavior on DELETE — needs owner sign-off before the
-migration runs against Neon.
+The natural next item is extending the audit-BackgroundTasks wiring from
+`routers/auth.py` / `routers/auth_admin.py` / `routers/patients.py` to
+the remaining routers (grep `self.audit.log(` or `audit_service.log(`
+for the call sites — `routers/reports.py`, `routers/sessions.py`,
+`routers/soap.py` are the likely ones). The deferred path is already
+implemented in `services/audit_service.py`; this is mechanical wiring of
+two new deps (`background_tasks: BackgroundTasks` +
+`db_factory: DBSessionFactory = Depends(get_db_factory)`) into each route.
 
-Otherwise pick from `TASKS.md` "Next" column. Remaining agent-safe
-items: `audit_service.log()` → `BackgroundTasks` migration, dropping
-redundant single-column `ix_*_user_id` indexes after EXPLAIN
-verification, fixing the `test_no_api_key_references` worktree
-exclusion. Don't touch `anamnesis_engine.py`, `phonological_analyzer.py`,
-`anamnesis_catalog.py`, or `test_phonological_analyzer.py` until the
-owner explicitly hands them over.
+Otherwise pick from `TASKS.md` "Next" column. Remaining items are all
+LOW-severity: `ix_patients_pseudonym` resolution, `VARCHAR(36)→UUID`
+type alignment (0013), dropping redundant single-column `ix_*_user_id`
+indexes after EXPLAIN verification on Neon. Don't touch
+`anamnesis_engine.py`, `phonological_analyzer.py`, `anamnesis_catalog.py`,
+or `test_phonological_analyzer.py` until the owner explicitly hands them
+over.
 
 ---
 
 ## Notes for Next Agent
 
-- Read this file plus `HANDOFF.md` first; both are current as of 2026-05-29 (PM).
-  For the schema-drift context behind the A3 audit, see the earlier
-  2026-05-29 entry in `HANDOFF.md` ("Previous session — earlier
-  2026-05-29 — schema-drift hotfix").
+- Read this file plus `HANDOFF.md` first; both are current as of 2026-05-29
+  (evening). For the schema-drift context, see the chain of session
+  entries in `HANDOFF.md`: evening (B1/B2/B3 — closing the FK class) →
+  PM (A1/A2/A3 — perf + audit) → earlier 2026-05-29 (the original
+  schema-drift hotfix).
 - The full architectural picture is in `PROJECT.md`.
 - Don't trust the cached "9 routers / 11 services / 6 CI jobs / 35 tests"
   numbers if you see them in older docs — they are pre-auth-rollout. The

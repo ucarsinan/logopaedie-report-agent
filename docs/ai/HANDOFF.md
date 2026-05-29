@@ -8,15 +8,189 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (PM)
+- **Date:** 2026-05-29 (evening)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent picking from `TASKS.md` "Next" — specifically the
-  `0012_align_declared_fks` migration + `alembic check` CI guard sketched in
-  `docs/ai/AUDIT_2026-05-29_schema.md`.
+- **Handoff to:** next agent picking from `TASKS.md` "Next" — only the
+  LOW-severity follow-ups remain (drop redundant single-column indexes after
+  EXPLAIN, `ix_patients_pseudonym` resolution, `VARCHAR(36)→UUID` 0013).
 
 ---
 
 ## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-05-29 (evening)
+**Role(s):** Coordinator + Implementer + Scribe (three parallel sub-agents B1/B2/B3)
+
+### What was done
+
+- Dispatched a second wave of three parallel sub-agents in worktree
+  isolation against the remaining agent-safe items from `TASKS.md` "Next"
+  plus the schema-audit follow-ups produced by A3 earlier this afternoon:
+  - **B1**: defer `audit_service.log()` writes to FastAPI `BackgroundTasks`.
+    New `audit_service.log_in_background(background, db_factory, …)`
+    schedules `_persist_with_fresh_session` after the response is sent;
+    new `database.get_db_factory(request)` resolves
+    `dependency_overrides[get_db]` at request time and hands back a
+    context-manager factory so the background task opens its own session
+    against the same engine (including test overrides). `AuthService`
+    methods gained optional `(background, db_factory)` kwargs and an
+    internal `_audit()` router that picks the deferred path when both are
+    provided, else falls back to the sync `log()` (preserved for unit
+    tests). Routes in `routers/auth.py`, `routers/auth_admin.py`,
+    `routers/patients.py` wire the two new deps. Landed as **`6c18482`**.
+  - **B2**: write `backend/alembic/versions/0012_align_declared_fks.py` +
+    add the `alembic check` CI guard from A3's audit. The migration emits
+    the 7 declared-but-missing FKs (`reports.user_id`,
+    `reports.patient_id`, `soaprecord.user_id`, `patients.user_id`,
+    `consent_records.patient_id`, `consent_records.recorded_by`,
+    `therapyplanrecord.user_id`) idempotently via
+    `inspector.get_foreign_keys()` guards — no-op on Neon for the
+    hotfixed `therapyplanrecord.user_id`. `backend/alembic/env.py` gained
+    a missing `import models.patient`, `compare_type=False` (suppresses
+    GUID/VARCHAR reflection noise; type alignment deferred to a future
+    0013), and an `include_object` filter excluding the migration-only
+    composite indexes from 0011 plus the deferred `ix_patients_pseudonym`.
+    `.github/workflows/ci.yml` got a new step that runs
+    `alembic upgrade head && alembic check` after pytest, against a
+    `sqlite:///./ci_check.db`. New `test_migration_0012.py` covers
+    upgrade, idempotency-when-FK-preexists, and downgrade-removes.
+    Landed as **`6e31983`**.
+  - **B3**: fix `test_no_api_key_references` so worktree dispatch stops
+    false-failing the full suite. The latent bug was iterating absolute
+    `path.parts` against the exclusion set — any ancestor directory name
+    (like `.claude` in the CC worktree path) coincidentally short-circuits
+    the scan. Switched to `path.relative_to(root).parts` so exclusions
+    only match repo-relative segments; added `.claude` + `worktrees` to
+    the set. Landed as **`33c542e`**.
+- Verified before push: backend `python3 -m pytest -q` → **422 passed**
+  (419 baseline + 3 new from `test_migration_0012`). One ruff regression
+  caught during integration (`RUF100` from a `# noqa: BLE001` that B1
+  added but the project's ruff config doesn't enable BLE001) — removed in
+  the B1 commit before staging. `mypy` clean on touched files (3
+  pre-existing errors in `alembic/versions/0010`/`0011` remain).
+- Local end-to-end of the new CI step:
+  `DATABASE_URL="sqlite:///./ci_check.db" alembic upgrade head && alembic check`
+  → "No new upgrade operations detected." The guard is live and passing.
+
+### Files changed
+
+#### `6c18482` — audit logging deferred to BackgroundTasks
+
+- `backend/database.py` — new `get_db_factory` + `DBSessionFactory`
+  type alias. Captures the currently-active `get_db` (including test
+  overrides) so background tasks can open a fresh `Session` after the
+  request-scoped one closes.
+- `backend/services/audit_service.py` — new `log_in_background` +
+  `_persist_with_fresh_session` (logs on exception, doesn't raise — no
+  response left to fail).
+- `backend/services/auth_service.py` — new internal `_audit` router; all
+  `self.audit.log(…)` call sites rewrapped to take optional `background`
+  + `db_factory`.
+- `backend/routers/auth.py` — handlers gain `background_tasks:
+  BackgroundTasks` + `db_factory: DBSessionFactory = Depends(get_db_factory)`
+  and pass them into the svc layer.
+- `backend/routers/auth_admin.py`, `backend/routers/patients.py` — same
+  wiring pattern at admin / patient-CRUD audit emit sites.
+
+#### `6e31983` — `0012_align_declared_fks` + alembic check CI guard
+
+- `backend/alembic/versions/0012_align_declared_fks.py` (new) — 7
+  conditional `create_foreign_key` calls + matching `downgrade`.
+- `backend/alembic/env.py` — `import models.patient`, `compare_type=False`,
+  `include_object` filter (with `_MIGRATION_ONLY_INDEXES` set listing each
+  excluded index name and pointing at this audit).
+- `backend/tests/test_migration_0012.py` (new) — 3 cases: all FKs land
+  on a fresh upgrade, idempotent re-run leaves the FK set identical,
+  downgrade removes only what 0012 added.
+- `.github/workflows/ci.yml` — new step `Verify alembic migrations match
+  SQLModel metadata` in the `backend-test` job (after pytest), uses
+  `DATABASE_URL: sqlite:///./ci_check.db`.
+- `docs/ai/AUDIT_2026-05-29_schema.md` — one-line "Applied as
+  `0012_align_declared_fks.py`" annotation under the migration sketch.
+
+#### `33c542e` — `test_no_api_key_references` scoped exclusions
+
+- `backend/tests/test_no_api_key_references.py` — switch to
+  `relative_to(root).parts`; add `.claude` + `worktrees` to the
+  exclusion set.
+
+### What is NOT done yet
+
+- **`ix_patients_pseudonym` index** — still declared `index=True` on the
+  model but not created by any migration. B2 suppressed it via the
+  `include_object` filter so `alembic check` stays green; either land a
+  0013 that creates it on Neon, or drop the `index=True` declaration if
+  the slower lookup is fine.
+- **`VARCHAR(36)` → `UUID` type alignment** across 13 legacy-id columns.
+  Suppressed via `compare_type=False`. Real alignment should follow the
+  0008/0009 dialect-gated `ALTER TYPE` pattern.
+- **Drop redundant single-column `ix_*_user_id` indexes** after Postgres
+  EXPLAIN confirms the 0011 composites are picked. Same item as the prior
+  session; still needs a live-Neon EXPLAIN before the drop.
+- **`audit_service.log_in_background` not yet wired** into the other
+  routers that emit audit events (`reports.py`, `sessions.py`, etc.).
+  B1's wave covered auth + auth_admin + patients; the remaining
+  `audit.log()` call sites in other routers still take the sync path.
+  Follow-up task: extend the BackgroundTasks wiring to those routes.
+
+### Risks / Attention
+
+- **B1 introduced a public-API breaking change on `AuthService`** — the
+  email-emitting service methods now take optional `(background,
+  db_factory)`. Backwards-compatible at the call site (both default to
+  `None` → sync path), but anything that mocks the method signature
+  needs updating. Existing tests pass via `TestClient` running
+  `BackgroundTasks` synchronously after the response.
+- **B2's `include_object` filter is a deliberate deferral**. If someone
+  later adds a real index named the same as one of the entries in
+  `_MIGRATION_ONLY_INDEXES` and expects autogenerate to flag it, the
+  filter will silently swallow it. The filter is documented at the
+  call site; revisit when the deferred 0013 lands.
+- **`alembic check` only runs against SQLite in CI.** The guard catches
+  metadata drift (column / FK / table presence) but not Postgres-specific
+  divergence (e.g. partial indexes, jsonb defaults). For Neon parity, an
+  occasional manual `DATABASE_URL=$NEON_URL alembic check --autogenerate`
+  is still worthwhile.
+- Owner WIP from earlier sessions (`anamnesis_engine` /
+  `phonological_analyzer` / `anamnesis_catalog` /
+  `test_phonological_analyzer`) — none of B1/B2/B3 touched these files.
+
+### Next concrete action
+
+Wire `audit_service.log_in_background(…)` into the remaining routers that
+emit audit events (`backend/routers/reports.py`,
+`backend/routers/sessions.py`, etc. — grep `self.audit.log(` or
+`audit_service.log(` for the call sites) so the BackgroundTasks deferral
+covers every request path. After that, the remaining open items in
+`TASKS.md` "Next" are all LOW-severity (`ix_patients_pseudonym`,
+`VARCHAR(36)→UUID`, dropping redundant single-column indexes).
+
+### Ideal next prompt
+
+```text
+Read docs/ai/HANDOFF.md (latest "Session Summary"), then
+docs/ai/TASKS.md "Next".
+
+Current situation: main is at 33c542e, 0 ahead of origin/main. Five
+commits landed today PM/evening (c0980ab, 0467587, 6c18482, 6e31983,
+33c542e). 422/422 backend tests, alembic check CI guard live and
+passing. The B1 BackgroundTasks plumbing only covers auth /
+auth_admin / patients — the other routers still take the sync audit
+path.
+
+Your task: extend the audit-BackgroundTasks wiring from routers/auth.py
+to routers/reports.py, routers/sessions.py, routers/soap.py, etc. (grep
+'audit_service.log(' or 'self.audit.log(' for the full list). For each
+route that emits an audit event, add 'background_tasks: BackgroundTasks'
++ 'db_factory: DBSessionFactory = Depends(get_db_factory)' and route
+the emit through the svc-layer or audit_service.log_in_background
+directly. After that, update docs/ai state files.
+```
+
+---
+
+## Previous session — 2026-05-29 (PM) — A1/A2/A3 batch
 
 **Agent:** Claude Code
 **Date:** 2026-05-29 (PM)
@@ -479,20 +653,23 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 ## Open Items
 
 - [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
-- [ ] **`0012_align_declared_fks` migration** — sketched in
-      `docs/ai/AUDIT_2026-05-29_schema.md`. Owner decision pending.
-- [ ] **`alembic check` CI guard** — sketched in
-      `docs/ai/AUDIT_2026-05-29_schema.md`. Would catch the next
-      column-vs-FK split at PR time.
-- [ ] **Type-encoding drift (`VARCHAR(36)` vs. `UUID`)** across 13 columns
-      (`reports.user_id`, `patients.id`/`user_id`, `consent_records.*`,
-      `users.id`, `user_sessions.*`, `email_tokens.*`, `audit_log.*`).
-      Cosmetic until autogenerate is on.
-- [ ] `audit_service.log()` → `BackgroundTasks` (open perf-audit item).
+- [ ] **Extend BackgroundTasks audit wiring** to the remaining routers
+      (`reports.py`, `sessions.py`, `soap.py`, etc. — anywhere a sync
+      `self.audit.log(...)` still lives). B1 covered auth / auth_admin /
+      patients only.
+- [ ] **`ix_patients_pseudonym` resolution** — model declares
+      `index=True`; B2 suppressed it via `_MIGRATION_ONLY_INDEXES` in
+      `backend/alembic/env.py`. Decide: land a 0013 that creates it on
+      Neon, OR drop the `index=True` declaration on the model.
+- [ ] **Type-encoding (`VARCHAR(36)` → `UUID`)** across 13 legacy-id
+      columns. Suppressed via `compare_type=False`; real alignment via
+      a future `0013_*` mirroring 0008/0009.
 - [ ] Drop redundant single-column `ix_*_user_id` indexes after Postgres
       EXPLAIN confirms 0011 composites are picked.
-- [ ] `test_no_api_key_references` exclusion misses `.claude/worktrees/` —
-      one-line fix at `backend/tests/test_no_api_key_references.py:17`.
+- [ ] **`alembic check` only runs against SQLite in CI.** For Neon
+      parity, an occasional manual `DATABASE_URL=$NEON_URL alembic check
+      --autogenerate` is still useful — Postgres-specific drift (partial
+      indexes, jsonb defaults) is invisible to the SQLite guard.
 - [ ] Pre-existing Vercel preview deploy failure — separate deployment-config
       issue. Out of scope unless explicitly requested.
 
@@ -502,8 +679,9 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| `python -m pytest` (backend) | **419 passed**, locally green after `0467587` | full suite |
-| `npm test` (frontend unit) | green via pre-push hook on `0467587` | 43 test files |
+| `python -m pytest` (backend) | **422 passed**, locally green after `33c542e` | full suite (419 + 3 new `test_migration_0012`) |
+| `npm test` (frontend unit) | green via pre-push hook on `33c542e` | 43 test files |
+| `alembic check` | **No new upgrade operations detected** after `6e31983` | new CI guard, runs after pytest in `backend-test` |
 | `npx playwright test` (E2E) | last green in PR #6 CI | 32 cases / 11 specs, chromium-only |
 | `npm run build` | passed | with `/backend-api` default, **not** absolute host |
 | `ruff check`, `mypy`, `eslint`, `tsc` | passed locally on touched files; 3 pre-existing ruff errors in alembic migration tests + 3 pre-existing mypy errors in `alembic/versions/0010`/`0011` remain unchanged from baseline | |
