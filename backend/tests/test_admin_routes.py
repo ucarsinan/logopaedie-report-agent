@@ -131,6 +131,49 @@ def test_admin_lock_user_sets_locked_until(client):
     assert login.status_code == 423
 
 
+def test_admin_lock_writes_audit_row_via_background_task(client):
+    """The ``POST /admin/users/{id}/lock`` endpoint schedules the audit row
+    insert via ``BackgroundTasks``. ``TestClient`` runs background tasks
+    synchronously *before* returning control, so by the time the response
+    is in hand the row must already be queryable via ``GET /admin/audit``.
+
+    If ``get_db_factory`` were broken (e.g. failed to resolve the
+    ``dependency_overrides[get_db]`` from the test fixture and instead opened
+    a session against the real ``DATABASE_URL``), the row would land in the
+    wrong database and this query would not see it — exactly the regression
+    the BG-deferred audit path is fragile to.
+    """
+    admin = make_admin(client, "audit_admin@example.com", "correct horse battery a30")
+    target = register_and_login(client, "audit_target@example.com", "correct horse battery a31")
+    uid = client.get("/auth/me", headers=auth_headers(target)).json()["id"]
+
+    res = client.post(
+        f"/admin/users/{uid}/lock",
+        json={"duration_minutes": 30},
+        headers=auth_headers(admin),
+    )
+    assert res.status_code == 200
+
+    # Filter to the specific event so the row is unambiguous regardless of
+    # other audit traffic produced by register/login flows above.
+    audit_rows = client.get(
+        "/admin/audit?event=admin.user_locked&limit=10",
+        headers=auth_headers(admin),
+    ).json()
+
+    assert audit_rows, "expected admin.user_locked audit row to land after lock call"
+    matching = [r for r in audit_rows if r["metadata_json"].get("target_user_id") == uid]
+    assert matching, f"no admin.user_locked row found for target {uid}; rows={audit_rows}"
+
+    row = matching[0]
+    # The router emits the row with user_id=admin.id (the actor) and the
+    # target user UUID in metadata. See routers/auth_admin.py::lock_user.
+    admin_uid = client.get("/auth/me", headers=auth_headers(admin)).json()["id"]
+    assert row["user_id"] == admin_uid
+    assert row["event"] == "admin.user_locked"
+    assert row["metadata_json"]["target_user_id"] == uid
+
+
 def test_admin_unlock_user_clears_lock_and_counter(client):
     admin = make_admin(client, "admin6@example.com", "correct horse battery a17")
     target = register_and_login(client, "target4@example.com", "correct horse battery a18")
