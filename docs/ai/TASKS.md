@@ -26,26 +26,8 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       the report flow. Likely overlaps with the in-progress owner work →
       coordinate before starting.
 
-### From 2026-05-29 security audit (still open)
-
-- [ ] Restrict `X-Forwarded-For` trust in `backend/middleware/rate_limiter.py:27-39`
-      to known proxy CIDRs, or assert `TRUSTED_PROXY` is configured at startup.
-      Right now any client can spoof the header and bypass IP rate limits.
-- [ ] Harden `ServiceTokenMiddleware` fail-open behavior
-      (`backend/middleware/service_token.py:20-22`): assert `SERVICE_TOKEN`
-      is set when `ENV=production`, raise on missing rather than passing all
-      requests through.
-- [ ] Drop dead `res.auto_verified` branch from
-      `frontend/src/features/auth/hooks/useRegister.ts` (backend field was
-      removed in `c44de76`; UI auto-login path is unreachable now).
-
 ### From 2026-05-29 performance audit (still open)
 
-- [ ] Add `limit`/`offset` pagination to `GET /patients/{id}/history`
-      (`backend/routers/patients.py:205-227`) — currently returns all reports unbounded.
-- [ ] Wrap `EmailService._send()` (`backend/services/email_service.py:22`)
-      with `asyncio.to_thread` or push to FastAPI BackgroundTasks — sync
-      Resend SDK call blocks the event loop on every auth email.
 - [ ] Move `audit_service.log()` writes (`backend/services/audit_service.py:32`)
       to BackgroundTasks to eliminate the second per-request `db.commit()`.
 - [ ] Evaluate `get_optional_user` (`backend/dependencies.py:140-148`):
@@ -54,16 +36,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 - [ ] After Postgres EXPLAIN confirms the composite indexes from migration 0011
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
-
-### From 2026-05-29 a11y audit (still open)
-
-- [ ] Move `role="dialog" aria-modal="true"` from the backdrop to the inner panel
-      `<div ref={dialogRef}>` in `PatientPickerModal.tsx:73-93`.
-- [ ] Add skip-to-main-content link before `<header>` in `AppShell.tsx`.
-- [ ] Wrap `WorkflowStepper` in `<nav aria-label="Arbeitsschritte">` and add
-      `aria-current="step"` + step-number labels (`WorkflowStepper.tsx:31-53`).
-- [ ] Audit dark-mode `--muted-foreground` (#64748b) contrast on `--surface`
-      (#1e293b) — currently ~3.7:1 for small text, below AA.
+- [ ] Convert `backend/routers/auth.py` route handlers to `async def` and call
+      `await self.email.send_*(...)` directly so the `_send` async seam from
+      `64800ce` actually unblocks the event loop on every auth email.
 
 ### Other
 
@@ -74,6 +49,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] `GET /patients/{id}/history` pagination + `EmailService._send` async seam (`64800ce`) — 2026-05-29
+- [x] Production assertions: `TRUSTED_PROXY` for rate-limiter, `SERVICE_TOKEN` for service-token middleware; flaky rate-limit tests hardened via unique per-test `X-Forwarded-For` IPs (`4117ae9`) — 2026-05-29
+- [x] A11y/cleanup batch: skip-link, WorkflowStepper nav semantics, PatientPickerModal role placement, dark-mode `--muted-foreground` contrast, `useRegister` dead branch (`d8ea14e`) — 2026-05-29
 - [x] A11y batch: nav `aria-current="page"`, icon-button labels, `motion-reduce` guards, input labels in TherapyPlanModule/SuggestModule/PhonologyModule, AuditLogTable `scope="col"`, ChatBubble SVG `aria-hidden`, ReportPreview disclaimer `role="alert"` (`f715700`) — 2026-05-29
 - [x] Redis client singleton + duplicate SessionStore removal + migration 0011 with composite/partial indexes on reports/patients/therapyplanrecord (`5af7c4a`) — 2026-05-29
 - [x] Security batch: rate limits on 6 previously-unlimited auth endpoints, `auto_verified` leak removed, audit offset capped (`c44de76`) — 2026-05-29
