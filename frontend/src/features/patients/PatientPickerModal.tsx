@@ -70,15 +70,13 @@ export function PatientPickerModal({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="patient-picker-title"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div
         ref={dialogRef}
         className="mx-4 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="patient-picker-title"
         onClick={(e) => e.stopPropagation()}
       >
         <h2

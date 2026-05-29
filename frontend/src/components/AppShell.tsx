@@ -48,6 +48,12 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <a
+        href="#main-content"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:rounded focus-visible:bg-background focus-visible:text-foreground focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        Zum Hauptinhalt springen
+      </a>
       <MobileSidebar
         isOpen={isMobileNavOpen}
         activeSlug={isPatientenSection ? "patienten" : activeSlug}
@@ -125,7 +131,10 @@ export function AppShell({ children, headerExtras, subheader }: AppShellProps) {
       </Suspense>
       {subheader}
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
+      <main
+        id="main-content"
+        className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6"
+      >
         {children}
       </main>
 

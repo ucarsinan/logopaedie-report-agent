@@ -12,19 +12,9 @@ export function useRegister() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authApi.register(email, password);
+      await authApi.register(email, password);
       setDemoMode(false);
-      if (res.auto_verified) {
-        try {
-          await authApi.login(email, password);
-          window.location.href = "/module/report";
-        } catch {
-          // Email already registered with a different password — redirect to login
-          window.location.href = "/login";
-        }
-      } else {
-        setDone(true);
-      }
+      setDone(true);
     } catch {
       setError("Registrierung fehlgeschlagen. Bitte später erneut versuchen.");
     } finally {

@@ -53,6 +53,19 @@ describe("PatientPickerModal", () => {
     expect(screen.getByRole("heading", { name: "Patient auswählen" })).toBeInTheDocument();
   });
 
+  it("places dialog role on the inner panel, not the backdrop", () => {
+    render(
+      <PatientPickerModal open={true} onSelect={onSelect} onDismiss={onDismiss} />,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // The backdrop carries the fullscreen overlay classes; the inner panel does not.
+    expect(dialog.className).not.toMatch(/fixed\s+inset-0/);
+    // The labelled heading must live inside the dialog node.
+    const heading = screen.getByRole("heading", { name: "Patient auswählen" });
+    expect(dialog.contains(heading)).toBe(true);
+  });
+
   it("does not render when open is false", () => {
     render(
       <PatientPickerModal
