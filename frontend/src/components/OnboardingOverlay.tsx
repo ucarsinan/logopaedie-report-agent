@@ -1,7 +1,7 @@
 // frontend/src/components/OnboardingOverlay.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface OnboardingOverlayProps {
   onComplete: () => void;
@@ -37,6 +37,56 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
   const [screen, setScreen] = useState(0);
   const isLast = screen === SCREENS.length - 1;
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+
+    const getFocusable = () => {
+      const root = dialogRef.current;
+      if (!root) return [] as HTMLElement[];
+      return Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    };
+
+    const focusables = getFocusable();
+    focusables[0]?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onComplete();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = getFocusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !dialogRef.current?.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused.current?.focus?.();
+    };
+  }, [onComplete]);
+
   function handleSkip() {
     onComplete();
   }
@@ -63,6 +113,10 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
@@ -77,14 +131,7 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
           <button
             onClick={handleSkip}
-            style={{
-              fontSize: "12px",
-              color: "var(--muted-foreground)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "2px 4px",
-            }}
+            className="text-xs text-muted-foreground hover:text-foreground bg-transparent border-0 cursor-pointer px-1 py-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Überspringen
           </button>
@@ -94,7 +141,10 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
         {screen === 1 ? (
           /* Module list screen */
           <div>
-            <h2 style={{ fontSize: "18px", fontWeight: "700", margin: "0 0 16px 0", color: "var(--foreground)" }}>
+            <h2
+              id="onboarding-title"
+              style={{ fontSize: "18px", fontWeight: "700", margin: "0 0 16px 0", color: "var(--foreground)" }}
+            >
               Was kann dieses Tool?
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "24px" }}>
@@ -127,7 +177,10 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
           /* Text screens (0 and 2) */
           <div style={{ textAlign: "center", marginBottom: "24px" }}>
             <div style={{ fontSize: "40px", marginBottom: "14px" }}>{SCREENS[screen].emoji}</div>
-            <h2 style={{ fontSize: "20px", fontWeight: "700", margin: "0 0 10px 0", color: "var(--foreground)" }}>
+            <h2
+              id="onboarding-title"
+              style={{ fontSize: "20px", fontWeight: "700", margin: "0 0 10px 0", color: "var(--foreground)" }}
+            >
               {SCREENS[screen].title}
             </h2>
             <p style={{ fontSize: "13px", color: "var(--muted-foreground)", lineHeight: "1.6", margin: 0 }}>
@@ -155,17 +208,7 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
         {/* CTA */}
         <button
           onClick={handleNext}
-          style={{
-            width: "100%",
-            padding: "10px",
-            borderRadius: "8px",
-            background: "var(--accent)",
-            color: "white",
-            fontSize: "14px",
-            fontWeight: "600",
-            border: "none",
-            cursor: "pointer",
-          }}
+          className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-semibold border-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {isLast ? "App öffnen →" : "Weiter →"}
         </button>
