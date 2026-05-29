@@ -40,25 +40,20 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       alignment should mirror the 0008/0009 dialect-gated `ALTER TYPE`
       pattern. Low priority.
 
-### From 2026-05-29 evening code review (`6c18482` review)
+### Open follow-ups
 
-- [ ] **T1: `log_in_background` end-to-end test.** No existing test calls
-      `AuditService.log_in_background(BackgroundTasks(), factory, …)`,
-      manually runs the queued task, and asserts the `AuditLog` row was
-      inserted. Catches `_factory` / session-lifecycle regressions.
-- [ ] **T2: admin-route audit row landing.** `test_admin_routes.py`
-      asserts on lock behavior but never queries `GET /admin/audit` to
-      confirm the `admin.user_locked` row materialized — TestClient runs
-      BG tasks before returning, so an in-test verification would catch
-      a broken factory.
-- [ ] **T3: DB-failure fail-open test.** Sync path has
-      `test_audit_log_failure_raises_fail_closed`; no equivalent test for
-      the background path that asserts the exception is caught,
-      `logger.exception` is called, and the worker does not crash.
-- [ ] **M4 follow-up: `AuthService.refresh` happy path has no audit row.**
-      Pre-existing omission flagged in the C3 review; every other auth
-      operation logs an audit, refresh doesn't. Compliance gap if
-      token-rotation is security-relevant.
+- [ ] **Resolve the pre-commit-vs-`ruff check` I001 conflict.** Sub-agent
+      D3 attempted to clear the 4 `I001` import-sort errors in
+      `tests/test_alembic_migrations.py` / `test_migration_0005.py` /
+      `test_migration_0006.py` / `test_migration_0012.py`. The worktree
+      `ruff check --fix` produced a sort that ruff check accepted; but
+      the project's `.pre-commit-config.yaml` "ruff (legacy alias)" hook
+      enforces a DIFFERENT sort that ruff check then rejects.
+      Circular conflict — same one noted in `9c27c7e`'s commit message.
+      Real fix needs a `.pre-commit-config.yaml` adjustment (replace the
+      legacy alias with `ruff check --fix` so it respects the same
+      config) or a `pyproject.toml` isort tweak. Out of scope for a
+      "test-files-only" agent; needs to touch the hook config.
 
 ### Other
 
@@ -69,6 +64,8 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] M4: `AuthService.refresh` happy path now emits `event="user.token_refreshed"` audit row (parallel sub-agent D2). Metadata: `{"old_session_id": ..., "new_session_id": ...}`. Route was already wired with `background_tasks` + `db_factory` from B1; only the svc-side emit was missing (`44ff83b`) — 2026-05-29
+- [x] T1 + T2 + T3 end-to-end tests for the BackgroundTasks audit path (parallel sub-agent D1): T1 drives `log_in_background` directly + asserts fresh-session landing; T2 hits admin lock route + asserts row via `GET /admin/audit`; T3 monkeypatches `Session.commit` to raise + asserts the worker swallows + `logger.exception` is called. T3 verified by removing the `except` clause and watching it fail (`3d57bc1`) — 2026-05-29
 - [x] Code-review hardening on `6c18482` (parallel sub-agent C3 + M2 follow-up): `AuthService._audit` now asserts `(background is None) == (db_factory is None)` so partial wiring fails loud instead of silently degrading to the sync path (`222c708`) — 2026-05-29
 - [x] `ix_patients_pseudonym` drift resolution (parallel sub-agent C2): dropped the `index=True` declaration from `Patient.pseudonym` (call-site audit showed only `ILIKE '%q%'` searches always co-anded with `user_id`/`deleted_at`; `idx_patients_user_active` from 0011 covers the access path); removed the entry from `_MIGRATION_ONLY_INDEXES` so `alembic check` now actively guards against re-introducing it (`90c51e3`) — 2026-05-29
 - [x] BackgroundTasks audit-wiring audit (parallel sub-agent C1): grep confirmed every audit emit site in the codebase was already converted in `6c18482` — `reports.py`, `sessions.py`, `soap.py`, etc. don't emit audit events. No code change required; HANDOFF's anticipation of "remaining routers" was incorrect. (No commit.) — 2026-05-29

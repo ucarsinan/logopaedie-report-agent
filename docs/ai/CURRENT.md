@@ -8,9 +8,9 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (late evening)
+- **Date:** 2026-05-29 (overnight)
 - **Updated by:** Claude Code
-- **Session focus:** Third parallel-agent wave (C1, C2, C3). C1 was a null-result audit-wiring check (the "remaining routers" anticipated in the prior handoff don't actually emit audit events). C2 dropped the dead `ix_patients_pseudonym` index declaration. C3 reviewed `6c18482` and flagged a defensive assert (applied inline as M2). Two commits pushed.
+- **Session focus:** Fourth parallel-agent wave (D1, D2, D3). D1 wrote T1+T2+T3 end-to-end tests for the BackgroundTasks audit path (closing C3's Medium-risk rating). D2 wired the refresh audit row (M4). D3 attempted to clear the 4-error ruff baseline but hit the same pre-commit-vs-`ruff check` conflict noted in `9c27c7e`; conflict promoted to a TASKS follow-up. Two commits pushed.
 
 ---
 
@@ -36,10 +36,13 @@ explicitly hands them over.
 main
 ```
 
-Local `main` is **at `origin/main`** (`222c708`, 0 ahead / 0 behind
+Local `main` is **at `origin/main`** (`44ff83b`, 0 ahead / 0 behind
 after the upcoming docs commit pushes).
 Today's commits (newest first):
 
+- `44ff83b` — `feat(backend): emit audit row on AuthService.refresh happy path`
+- `3d57bc1` — `test(backend): add T1+T2+T3 end-to-end tests for audit BackgroundTasks path`
+- `166c09d` — `docs(ai): record C1/C2/C3 late-evening batch and surface T1/T2/T3/M4 follow-ups`
 - `222c708` — `fix(backend): assert (background, db_factory) pass together in AuthService._audit`
 - `90c51e3` — `fix(backend): drop ix_patients_pseudonym index declaration; alembic check now strict`
 - `c73d16c` — `docs(ai): record B1/B2/B3 evening batch and surface the next routers to wire`
@@ -50,8 +53,8 @@ Today's commits (newest first):
 - `0467587` — `perf(backend): make auth email path async end-to-end`
 - `c0980ab` — `perf(backend): skip per-request DB fetch in get_optional_user; add AuthIdentity`
 
-Working tree carries the docs/ai state-file refresh for this late
-evening session.
+Working tree carries the docs/ai state-file refresh for this
+overnight session.
 
 ---
 
@@ -59,6 +62,32 @@ evening session.
 
 ### Done (recent — see `TASKS.md` "Done" for the full log)
 
+- [x] **M4: refresh happy-path audit row** (D2, `44ff83b`, 2026-05-29
+      overnight) — `AuthService.refresh()` now emits
+      `event="user.token_refreshed"` with `metadata={"old_session_id":
+      ..., "new_session_id": ...}` via the standard `_audit` router.
+      Discovery: the route handler in `routers/auth.py` was already
+      wired with `background_tasks` + `db_factory` from `6c18482`; only
+      the svc-side emit was missing. The reuse-detection branch's
+      `session.refresh_reuse_detected` emit was already in place.
+- [x] **T1 + T2 + T3 BG-audit end-to-end tests** (D1, `3d57bc1`,
+      2026-05-29 overnight) — T1 drives `log_in_background` directly
+      with a fresh-session factory and asserts the row lands; T2 hits
+      `/admin/users/{id}/lock` and queries `/admin/audit` to confirm
+      the row materialized post-response; T3 monkeypatches
+      `Session.commit` to raise and asserts the worker swallows + logs.
+      T3 verified by removing the `except` clause and watching it fail.
+      Subtlety caught: `alembic.ini`'s `disable_existing_loggers=True`
+      disables `services.audit_service` when alembic tests load first;
+      T3 re-enables it before the assertion. Closes C3's Medium-risk
+      rating on `6c18482`.
+- [x] **D3 (failed) — pre-commit-vs-`ruff check` I001 conflict** —
+      D3 produced a sort that `ruff check --fix` accepts but the
+      project's `.pre-commit-config.yaml` "ruff (legacy alias)" hook
+      reverts it (the conflict `9c27c7e` flagged is still live). No
+      code commit; conflict promoted to `TASKS.md` "Open follow-ups"
+      so a future agent can adjust the hook config (not the test
+      files).
 - [x] **`AuthService._audit` partial-wiring assert** (M2 from C3 review,
       `222c708`, 2026-05-29 late evening) — `assert (background is None)
       == (db_factory is None)` so a future route refactor that wires
@@ -245,9 +274,9 @@ backend/tests/test_phonological_analyzer.py  — owner WIP, do not touch
 
 ```text
 Branch: main
-HEAD:   222c708 fix(backend): assert (background, db_factory) pass together in AuthService._audit
+HEAD:   44ff83b feat(backend): emit audit row on AuthService.refresh happy path
 Behind: 0
-Ahead:  2 (90c51e3, 222c708 — about to push along with this docs commit)
+Ahead:  0 (D1 + D2 pushed; this docs commit goes next)
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/TASKS.md
@@ -294,37 +323,32 @@ Uncommitted:
 
 ## Next Step
 
-The two highest-value remaining items are the C3-review follow-ups:
+The natural next item is **fixing the pre-commit-vs-`ruff check` I001
+conflict** so the 4-error baseline can actually clear. D3's worktree
+attempt was reverted by `.pre-commit-config.yaml`'s "ruff (legacy
+alias)" hook, which enforces a sort `ruff check` rejects. Real fix:
+replace the legacy alias with `ruff check --fix` in the hook config
+(so it respects `pyproject.toml` like the local CLI does) OR adjust
+the isort config in `pyproject.toml`. Verify by running `pre-commit
+run --all-files` locally before and after.
 
-(i) Write **T1 + T2 + T3** as concrete pytest cases. T1 calls
-    `audit.log_in_background` with a real `BackgroundTasks()`, invokes
-    the queued task manually, asserts the `AuditLog` row was inserted
-    in a fresh session. T2 extends `test_admin_routes.py` to query
-    `GET /admin/audit` after the lock action and confirm the
-    `admin.user_locked` row landed. T3 mocks the DB factory to raise on
-    commit and asserts `_persist_with_fresh_session` swallows the
-    exception, calls `logger.exception`, and does NOT crash the worker.
-    Closing these would move the C3 risk rating from Medium to Low.
-
-(ii) **Fix M4** — wire an audit row into `AuthService.refresh` happy
-     path. One method change; matches the existing `_audit` pattern.
-
-Everything else open is LOW-severity (`VARCHAR(36)→UUID` type
-alignment, dropping redundant single-column `ix_*_user_id` indexes
-after EXPLAIN verification on Neon, the 4-error ruff `I001` baseline
-cleanup). Don't touch `anamnesis_engine.py`, `phonological_analyzer.py`,
-`anamnesis_catalog.py`, or `test_phonological_analyzer.py` until the
-owner explicitly hands them over.
+Otherwise pick from `TASKS.md` "Next" / "Open follow-ups". Remaining
+items are all LOW-severity (`VARCHAR(36)→UUID` type alignment as a
+0013_* migration, dropping redundant single-column `ix_*_user_id`
+indexes after EXPLAIN verification on Neon). Don't touch
+`anamnesis_engine.py`, `phonological_analyzer.py`, `anamnesis_catalog.py`,
+or `test_phonological_analyzer.py` until the owner explicitly hands
+them over.
 
 ---
 
 ## Notes for Next Agent
 
 - Read this file plus `HANDOFF.md` first; both are current as of 2026-05-29
-  (late evening). For the schema-drift context, see the chain of session
-  entries in `HANDOFF.md`: late evening (C1/C2/C3 — pseudonym drift +
-  C3 review of B1) → evening (B1/B2/B3 — closing the FK class) → PM
-  (A1/A2/A3 — perf + audit) → earlier 2026-05-29 (the original
+  (overnight). The session chain in `HANDOFF.md`: overnight (D1/D2/D3 —
+  audit testing + refresh audit) → late evening (C1/C2/C3 — pseudonym
+  drift + C3 review of B1) → evening (B1/B2/B3 — closing the FK class)
+  → PM (A1/A2/A3 — perf + audit) → earlier 2026-05-29 (the original
   schema-drift hotfix).
 - The full architectural picture is in `PROJECT.md`.
 - Don't trust the cached "9 routers / 11 services / 6 CI jobs / 35 tests"

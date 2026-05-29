@@ -8,16 +8,180 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (late evening)
+- **Date:** 2026-05-29 (overnight)
 - **Updated by:** Claude Code
 - **Handoff to:** next agent picking from `TASKS.md` "Next" — only the
   LOW-severity follow-ups remain (`VARCHAR(36)→UUID` type alignment, drop
-  redundant single-column indexes after EXPLAIN) plus the
-  T1/T2/T3/M4 follow-ups from the C3 review.
+  redundant single-column indexes after EXPLAIN, the pre-commit-vs-ruff
+  I001 hook conflict).
 
 ---
 
 ## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-05-29 (overnight)
+**Role(s):** Coordinator + Implementer + Scribe (three parallel sub-agents D1/D2/D3)
+
+### What was done
+
+- Fourth parallel-agent wave dispatched in worktree isolation against
+  the C3-review follow-ups + a small infrastructural cleanup:
+  - **D1**: write T1 + T2 + T3 end-to-end tests for the
+    BackgroundTasks-deferred audit path. T1 drives
+    `audit.log_in_background` directly with a real `BackgroundTasks`
+    and a fresh-session factory, asserts no row before `await
+    background()`, then asserts the row landed via a third independent
+    session — catches a captured-outer-session regression in
+    `get_db_factory`. T2 hits `POST /admin/users/{id}/lock` and queries
+    `GET /admin/audit?event=admin.user_locked` — TestClient runs BG
+    tasks before returning so the row must be visible. T3
+    monkeypatches `Session.commit` to raise `OperationalError`, drives
+    the queued task manually, asserts no exception escapes the worker,
+    `logger.exception` is called with `audit_service.background_log_failed`,
+    and `exc_info[0] is OperationalError`. D1 verified T3 by removing
+    the `except Exception:` clause temporarily and watching T3 fail.
+    Caught a subtle issue: `alembic.ini`'s `fileConfig` sets
+    `disable_existing_loggers=True`, which disables
+    `services.audit_service` when alembic tests load it earlier in the
+    suite — T3 re-enables the logger explicitly before the assertion.
+    Landed as **`3d57bc1`**.
+  - **D2**: wire an audit row into `AuthService.refresh()` happy path
+    (M4 from the C3 review). Event `user.token_refreshed`; metadata
+    `{"old_session_id": ..., "new_session_id": ...}` mirroring the
+    pattern from `logout`. Useful discovery: the `refresh` route
+    handler in `routers/auth.py` was already wired with
+    `background_tasks` + `db_factory` from `6c18482`, even though it
+    didn't emit then — only the svc-side emit was missing. The M2
+    assert (`(background is None) == (db_factory is None)`) confirms
+    the route's full wiring. The reuse-detection branch already emits
+    `session.refresh_reuse_detected`; left untouched.
+    Landed as **`44ff83b`**.
+  - **D3**: clear the 4 `ruff I001` baseline errors in the alembic
+    migration test files. **Failed** — pre-commit's `ruff (legacy
+    alias)` hook auto-fixed D3's sort BACK to the layout the project's
+    `ruff check` rejects. This is the exact circular conflict noted in
+    `9c27c7e`'s commit message and is reproducible against current
+    main. D3's worktree run was misleading because it doesn't go
+    through pre-commit. Real fix needs `.pre-commit-config.yaml`
+    adjustment (replace the legacy alias with `ruff check --fix` so it
+    respects the same config) OR a `pyproject.toml` isort tweak —
+    both out of scope for D3's "test-files-only" mandate. No code
+    commit; conflict promoted to a TASKS follow-up item.
+- Verified before push: backend `python3 -m pytest -q` → **427
+  passed** (423 baseline + 3 from D1 + 1 from D2). Ruff baseline stays
+  at 4 errors (D3 didn't land). Mypy clean on touched files (3
+  pre-existing errors in `alembic/versions/0010`/`0011` remain).
+- `DATABASE_URL="sqlite:///./ci_check.db" alembic upgrade head &&
+  alembic check` → "No new upgrade operations detected."
+
+### Files changed
+
+#### `3d57bc1` — T1+T2+T3 audit BG-task tests
+
+- `backend/tests/test_audit_service.py` — +150 lines: T1
+  (`test_log_in_background_persists_via_fresh_session`) + T3
+  (`test_log_in_background_swallows_db_failure_and_logs`), plus the
+  alembic-disabled-logger workaround in T3.
+- `backend/tests/test_admin_routes.py` — +43 lines: T2
+  (`test_admin_lock_writes_audit_row_via_background_task`).
+
+#### `44ff83b` — refresh happy-path audit row (M4)
+
+- `backend/services/auth_service.py` — `refresh()` captures
+  `new_sess` as a named local, calls `db.refresh(new_sess)` so the PK
+  is populated post-commit, then `self._audit(db, background,
+  db_factory, ..., event="user.token_refreshed", metadata={...})`.
+- `backend/tests/test_auth_service.py` — new
+  `test_refresh_happy_path_emits_audit_row` drives `svc.refresh(...)`
+  directly, captures rotated session id pre-call, asserts a single
+  new `AuditLog` row with the right user_id / ip / user_agent /
+  metadata.
+
+#### D3 (no commit — conflict promoted to follow-up)
+
+- D3's `ruff check --fix` produced a sort the project's `ruff check`
+  accepts; pre-commit's `ruff (legacy alias)` reverts it. The 4
+  `I001` errors in `tests/test_alembic_migrations.py`,
+  `test_migration_0005.py`, `test_migration_0006.py`,
+  `test_migration_0012.py` remain. New TASKS item tracks the
+  required hook config fix.
+
+### What is NOT done yet
+
+- **The 4-error ruff baseline persists** because pre-commit and `ruff
+  check` disagree on `I001`. Real fix needs `.pre-commit-config.yaml`
+  edit; tracked in `TASKS.md`.
+- **`VARCHAR(36)` → `UUID` type alignment** across 13 legacy-id
+  columns. Suppressed via `compare_type=False` in
+  `backend/alembic/env.py`. Real fix mirrors 0008/0009 dialect-gated
+  pattern; non-trivial because of coordinated FK type changes.
+- **Drop redundant single-column `ix_*_user_id` indexes** after
+  Postgres EXPLAIN confirms 0011 composites are picked. Needs
+  live-Neon EXPLAIN.
+- **`alembic check` only runs against SQLite in CI.** For Neon parity
+  an occasional manual `DATABASE_URL=$NEON_URL alembic check
+  --autogenerate` is still useful — Postgres-specific drift
+  (partial indexes, jsonb defaults) is invisible to the SQLite guard.
+
+### Risks / Attention
+
+- **The audit ecosystem is now well-tested** — T1 covers the
+  service-direct path, T2 covers the route-through-TestClient path,
+  T3 covers DB-failure resilience. Production posture for the audit
+  BG-tasks refactor (6c18482) is now Low-risk (was Medium per C3).
+- **D3's worktree pattern revealed a verification gap.** Worktree-mode
+  agents run `ruff check` directly, not via pre-commit. For any future
+  hook-touching cleanup, the agent should run `pre-commit run
+  --all-files` to validate, not just direct tool invocations.
+- **M4 covers the happy path only.** The reuse-detection branch
+  already emits `session.refresh_reuse_detected`. If a future refresh
+  failure mode is added (e.g. expired refresh token), confirm an
+  audit event is emitted before declaring complete.
+- Owner WIP from earlier sessions (`anamnesis_engine` /
+  `phonological_analyzer` / `anamnesis_catalog` /
+  `test_phonological_analyzer`) — none of D1/D2/D3 touched these files.
+
+### Next concrete action
+
+Pick from `TASKS.md` "Next" or "Open follow-ups". Highest-value items:
+  (i) Fix the `.pre-commit-config.yaml` ruff-vs-pre-commit I001
+      conflict so the baseline can actually clear. One-file change,
+      bounded scope.
+  (ii) `VARCHAR(36)` → `UUID` type alignment as a 0013_* migration
+       (Postgres-only, mirroring 0008/0009 conditional pattern). The
+       FK coordination makes this non-trivial — pick a small subset
+       (e.g. just `audit_log.id` + `audit_log.user_id` first) rather
+       than all 13 columns at once.
+
+Everything else open is LOW-severity.
+
+### Ideal next prompt
+
+```text
+Read docs/ai/HANDOFF.md (latest "Session Summary"), then
+docs/ai/TASKS.md "Open follow-ups".
+
+Current situation: main is at 44ff83b (after the upcoming docs commit
+pushes), 0 ahead of origin/main. The audit BackgroundTasks refactor
+(6c18482) is now end-to-end tested (T1/T2/T3 in 3d57bc1) and the
+refresh audit gap (M4) is closed (44ff83b). The 4-error ruff I001
+baseline persists because pre-commit and ruff check disagree.
+
+Your task: fix the .pre-commit-config.yaml ruff hook so the 4 I001
+errors can be cleared without triggering the circular auto-fix
+conflict. Either replace the "ruff (legacy alias)" hook entry with a
+modern `ruff check --fix` entry that respects pyproject.toml, OR
+adjust pyproject.toml's isort config to satisfy both. Verify by
+running pre-commit run --all-files locally before and after, and
+confirm ruff check . is clean.
+
+After that, update docs/ai state files.
+```
+
+---
+
+## Previous session — 2026-05-29 (late evening) — C1/C2/C3 batch
 
 **Agent:** Claude Code
 **Date:** 2026-05-29 (late evening)
@@ -824,11 +988,12 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 ## Open Items
 
 - [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
-- [ ] **T1 / T2 / T3** — missing end-to-end tests for the audit
-      BackgroundTasks path; see `TASKS.md` "From 2026-05-29 evening code
-      review".
-- [ ] **M4** — `AuthService.refresh` happy path has no audit row.
-      Pre-existing; surfaced by the C3 review.
+- [ ] **Pre-commit-vs-`ruff check` I001 conflict** — D3 surfaced that
+      the project's `.pre-commit-config.yaml` "ruff (legacy alias)"
+      hook reverts whatever `ruff check --fix` produces, keeping the
+      4-error baseline stuck. Real fix: replace the legacy alias with
+      `ruff check --fix` in the hook config OR adjust pyproject.toml
+      isort.
 - [ ] **Type-encoding (`VARCHAR(36)` → `UUID`)** across 13 legacy-id
       columns. Suppressed via `compare_type=False`; real alignment via
       a future migration mirroring 0008/0009.
@@ -838,9 +1003,6 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
       parity, an occasional manual `DATABASE_URL=$NEON_URL alembic check
       --autogenerate` is still useful — Postgres-specific drift (partial
       indexes, jsonb defaults) is invisible to the SQLite guard.
-- [ ] **Ruff baseline is now 4 errors** (was 3) — `I001` import-sort
-      across alembic migration tests including `test_migration_0012.py`.
-      Auto-fixable; left for a holistic cleanup.
 - [ ] Pre-existing Vercel preview deploy failure — separate deployment-config
       issue. Out of scope unless explicitly requested.
 
@@ -850,9 +1012,9 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| `python -m pytest` (backend) | **423 passed**, locally green after `222c708` | full suite (422 + 1 new `test_patient_pseudonym_has_no_standalone_index`) |
-| `npm test` (frontend unit) | green via pre-push hook on `33c542e` | 43 test files |
-| `alembic check` | **No new upgrade operations detected** after `90c51e3` | C2 removed `ix_patients_pseudonym` from the filter; guard now actively enforces it |
+| `python -m pytest` (backend) | **427 passed**, locally green after `44ff83b` | full suite (423 + 3 from D1 + 1 from D2) |
+| `npm test` (frontend unit) | green via pre-push hook on `44ff83b` | 43 test files |
+| `alembic check` | **No new upgrade operations detected** after `44ff83b` | guard still active, no drift |
 | `npx playwright test` (E2E) | last green in PR #6 CI | 32 cases / 11 specs, chromium-only |
 | `npm run build` | passed | with `/backend-api` default, **not** absolute host |
 | `ruff check`, `mypy`, `eslint`, `tsc` | passed locally on touched files; 3 pre-existing ruff errors in alembic migration tests + 3 pre-existing mypy errors in `alembic/versions/0010`/`0011` remain unchanged from baseline | |
