@@ -1,5 +1,6 @@
 """Singleton service instances and FastAPI dependency providers."""
 
+from dataclasses import dataclass
 from functools import lru_cache
 from uuid import UUID
 
@@ -137,7 +138,25 @@ def get_auth_service() -> AuthService:
     return _auth_service_singleton()
 
 
-def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+@dataclass(frozen=True, slots=True)
+class AuthIdentity:
+    """Lightweight authenticated caller built straight from the JWT payload.
+
+    Used by endpoints that only need the user id (and optionally role / session
+    hash) and would otherwise pay for a Postgres round-trip on every request.
+    For endpoints that need the persisted ``User`` row (email, verification
+    state, lock status, …) use ``get_current_user`` instead.
+    """
+
+    id: UUID
+    role: str
+    sid: str | None
+
+
+def _identity_from_request(request: Request) -> AuthIdentity | None:
+    """Build an ``AuthIdentity`` from the JWT payload populated by the
+    ``JWTAuthMiddleware``. Returns ``None`` for anonymous callers and for
+    payloads with a malformed ``sub`` claim."""
     state_user = getattr(request.state, "user", None)
     if not state_user:
         return None
@@ -145,10 +164,47 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User |
         uid = UUID(state_user["id"])
     except (KeyError, TypeError, ValueError):
         return None
-    return db.exec(select(User).where(User.id == uid)).first()
+    return AuthIdentity(
+        id=uid,
+        role=state_user.get("role", "user"),
+        sid=state_user.get("sid"),
+    )
 
 
-def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
+def get_optional_user(request: Request) -> AuthIdentity | None:
+    """Optional auth dependency — no DB hit.
+
+    The JWT signature and expiry were already validated by ``JWTAuthMiddleware``;
+    the prior implementation additionally fetched the ``User`` row from Postgres
+    on every authenticated request. None of the endpoints using this dependency
+    (``backend/routers/sessions.py``) read anything beyond ``user.id``, and
+    revocation / lock / verification checks live on the login path, not the
+    request-time path. So the DB round-trip is pure overhead — skip it.
+    """
+    return _identity_from_request(request)
+
+
+def get_current_user(
+    identity: AuthIdentity | User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """Required auth dependency — returns the persisted ``User`` row.
+
+    Kept DB-backed because downstream routers (``auth``, ``patients``,
+    ``reports``, ``soap``, ``exports``, ``therapy_plans``, ``admin``, …) read
+    fields beyond ``id``/``role`` and some mutate the row directly.
+
+    Composed on top of ``get_optional_user`` so that tests overriding the
+    optional dep transparently override ``current_user`` as well. The override
+    is allowed to hand back either an ``AuthIdentity`` (production path) or a
+    ready-made ``User`` row (test convenience — many existing fixtures inject a
+    ``User`` object directly into ``get_optional_user``).
+    """
+    if identity is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication_required")
+    if isinstance(identity, User):
+        return identity
+    user = db.exec(select(User).where(User.id == identity.id)).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication_required")
     return user

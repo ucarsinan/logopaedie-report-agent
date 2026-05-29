@@ -12,12 +12,11 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from database import get_db
-from dependencies import anamnesis_engine, get_optional_user, groq_service, report_generator
+from dependencies import AuthIdentity, anamnesis_engine, get_optional_user, groq_service, report_generator
 from exceptions import (
     FileTooLargeError,
 )
 from middleware.rate_limiter import AUDIO_LIMIT, CHAT_LIMIT, GENERATE_LIMIT, client_ip_key, limiter
-from models.auth import User
 from models.patient import Patient
 from models.report_record import ReportRecord
 from models.schemas import (
@@ -48,7 +47,7 @@ def _validate_session_id(session_id: str) -> None:
         raise HTTPException(status_code=400, detail="Ungültige Session-ID.")
 
 
-def _uid(user: User | None) -> str | None:
+def _uid(user: AuthIdentity | None) -> str | None:
     """The caller's user id as a string, or None for anonymous callers."""
     return str(user.id) if user is not None else None
 
@@ -66,7 +65,7 @@ class ConsentRequest(BaseModel):
 @router.post("/sessions")
 async def create_session(
     req: CreateSessionRequest | None = None,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> SessionInfo:
     session = store.create()
     # Bind the session to its owner; anonymous sessions are demo sessions.
@@ -101,7 +100,7 @@ async def create_session(
 @router.get("/sessions/{session_id}")
 async def get_session(
     session_id: str,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
@@ -119,7 +118,7 @@ async def get_session(
 @router.post("/sessions/{session_id}/new-conversation")
 async def new_conversation(
     session_id: str,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
@@ -156,7 +155,7 @@ async def chat(
     request: Request,
     session_id: str,
     req: ChatRequest,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> ChatResponse:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
@@ -183,7 +182,7 @@ async def chat_audio(
     request: Request,
     session_id: str,
     audio_file: UploadFile = File(...),
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> ChatResponse:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
@@ -223,7 +222,7 @@ async def upload_material(
     session_id: str,
     file: UploadFile = File(...),
     material_type: str = "sonstiges",
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> UploadedMaterial:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
@@ -250,7 +249,7 @@ async def upload_material(
 async def set_materials_consent(
     session_id: str,
     req: ConsentRequest,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> SessionInfo:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
@@ -271,7 +270,7 @@ async def set_materials_consent(
 async def generate_report(
     request: Request,
     session_id: str,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ) -> dict:
     _validate_session_id(session_id)
@@ -351,7 +350,7 @@ async def generate_report(
 @router.get("/sessions/{session_id}/report")
 async def get_report(
     session_id: str,
-    user: User | None = Depends(get_optional_user),
+    user: AuthIdentity | None = Depends(get_optional_user),
 ) -> dict:
     _validate_session_id(session_id)
     session = store.get_authorized(session_id, _uid(user))
