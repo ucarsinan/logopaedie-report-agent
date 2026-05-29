@@ -61,6 +61,17 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: pytest --tb=short --cov=. --cov-report=term-missing -q
+      # Catch the next column-vs-FK drift at PR time instead of as a
+      # production 500. `alembic check` upgrades a throwaway SQLite DB to head
+      # and fails if SQLModel.metadata diverges. Runs AFTER pytest so a
+      # migration failure doesn't mask a test failure. Requires alembic >= 1.9
+      # (we ship 1.18.x via requirements-dev.txt).
+      - name: Verify alembic migrations match SQLModel metadata
+        env:
+          DATABASE_URL: sqlite:///./ci_check.db
+        run: |
+          alembic upgrade head
+          alembic check
 
   frontend-lint:
     name: Frontend Lint

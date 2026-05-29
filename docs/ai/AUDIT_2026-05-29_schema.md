@@ -97,6 +97,7 @@ running migrations from scratch would NOT recreate the hotfix Neon was given.
 A second `0012_*` should formalize that hotfix as alembic.
 
 Proposed consolidating migration sketch (do NOT save yet — owner decision):
+**Applied as `backend/alembic/versions/0012_align_declared_fks.py` (2026-05-29).**
 
 ```python
 # backend/alembic/versions/0012_align_declared_fks.py
