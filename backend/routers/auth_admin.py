@@ -5,12 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import update as sa_update
 from sqlmodel import Session
 
-from database import get_db
+from database import DBSessionFactory, get_db, get_db_factory
 from dependencies import get_admin_user, get_audit_service
 from models.auth import User, UserSession
 from services.audit_service import AuditService
@@ -51,8 +51,10 @@ class LockBody(BaseModel):
 def lock_user(
     user_id: UUID,
     body: LockBody,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     audit: AuditService = Depends(get_audit_service),
 ) -> dict:
     user = db.get(User, user_id)
@@ -61,8 +63,9 @@ def lock_user(
     user.locked_until = datetime.now(UTC) + timedelta(minutes=body.duration_minutes)
     db.add(user)
     db.commit()
-    audit.log(
-        db,
+    audit.log_in_background(
+        background_tasks,
+        db_factory,
         user_id=admin.id,
         event="admin.user_locked",
         ip=None,
@@ -75,8 +78,10 @@ def lock_user(
 @router.post("/users/{user_id}/unlock")
 def unlock_user(
     user_id: UUID,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     audit: AuditService = Depends(get_audit_service),
 ) -> dict:
     user = db.get(User, user_id)
@@ -86,8 +91,9 @@ def unlock_user(
     user.failed_login_count = 0
     db.add(user)
     db.commit()
-    audit.log(
-        db,
+    audit.log_in_background(
+        background_tasks,
+        db_factory,
         user_id=admin.id,
         event="admin.user_unlocked",
         ip=None,
@@ -100,8 +106,10 @@ def unlock_user(
 @router.post("/users/{user_id}/disable-2fa")
 def admin_disable_2fa(
     user_id: UUID,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     audit: AuditService = Depends(get_audit_service),
 ) -> dict:
     user = db.get(User, user_id)
@@ -119,8 +127,9 @@ def admin_disable_2fa(
         .execution_options(synchronize_session=False)
     )
     db.commit()
-    audit.log(
-        db,
+    audit.log_in_background(
+        background_tasks,
+        db_factory,
         user_id=admin.id,
         event="admin.2fa_disabled_by_admin",
         ip=None,

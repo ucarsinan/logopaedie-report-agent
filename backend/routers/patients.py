@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlmodel import Session, col, func, select
 
-from database import get_db
+from database import DBSessionFactory, get_db, get_db_factory
 from dependencies import get_audit_service, get_current_user, get_patient_service, get_report_comparator
 from models.auth import User
 from models.patient import ConsentRecord, Patient
@@ -146,8 +146,10 @@ def update_patient(
     patient_id: UUID,
     req: UpdatePatientRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: PatientService = Depends(get_patient_service),
     audit=Depends(get_audit_service),
 ) -> dict[str, Any]:
@@ -167,8 +169,9 @@ def update_patient(
         insurance_name=req.insurance_name,
         guardian_name=req.guardian_name,
     )
-    audit.log(
-        db,
+    audit.log_in_background(
+        background_tasks,
+        db_factory,
         user_id=current_user.id,
         event="patient_updated",
         ip=request.client.host if request.client else None,
@@ -182,8 +185,10 @@ def update_patient(
 def delete_patient(
     patient_id: UUID,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: PatientService = Depends(get_patient_service),
     audit=Depends(get_audit_service),
 ) -> dict[str, str]:
@@ -191,8 +196,9 @@ def delete_patient(
     patient.deleted_at = datetime.now(UTC)
     db.add(patient)
     db.commit()
-    audit.log(
-        db,
+    audit.log_in_background(
+        background_tasks,
+        db_factory,
         user_id=current_user.id,
         event="patient_deleted",
         ip=request.client.host if request.client else None,

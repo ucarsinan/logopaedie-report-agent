@@ -7,12 +7,12 @@ import hmac
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
-from database import get_db
+from database import DBSessionFactory, get_db, get_db_factory
 from dependencies import get_auth_service, get_current_user
 from exceptions import (
     AccountLockedError,
@@ -97,12 +97,22 @@ def _err(exc: Exception, response: Response) -> dict:
 async def register(
     request: Request,
     body: RegisterIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
     with contextlib.suppress(ValueError):
-        await svc.register(db, email_addr=body.email, password=body.password, ip=ip, ua=ua)
+        await svc.register(
+            db,
+            email_addr=body.email,
+            password=body.password,
+            ip=ip,
+            ua=ua,
+            background=background_tasks,
+            db_factory=db_factory,
+        )
     return {"message": GENERIC_REGISTER_MSG}
 
 
@@ -112,12 +122,21 @@ def verify_email(
     body: VerifyIn,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
     try:
-        svc.verify_email(db, token=body.token, ip=ip, ua=ua)
+        svc.verify_email(
+            db,
+            token=body.token,
+            ip=ip,
+            ua=ua,
+            background=background_tasks,
+            db_factory=db_factory,
+        )
     except TokenInvalidError as e:
         return _err(e, response)
     return {"verified": True}
@@ -129,12 +148,22 @@ def login(
     request: Request,
     body: LoginIn,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
     try:
-        return svc.login(db, email_addr=body.email, password=body.password, ip=ip, ua=ua)
+        return svc.login(
+            db,
+            email_addr=body.email,
+            password=body.password,
+            ip=ip,
+            ua=ua,
+            background=background_tasks,
+            db_factory=db_factory,
+        )
     except (InvalidCredentialsError, EmailNotVerifiedError, AccountLockedError) as e:
         return _err(e, response)
 
@@ -149,11 +178,21 @@ class Login2faBody(BaseModel):
 def login_2fa(
     body: Login2faBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ) -> dict:
     ip, ua = _client(request)
-    return svc.login_2fa(db, challenge_id=body.challenge_id, code=body.code, ip=ip, ua=ua)
+    return svc.login_2fa(
+        db,
+        challenge_id=body.challenge_id,
+        code=body.code,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
 
 
 @router.post("/refresh")
@@ -162,12 +201,21 @@ def refresh(
     request: Request,
     body: RefreshIn,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
     try:
-        return svc.refresh(db, refresh_token=body.refresh_token, ip=ip, ua=ua)
+        return svc.refresh(
+            db,
+            refresh_token=body.refresh_token,
+            ip=ip,
+            ua=ua,
+            background=background_tasks,
+            db_factory=db_factory,
+        )
     except TokenInvalidError as e:
         return _err(e, response)
 
@@ -176,11 +224,20 @@ def refresh(
 def logout(
     body: LogoutIn,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
-    svc.logout(db, refresh_token=body.refresh_token, ip=ip, ua=ua)
+    svc.logout(
+        db,
+        refresh_token=body.refresh_token,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
     return {"ok": True}
 
 
@@ -200,11 +257,20 @@ def me(user: User = Depends(get_current_user)):
 async def reset_request(
     request: Request,
     body: ResetRequestIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
-    await svc.request_password_reset(db, email_addr=body.email, ip=ip, ua=ua)
+    await svc.request_password_reset(
+        db,
+        email_addr=body.email,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
     return {"message": GENERIC_REGISTER_MSG}
 
 
@@ -214,12 +280,22 @@ def reset_confirm(
     body: ResetConfirmIn,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
     try:
-        svc.confirm_password_reset(db, token=body.token, new_password=body.new_password, ip=ip, ua=ua)
+        svc.confirm_password_reset(
+            db,
+            token=body.token,
+            new_password=body.new_password,
+            ip=ip,
+            ua=ua,
+            background=background_tasks,
+            db_factory=db_factory,
+        )
     except TokenInvalidError as e:
         return _err(e, response)
     return {"ok": True}
@@ -231,8 +307,10 @@ def password_change(
     body: PasswordChangeIn,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
@@ -245,6 +323,8 @@ def password_change(
             current_refresh_token=body.current_refresh_token,
             ip=ip,
             ua=ua,
+            background=background_tasks,
+            db_factory=db_factory,
         )
     except InvalidCredentialsError as e:
         return _err(e, response)
@@ -256,11 +336,20 @@ def password_change(
 async def resend(
     body: ResendIn,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
     svc: AuthService = Depends(get_auth_service),
 ):
     ip, ua = _client(request)
-    await svc.resend_verification(db, email_addr=body.email, ip=ip, ua=ua)
+    await svc.resend_verification(
+        db,
+        email_addr=body.email,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
     return {"message": GENERIC_REGISTER_MSG}
 
 
@@ -290,12 +379,23 @@ class TwoFaDisableBody(BaseModel):
 def twofa_disable(
     body: TwoFaDisableBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     svc: AuthService = Depends(get_auth_service),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
 ) -> dict[str, str]:
     ip, ua = _client(request)
-    svc.disable_2fa(db, current_user, body.current_password, body.code, ip=ip, ua=ua)
+    svc.disable_2fa(
+        db,
+        current_user,
+        body.current_password,
+        body.code,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
     return {"status": "ok"}
 
 
@@ -304,14 +404,24 @@ def twofa_disable(
 def twofa_enable(
     body: TwoFaEnableBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     svc: AuthService = Depends(get_auth_service),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
 ) -> dict[str, str]:
     # session_hash is the refresh_token_hash embedded in the JWT sid claim by the middleware
     current_user._current_session_hash = getattr(request.state, "session_hash", None)  # type: ignore[attr-defined]
     ip, ua = _client(request)
-    svc.enable_2fa(db, current_user, body.code, ip=ip, ua=ua)
+    svc.enable_2fa(
+        db,
+        current_user,
+        body.code,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
     return {"status": "ok"}
 
 

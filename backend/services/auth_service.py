@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import case
 from sqlalchemy import update as sa_update
@@ -23,6 +25,11 @@ from services.email_service import EmailService, FakeEmailService
 from services.password_service import PasswordService
 from services.token_service import TokenService
 from services.totp_service import TOTPService
+
+if TYPE_CHECKING:
+    from fastapi import BackgroundTasks
+
+    from database import DBSessionFactory
 
 
 def _utcnow() -> datetime:
@@ -83,15 +90,67 @@ class AuthService:
             "created_at": user.created_at.isoformat(),
         }
 
+    def _audit(
+        self,
+        db: Session,
+        background: BackgroundTasks | None,
+        db_factory: DBSessionFactory | None,
+        *,
+        user_id: UUID | None,
+        event: str,
+        ip: str | None,
+        user_agent: str | None,
+        metadata: dict,
+    ) -> None:
+        """Route an audit emit through either the BackgroundTasks-deferred
+        path (production: avoids the second per-request ``db.commit()`` on the
+        response path) or the synchronous path (unit tests calling
+        ``AuthService`` directly with no ``BackgroundTasks``).
+
+        Both ``background`` and ``db_factory`` must be present to take the
+        deferred path — they are wired together at the route layer.
+        """
+        if background is not None and db_factory is not None:
+            self.audit.log_in_background(
+                background,
+                db_factory,
+                user_id=user_id,
+                event=event,
+                ip=ip,
+                user_agent=user_agent,
+                metadata=metadata,
+            )
+            return
+        self.audit.log(
+            db,
+            user_id=user_id,
+            event=event,
+            ip=ip,
+            user_agent=user_agent,
+            metadata=metadata,
+        )
+
     # ---------- register + verify ----------
 
-    async def register(self, db: Session, *, email_addr: str, password: str, ip: str | None, ua: str | None) -> None:
+    async def register(
+        self,
+        db: Session,
+        *,
+        email_addr: str,
+        password: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> None:
         normalized = email_addr.strip().lower()
         if len(password) < 12:
             raise ValueError("password_too_short")
         existing = db.exec(select(User).where(User.email == normalized)).first()
-        self.audit.log(
+        self._audit(
             db,
+            background,
+            db_factory,
             user_id=existing.id if existing else None,
             event="user.register_attempt",
             ip=ip,
@@ -111,7 +170,16 @@ class AuthService:
         db.commit()
         db.refresh(user)
         if self.auto_verify:
-            self.audit.log(db, user_id=user.id, event="user.email_auto_verified", ip=ip, user_agent=ua, metadata={})
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=user.id,
+                event="user.email_auto_verified",
+                ip=ip,
+                user_agent=ua,
+                metadata={},
+            )
             return
         plain = secrets.token_urlsafe(32)
         db.add(
@@ -125,7 +193,16 @@ class AuthService:
         db.commit()
         await self.email.send_verify_email(normalized, plain)
 
-    def verify_email(self, db: Session, *, token: str, ip: str | None, ua: str | None) -> None:
+    def verify_email(
+        self,
+        db: Session,
+        *,
+        token: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> None:
         token_hash = _sha256(token)
         now = _utcnow()
 
@@ -152,24 +229,59 @@ class AuthService:
         user.updated_at = now
         db.add(user)
         db.commit()
-        self.audit.log(db, user_id=user.id, event="user.email_verified", ip=ip, user_agent=ua, metadata={})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="user.email_verified",
+            ip=ip,
+            user_agent=ua,
+            metadata={},
+        )
 
     # ---------- login ----------
 
-    def login(self, db: Session, *, email_addr: str, password: str, ip: str | None, ua: str | None) -> dict:
+    def login(
+        self,
+        db: Session,
+        *,
+        email_addr: str,
+        password: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> dict:
         normalized = email_addr.strip().lower()
         user = db.exec(select(User).where(User.email == normalized)).first()
 
         if user is None:
             # Equalize timing against dummy argon2 hash.
             self.password.verify(password, self.password.dummy_hash)
-            self.audit.log(
-                db, user_id=None, event="login.fail", ip=ip, user_agent=ua, metadata={"reason": "unknown_email"}
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=None,
+                event="login.fail",
+                ip=ip,
+                user_agent=ua,
+                metadata={"reason": "unknown_email"},
             )
             raise InvalidCredentialsError()
 
         if user.locked_until is not None and _aware(user.locked_until) > _utcnow():
-            self.audit.log(db, user_id=user.id, event="login.fail", ip=ip, user_agent=ua, metadata={"reason": "locked"})
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=user.id,
+                event="login.fail",
+                ip=ip,
+                user_agent=ua,
+                metadata={"reason": "locked"},
+            )
             raise AccountLockedError(locked_until=user.locked_until.isoformat())
 
         if not self.password.verify(password, user.password_hash):
@@ -191,8 +303,10 @@ class AuthService:
             )
             db.commit()
             db.refresh(user)
-            self.audit.log(
+            self._audit(
                 db,
+                background,
+                db_factory,
                 user_id=user.id,
                 event="login.fail",
                 ip=ip,
@@ -202,8 +316,15 @@ class AuthService:
             raise InvalidCredentialsError()
 
         if not user.email_verified:
-            self.audit.log(
-                db, user_id=user.id, event="login.fail", ip=ip, user_agent=ua, metadata={"reason": "not_verified"}
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=user.id,
+                event="login.fail",
+                ip=ip,
+                user_agent=ua,
+                metadata={"reason": "not_verified"},
             )
             raise EmailNotVerifiedError()
 
@@ -219,7 +340,16 @@ class AuthService:
             challenge_id = _secrets.token_urlsafe(24)
             self.challenges.put(challenge_id, str(user.id), ttl_seconds=300)
             db.commit()
-            self.audit.log(db, user_id=user.id, event="login.2fa_challenge_issued", ip=ip, user_agent=ua, metadata={})
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=user.id,
+                event="login.2fa_challenge_issued",
+                ip=ip,
+                user_agent=ua,
+                metadata={},
+            )
             return {"step": "2fa_required", "challenge_id": challenge_id}
 
         plain_refresh, refresh_hash = self.tokens.encode_refresh()
@@ -232,7 +362,16 @@ class AuthService:
         )
         db.add(sess)
         db.commit()
-        self.audit.log(db, user_id=user.id, event="login.success", ip=ip, user_agent=ua, metadata={})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="login.success",
+            ip=ip,
+            user_agent=ua,
+            metadata={},
+        )
         return {
             "access_token": self.tokens.encode_access(user.id, session_hash=refresh_hash),
             "refresh_token": plain_refresh,
@@ -241,7 +380,16 @@ class AuthService:
 
     # ---------- refresh rotation + reuse detection ----------
 
-    def refresh(self, db: Session, *, refresh_token: str, ip: str | None, ua: str | None) -> dict:
+    def refresh(
+        self,
+        db: Session,
+        *,
+        refresh_token: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> dict:
         token_hash = self.tokens.hash_refresh(refresh_token)
         now = _utcnow()
 
@@ -274,8 +422,10 @@ class AuthService:
                     )
                 )
                 db.commit()
-                self.audit.log(
+                self._audit(
                     db,
+                    background,
+                    db_factory,
                     user_id=existing.user_id,
                     event="session.refresh_reuse_detected",
                     ip=ip,
@@ -306,24 +456,51 @@ class AuthService:
 
     # ---------- logout ----------
 
-    def logout(self, db: Session, *, refresh_token: str, ip: str | None, ua: str | None) -> None:
+    def logout(
+        self,
+        db: Session,
+        *,
+        refresh_token: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> None:
         token_hash = self.tokens.hash_refresh(refresh_token)
         row = db.exec(select(UserSession).where(UserSession.refresh_token_hash == token_hash)).first()
         if row is not None and row.revoked_at is None:
             row.revoked_at = _utcnow()
             db.add(row)
             db.commit()
-            self.audit.log(
-                db, user_id=row.user_id, event="logout", ip=ip, user_agent=ua, metadata={"session_id": str(row.id)}
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=row.user_id,
+                event="logout",
+                ip=ip,
+                user_agent=ua,
+                metadata={"session_id": str(row.id)},
             )
 
     # ---------- password reset ----------
 
-    async def request_password_reset(self, db: Session, *, email_addr: str, ip: str | None, ua: str | None) -> None:
+    async def request_password_reset(
+        self,
+        db: Session,
+        *,
+        email_addr: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> None:
         normalized = email_addr.strip().lower()
         user = db.exec(select(User).where(User.email == normalized)).first()
-        self.audit.log(
+        self._audit(
             db,
+            background,
+            db_factory,
             user_id=user.id if user else None,
             event="password.reset_requested",
             ip=ip,
@@ -345,7 +522,15 @@ class AuthService:
         await self.email.send_password_reset(normalized, plain)
 
     def confirm_password_reset(
-        self, db: Session, *, token: str, new_password: str, ip: str | None, ua: str | None
+        self,
+        db: Session,
+        *,
+        token: str,
+        new_password: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
     ) -> None:
         if len(new_password) < 12:
             raise TokenInvalidError()
@@ -383,7 +568,16 @@ class AuthService:
             )
         )
         db.commit()
-        self.audit.log(db, user_id=user.id, event="password.reset_completed", ip=ip, user_agent=ua, metadata={})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="password.reset_completed",
+            ip=ip,
+            user_agent=ua,
+            metadata={},
+        )
 
     # ---------- password change ----------
 
@@ -397,6 +591,8 @@ class AuthService:
         current_refresh_token: str | None,
         ip: str | None,
         ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
     ) -> None:
         if not self.password.verify(current_password, user.password_hash):
             raise InvalidCredentialsError()
@@ -413,15 +609,35 @@ class AuthService:
                 s.revoked_at = _utcnow()
                 db.add(s)
         db.commit()
-        self.audit.log(db, user_id=user.id, event="password.change", ip=ip, user_agent=ua, metadata={})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="password.change",
+            ip=ip,
+            user_agent=ua,
+            metadata={},
+        )
 
     # ---------- resend verification ----------
 
-    async def resend_verification(self, db: Session, *, email_addr: str, ip: str | None, ua: str | None) -> None:
+    async def resend_verification(
+        self,
+        db: Session,
+        *,
+        email_addr: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> None:
         normalized = email_addr.strip().lower()
         user = db.exec(select(User).where(User.email == normalized)).first()
-        self.audit.log(
+        self._audit(
             db,
+            background,
+            db_factory,
             user_id=user.id if user else None,
             event="user.resend_verification",
             ip=ip,
@@ -456,7 +672,17 @@ class AuthService:
             "provisioning_uri": self.totp.provisioning_uri(secret, user.email),
         }
 
-    def login_2fa(self, db: Session, *, challenge_id: str, code: str, ip: str | None, ua: str | None) -> dict:
+    def login_2fa(
+        self,
+        db: Session,
+        *,
+        challenge_id: str,
+        code: str,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> dict:
         from uuid import UUID as _UUID
 
         from fastapi import HTTPException
@@ -471,7 +697,16 @@ class AuthService:
 
         # Gate 4A Finding #6a: check lockout before accepting the TOTP code
         if user.locked_until is not None and _aware(user.locked_until) > _utcnow():
-            self.audit.log(db, user_id=user.id, event="login.fail", ip=ip, user_agent=ua, metadata={"reason": "locked"})
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=user.id,
+                event="login.fail",
+                ip=ip,
+                user_agent=ua,
+                metadata={"reason": "locked"},
+            )
             raise HTTPException(status_code=423, detail="Account locked")
 
         secret = self.totp.decrypt(user.totp_secret)
@@ -498,7 +733,16 @@ class AuthService:
                 )
             )
             db.commit()
-            self.audit.log(db, user_id=user.id, event="user.2fa_login_failed", ip=ip, user_agent=ua, metadata={})
+            self._audit(
+                db,
+                background,
+                db_factory,
+                user_id=user.id,
+                event="user.2fa_login_failed",
+                ip=ip,
+                user_agent=ua,
+                metadata={},
+            )
             raise HTTPException(status_code=401, detail="Invalid code")
 
         # Issue session (same as normal login success)
@@ -518,7 +762,16 @@ class AuthService:
             )
         )
         db.commit()
-        self.audit.log(db, user_id=user.id, event="login.success", ip=ip, user_agent=ua, metadata={"via": "2fa"})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="login.success",
+            ip=ip,
+            user_agent=ua,
+            metadata={"via": "2fa"},
+        )
         return {
             "access_token": self.tokens.encode_access(user.id, session_hash=refresh_hash),
             "refresh_token": plain_refresh,
@@ -534,6 +787,8 @@ class AuthService:
         *,
         ip: str | None,
         ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
     ) -> None:
         from fastapi import HTTPException
 
@@ -559,9 +814,28 @@ class AuthService:
             s.revoked_at = _utcnow()
             db.add(s)
         db.commit()
-        self.audit.log(db, user_id=user.id, event="user.2fa_disabled", ip=ip, user_agent=ua, metadata={})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="user.2fa_disabled",
+            ip=ip,
+            user_agent=ua,
+            metadata={},
+        )
 
-    def enable_2fa(self, db: Session, user: User, code: str, *, ip: str | None, ua: str | None) -> None:
+    def enable_2fa(
+        self,
+        db: Session,
+        user: User,
+        code: str,
+        *,
+        ip: str | None,
+        ua: str | None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> None:
         import hmac as _hmac
 
         from fastapi import HTTPException
@@ -600,4 +874,13 @@ class AuthService:
             s.revoked_at = _utcnow()
             db.add(s)
         db.commit()
-        self.audit.log(db, user_id=user.id, event="user.2fa_enabled", ip=ip, user_agent=ua, metadata={})
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="user.2fa_enabled",
+            ip=ip,
+            user_agent=ua,
+            metadata={},
+        )
