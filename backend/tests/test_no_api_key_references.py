@@ -13,10 +13,12 @@ def test_no_api_key_references() -> None:
     root = Path(__file__).resolve().parents[2]
     pattern = re.compile(r"\bAPI_KEY\b")
     offenders: list[str] = []
+    excluded = {".git", ".claude", "node_modules", ".next", "dist", ".venv", ".worktrees", "worktrees"}
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in {".git", "node_modules", ".next", "dist", ".venv", ".worktrees"} for part in path.parts):
+        rel_parts = path.relative_to(root).parts
+        if any(part in excluded for part in rel_parts):
             continue
         rel = path.relative_to(root).as_posix()
         if rel in ALLOWED_FILES:
