@@ -25,6 +25,79 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       anamnesis is complete, generate a structured handoff that wires into
       the report flow. Likely overlaps with the in-progress owner work →
       coordinate before starting.
+
+### From 2026-05-29 security audit (High)
+
+- [ ] Restrict `X-Forwarded-For` trust in `backend/middleware/rate_limiter.py:27-39`
+      to known proxy CIDRs, or assert `TRUSTED_PROXY` is configured at startup.
+      Right now any client can spoof the header and bypass IP rate limits.
+- [ ] Add `@limiter.limit("3/hour")` to `POST /auth/resend-verification`
+      (`backend/routers/auth.py:251-260`) — currently unlimited email-flooding vector.
+- [ ] Add `@limiter.limit("10/hour")` to `POST /auth/password/reset/confirm`
+      (`backend/routers/auth.py:210-223`) — defense-in-depth on the reset path.
+- [ ] Add `@limiter.limit("5/minute")` to `POST /auth/2fa/enable` and
+      `POST /auth/2fa/disable` (`backend/routers/auth.py:284-309`).
+- [ ] Add rate limits to `verify-email` and `password/change` endpoints
+      (`backend/routers/auth.py:109-122` and `:226-248`).
+- [ ] Remove `auto_verified` field from `POST /auth/register` response
+      (`backend/routers/auth.py:106`) — leaks production config state to
+      unauthenticated callers.
+- [ ] Harden `ServiceTokenMiddleware` fail-open behavior
+      (`backend/middleware/service_token.py:20-22`): assert `SERVICE_TOKEN`
+      is set when `ENV=production`, raise on missing rather than passing all
+      requests through.
+- [ ] Cap `offset` on `GET /admin/audit` (`backend/routers/auth_admin.py:26-31`)
+      — admin pagination can trigger unbounded scans as the audit table grows.
+
+### From 2026-05-29 performance audit (High)
+
+- [ ] Replace per-call Redis client construction in `backend/services/session_store.py:48-53`
+      with a module-level singleton — currently rebuilt 2-3× per session-touching request.
+- [ ] Remove duplicate `SessionStore()` in `backend/routers/soap.py:23`;
+      import and reuse the singleton from `services.session_store`.
+- [ ] Add migration: `CREATE INDEX idx_reports_user_created ON reports(user_id, created_at DESC)`
+      and `CREATE INDEX idx_reports_patient_id ON reports(patient_id)` — current
+      list/stats endpoints fall back to full index scans for users with many reports.
+- [ ] Add migration: partial composite index on `patients(user_id, created_at DESC) WHERE deleted_at IS NULL`.
+- [ ] Add migration: composite `(user_id, created_at DESC)` on `therapyplanrecord`
+      (migration 0010 only added single-column `user_id` index).
+- [ ] Add `limit`/`offset` pagination to `GET /patients/{id}/history`
+      (`backend/routers/patients.py:205-227`) — currently returns all reports unbounded.
+- [ ] Wrap `EmailService._send()` (`backend/services/email_service.py:22`)
+      with `asyncio.to_thread` or push to FastAPI BackgroundTasks — sync
+      Resend SDK call blocks the event loop on every auth email.
+- [ ] Move `audit_service.log()` writes (`backend/services/audit_service.py:32`)
+      to BackgroundTasks to eliminate the second per-request `db.commit()`.
+- [ ] Evaluate `get_optional_user` (`backend/dependencies.py:140-148`):
+      JWT payload already has user id + role, the per-request DB fetch is
+      unnecessary on most endpoints.
+
+### From 2026-05-29 a11y audit (High)
+
+- [ ] Add `aria-current="page"` to nav links in `AppShell` and `MobileSidebar`.
+- [ ] Add `aria-label="Aufnahme stoppen"` and `aria-label="Transkription läuft"`
+      to `DictationButton` icon-only buttons (`frontend/src/features/chat/components/DictationButton.tsx:28-43`).
+- [ ] Add `motion-reduce:animate-none` to `TypingIndicator` bounce dots
+      (`frontend/src/features/chat/components/ChatBubble.tsx:89-91`) and
+      `TypingDemo` blink/pulse (`frontend/src/components/landing/TypingDemo.tsx:32,39`).
+- [ ] Add `<label>` / `aria-label` to unlabelled inputs: `TherapyPlanModule`
+      mini-chat (`TherapyPlanModule.tsx:304`), `SuggestModule` textarea
+      (`SuggestModule.tsx:103`), `PhonologyModule` word-pair rows
+      (`PhonologyModule.tsx:88-116`).
+- [ ] Add `scope="col"` to `<th>` cells in `AuditLogTable.tsx:88-96`.
+- [ ] Move `role="dialog" aria-modal="true"` from the backdrop to the inner panel
+      `<div ref={dialogRef}>` in `PatientPickerModal.tsx:73-93`.
+- [ ] Add skip-to-main-content link before `<header>` in `AppShell.tsx`.
+- [ ] Wrap `WorkflowStepper` in `<nav aria-label="Arbeitsschritte">` and add
+      `aria-current="step"` + step-number labels (`WorkflowStepper.tsx:31-53`).
+- [ ] Add `aria-hidden="true"` to decorative AI robot SVGs in `ChatBubble.tsx:27-30,82-85`.
+- [ ] Change `ReportPreview` AI disclaimer from `role="note"` to `role="alert"`
+      so it announces on report load (`ReportPreview.tsx:27-32`).
+- [ ] Audit dark-mode `--muted-foreground` (#64748b) contrast on `--surface`
+      (#1e293b) — currently ~3.7:1 for small text, below AA.
+
+### Other
+
 - [ ] Fix the pre-existing Vercel preview deploy failure (separate
       deployment-config issue; ignore for CI green-up).
 
@@ -32,6 +105,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] OnboardingOverlay real dialog with focus trap + Escape + focus rings (`5672716`) — 2026-05-29
+- [x] PDF render offloaded to worker thread via `asyncio.to_thread` (`bbbe5ce`) — 2026-05-29
+- [x] Logout BFF actually revokes backend session by forwarding `refresh_token` (`24eef4e`) — 2026-05-29
 - [x] GeneratingView test moved into `__tests__/` for convention alignment (`6b37ba0`/`60a18c6`) — 2026-05-29
 - [x] `_make_footer` mock pinned so `canvas._generated_at` is deterministic (`6b37ba0`) — 2026-05-29
 - [x] TherapyPlanModule dead `sessionId` prop removal (`241f7fd`) — 2026-05-28
