@@ -7,10 +7,23 @@ import os
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
+
+
+def _is_production() -> bool:
+    """Same env contract as ``rate_limiter._is_production``."""
+    return os.environ.get("VERCEL_ENV") == "production" or os.environ.get("ENV") == "production"
 
 
 class ServiceTokenMiddleware(BaseHTTPMiddleware):
     GUARDED_PREFIXES = ("/health", "/cron/")
+
+    def __init__(self, app: ASGIApp) -> None:
+        # Fail boot in production rather than silently exposing /health.
+        # SERVICE_TOKEN unset = "dev mode, skip the check" — only safe outside prod.
+        if _is_production() and not os.getenv("SERVICE_TOKEN"):
+            raise RuntimeError("SERVICE_TOKEN must be set when VERCEL_ENV/ENV=production")
+        super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path

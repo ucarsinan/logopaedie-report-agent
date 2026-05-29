@@ -33,6 +33,20 @@ def _reset_rate_limiter():
     limiter._storage.reset()
 
 
+@pytest.fixture()
+def unique_ip_headers(request) -> dict[str, str]:
+    """Per-test X-Forwarded-For header so rate-limit buckets don't collide.
+
+    Each rate-limited test fills its bucket to the limit and asserts the next
+    call 429s. Two such tests at the same wall-clock minute sharing the default
+    ``testclient`` source IP can briefly cross-pollute their buckets (the
+    in-memory storage's ``__expire_events`` thread races with ``incr`` across
+    the reset boundary). Giving every test its own IP makes each bucket key
+    unique and removes the race entirely.
+    """
+    return {"X-Forwarded-For": f"203.0.113.{abs(hash(request.node.nodeid)) % 250 + 1}"}
+
+
 @pytest.fixture(autouse=True)
 def _set_env(monkeypatch):
     """Set required env vars for testing."""

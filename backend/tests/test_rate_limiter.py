@@ -73,6 +73,36 @@ def test_limiter_is_configured_to_degrade_gracefully():
     assert limiter._swallow_errors is True
 
 
+def test_trusted_proxy_assertion_fails_boot_in_production(monkeypatch):
+    """In production, missing TRUSTED_PROXY must crash the import — bypass-prevention."""
+    from middleware.rate_limiter import _assert_trusted_proxy_configured
+
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.delenv("TRUSTED_PROXY", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+    import pytest
+
+    with pytest.raises(RuntimeError, match="TRUSTED_PROXY"):
+        _assert_trusted_proxy_configured()
+
+
+def test_trusted_proxy_assertion_passes_when_opted_in(monkeypatch):
+    from middleware.rate_limiter import _assert_trusted_proxy_configured
+
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("TRUSTED_PROXY", "yes")
+    _assert_trusted_proxy_configured()  # must not raise
+
+
+def test_trusted_proxy_assertion_skipped_outside_production(monkeypatch):
+    from middleware.rate_limiter import _assert_trusted_proxy_configured
+
+    for var in ("VERCEL_ENV", "ENV"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("TRUSTED_PROXY", raising=False)
+    _assert_trusted_proxy_configured()  # must not raise — dev/test mode
+
+
 def test_chat_does_not_500_when_rate_limit_backend_fails(client, session_id, mock_groq):
     """Regression: a failing rate-limit backend 500'd every limited endpoint.
 

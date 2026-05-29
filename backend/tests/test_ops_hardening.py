@@ -21,3 +21,39 @@ def test_no_decommissioned_models_in_primary_lists():
     decommissioned = {"llama-3.1-70b-versatile"}
     assert not (set(_JSON_MODELS) & decommissioned)
     assert not (set(_CHAT_MODELS) & decommissioned)
+
+
+def test_service_token_middleware_refuses_to_boot_in_production_without_token(monkeypatch):
+    """A misconfigured prod must fail loudly, not silently expose /health."""
+    import pytest
+    from starlette.applications import Starlette
+
+    from middleware.service_token import ServiceTokenMiddleware
+
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.delenv("SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+
+    with pytest.raises(RuntimeError, match="SERVICE_TOKEN"):
+        ServiceTokenMiddleware(Starlette())
+
+
+def test_service_token_middleware_boots_in_production_with_token(monkeypatch):
+    from starlette.applications import Starlette
+
+    from middleware.service_token import ServiceTokenMiddleware
+
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("SERVICE_TOKEN", "any-non-empty")
+    ServiceTokenMiddleware(Starlette())  # must not raise
+
+
+def test_service_token_middleware_boots_outside_production_without_token(monkeypatch):
+    from starlette.applications import Starlette
+
+    from middleware.service_token import ServiceTokenMiddleware
+
+    for var in ("VERCEL_ENV", "ENV"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("SERVICE_TOKEN", raising=False)
+    ServiceTokenMiddleware(Starlette())  # must not raise — dev/test mode

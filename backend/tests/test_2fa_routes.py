@@ -445,28 +445,30 @@ def test_2fa_enable_already_enabled_rejected(client):
 # ── Rate-limit regressions ────────────────────────────────────────────────────
 
 
-def test_rate_limit_2fa_enable_5_per_min(client):
+def test_rate_limit_2fa_enable_5_per_min(client, unique_ip_headers):
     """slowapi limit 5/minute/IP on /auth/2fa/enable — 6th call returns 429."""
     tokens = register_and_login(client, "rlena@example.com", "correct horse battery 21")
-    client.post("/auth/2fa/setup", headers=auth_headers(tokens))
+    headers = {**auth_headers(tokens), **unique_ip_headers}
+    client.post("/auth/2fa/setup", headers=headers)
     for _ in range(5):
-        client.post("/auth/2fa/enable", json={"code": "000000"}, headers=auth_headers(tokens))
-    res = client.post("/auth/2fa/enable", json={"code": "000000"}, headers=auth_headers(tokens))
+        client.post("/auth/2fa/enable", json={"code": "000000"}, headers=headers)
+    res = client.post("/auth/2fa/enable", json={"code": "000000"}, headers=headers)
     assert res.status_code == 429
 
 
-def test_rate_limit_2fa_disable_5_per_min(client):
+def test_rate_limit_2fa_disable_5_per_min(client, unique_ip_headers):
     """slowapi limit 5/minute/IP on /auth/2fa/disable — 6th call returns 429."""
     tokens = register_and_login(client, "rldis@example.com", "correct horse battery 22")
+    headers = {**auth_headers(tokens), **unique_ip_headers}
     for _ in range(5):
         client.post(
             "/auth/2fa/disable",
             json={"current_password": "wrong", "code": "000000"},
-            headers=auth_headers(tokens),
+            headers=headers,
         )
     res = client.post(
         "/auth/2fa/disable",
         json={"current_password": "wrong", "code": "000000"},
-        headers=auth_headers(tokens),
+        headers=headers,
     )
     assert res.status_code == 429
