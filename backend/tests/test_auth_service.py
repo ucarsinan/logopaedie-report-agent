@@ -153,6 +153,42 @@ async def test_refresh_rotates_token(deps):
         svc.refresh(db, refresh_token=first["refresh_token"], ip=None, ua=None)
 
 
+async def test_refresh_happy_path_emits_audit_row(deps):
+    """M4: token rotation is security-relevant and must be auditable.
+
+    Drives ``AuthService.refresh`` directly (no BackgroundTasks → sync audit
+    path) and asserts the ``user.token_refreshed`` row landed with the
+    expected user_id and metadata pointing at the rotated session ids.
+    """
+    svc, db, email = deps
+    await _make_verified_user(svc, db, email, "audit@example.com")
+    first = svc.login(db, email_addr="audit@example.com", password="longpassword12", ip="9.9.9.9", ua="pytest-ua")
+
+    # Capture the session id about to be rotated so we can verify the
+    # metadata.old_session_id linkage.
+    from models.auth import AuditLog
+
+    user = db.exec(select(User).where(User.email == "audit@example.com")).one()
+    old_session = db.exec(
+        select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+    ).one()
+    pre_event_count = len(db.exec(select(AuditLog).where(AuditLog.event == "user.token_refreshed")).all())
+
+    svc.refresh(db, refresh_token=first["refresh_token"], ip="9.9.9.9", ua="pytest-ua")
+
+    rows = db.exec(select(AuditLog).where(AuditLog.event == "user.token_refreshed")).all()
+    assert len(rows) == pre_event_count + 1
+    row = rows[-1]
+    assert row.user_id == user.id
+    assert row.ip_address == "9.9.9.9"
+    assert row.user_agent == "pytest-ua"
+    assert row.metadata_json.get("old_session_id") == str(old_session.id)
+    new_session = db.exec(
+        select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+    ).one()
+    assert row.metadata_json.get("new_session_id") == str(new_session.id)
+
+
 async def test_refresh_reuse_revokes_all_sessions(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "reuse@example.com")

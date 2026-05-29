@@ -444,17 +444,30 @@ class AuthService:
         # Token was valid and atomically revoked — fetch user and issue new token
         row = db.exec(select(UserSession).where(UserSession.refresh_token_hash == token_hash)).first()
         new_plain, new_hash = self.tokens.encode_refresh()
-        db.add(
-            UserSession(
-                user_id=row.user_id,
-                refresh_token_hash=new_hash,
-                user_agent=ua,
-                ip_address=ip,
-                expires_at=now + self.REFRESH_TTL,
-            )
+        new_sess = UserSession(
+            user_id=row.user_id,
+            refresh_token_hash=new_hash,
+            user_agent=ua,
+            ip_address=ip,
+            expires_at=now + self.REFRESH_TTL,
         )
+        db.add(new_sess)
         db.commit()
+        db.refresh(new_sess)
         user = db.exec(select(User).where(User.id == row.user_id)).one()
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="user.token_refreshed",
+            ip=ip,
+            user_agent=ua,
+            metadata={
+                "old_session_id": str(row.id),
+                "new_session_id": str(new_sess.id),
+            },
+        )
         return {
             "access_token": self.tokens.encode_access(user.id, session_hash=new_hash),
             "refresh_token": new_plain,
