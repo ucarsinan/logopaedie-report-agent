@@ -25,14 +25,6 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       anamnesis is complete, generate a structured handoff that wires into
       the report flow. Likely overlaps with the in-progress owner work →
       coordinate before starting.
-- [ ] `backend/tests/test_pdf_disclaimer.py` future-proofing: the test
-      passes a `MagicMock` canvas, and `getattr(MagicMock, "_generated_at",
-      None)` returns a `MagicMock` (truthy). Today's assertions still
-      pass, but a future test asserting the branding-line text would see
-      `<MagicMock>` inside the string. Tighten the spec.
-- [ ] Move `frontend/src/features/report/components/GeneratingView.test.tsx`
-      to `frontend/src/features/report/__tests__/` for convention
-      alignment with the other feature tests.
 - [ ] Fix the pre-existing Vercel preview deploy failure (separate
       deployment-config issue; ignore for CI green-up).
 
@@ -40,6 +32,8 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] GeneratingView test moved into `__tests__/` for convention alignment (`6b37ba0`/`60a18c6`) — 2026-05-29
+- [x] `_make_footer` mock pinned so `canvas._generated_at` is deterministic (`6b37ba0`) — 2026-05-29
 - [x] TherapyPlanModule dead `sessionId` prop removal (`241f7fd`) — 2026-05-28
 - [x] SOAPModule.generateFromReport stale-session 404 recovery (`11ce3cd`) — 2026-05-28
 - [x] Therapy-plan ownership enforcement across GET-list / GET-by-id / PUT,
