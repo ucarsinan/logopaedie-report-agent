@@ -8,15 +8,186 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (evening)
+- **Date:** 2026-05-29 (late evening)
 - **Updated by:** Claude Code
 - **Handoff to:** next agent picking from `TASKS.md` "Next" — only the
-  LOW-severity follow-ups remain (drop redundant single-column indexes after
-  EXPLAIN, `ix_patients_pseudonym` resolution, `VARCHAR(36)→UUID` 0013).
+  LOW-severity follow-ups remain (`VARCHAR(36)→UUID` type alignment, drop
+  redundant single-column indexes after EXPLAIN) plus the
+  T1/T2/T3/M4 follow-ups from the C3 review.
 
 ---
 
 ## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-05-29 (late evening)
+**Role(s):** Coordinator + Implementer + Scribe (three parallel sub-agents C1/C2/C3)
+
+### What was done
+
+- Third parallel-agent wave dispatched in worktree isolation against the
+  follow-ups surfaced by the evening (B1/B2/B3) batch:
+  - **C1**: extend `audit_service.log_in_background` wiring to the
+    "remaining routers" called out in the prior handoff. **Null result.**
+    A comprehensive grep (`self.audit.log(`, `audit_service.log(`,
+    `audit.log(`, `AuditLog(`, `AuditService` injection sites) shows
+    every audit-emitting site was already converted in `6c18482`. The
+    routers I listed as remaining (`reports.py`, `sessions.py`,
+    `soap.py`, `exports.py`, `analysis.py`, `therapy_plans.py`,
+    `suggestions.py`, `legacy.py`, `health.py`) have **zero** audit
+    references — they never emitted audit events. C1 produced no diff;
+    HANDOFF's "next concrete action" had anticipated work that doesn't
+    exist.
+  - **C2**: resolve the `ix_patients_pseudonym` drift (declared
+    `index=True` on the model, never created by any migration, silenced
+    via `_MIGRATION_ONLY_INDEXES` since `6e31983`). C2 audited the query
+    call sites and chose Path 2 (drop the declaration) over Path 1
+    (write `0013_patients_pseudonym_index.py`). Evidence:
+    `routers/patients.py:113` searches with `ILIKE '%q%'` (leading
+    wildcard, no B-tree can serve — would need `gin_trgm_ops`); the
+    query is always co-anded with `user_id` + `deleted_at IS NULL`,
+    which `idx_patients_user_active` from `0011` already covers.
+    `routers/reports.py:57` only projects `pseudonym` on a JOIN over
+    `Patient.id` (PK), never uses it as a WHERE predicate. So
+    `index=True` was dead intent. Landed as **`90c51e3`** — drops the
+    declaration, removes the entry from
+    `_MIGRATION_ONLY_INDEXES`, adds
+    `test_patient_pseudonym_has_no_standalone_index` as a regression
+    guard, annotates `AUDIT_2026-05-29_schema.md` with the resolution.
+  - **C3**: read-only code review of `6c18482` (the B1 BackgroundTasks
+    audit refactor whose final summary was lost to a socket error).
+    C3 produced a structured review: **no Critical issues**, three
+    High (concurrency / session-lifecycle / `dependency_overrides`
+    resolution — all judged safe-as-landed), one Medium that I applied
+    inline (`M2` — partial-wiring silent fallback), three missing tests
+    (T1/T2/T3 — `log_in_background` end-to-end, admin-route audit row
+    landing, DB-failure fail-open) and one pre-existing gap (`M4` —
+    `AuthService.refresh` happy path has no audit row). Approval status:
+    "safe to keep as landed + follow-up needed". Risk: Medium.
+- Applied C3's M2 inline as **`222c708`**: `AuthService._audit` now
+  `assert (background is None) == (db_factory is None)` so partial
+  wiring fails loud instead of silently degrading to the sync commit
+  path we just removed.
+- Verified before push: backend `python3 -m pytest -q` → **423 passed**
+  (422 baseline + 1 new from C2's `test_patient_pseudonym_has_no_standalone_index`).
+  `mypy` clean on touched files (3 pre-existing errors in
+  `alembic/versions/0010`/`0011` remain). Ruff baseline is now **4
+  errors** (was 3) — the 4th is `tests/test_migration_0012.py` which
+  matches the existing pattern in
+  `test_alembic_migrations.py`/`test_migration_0005.py`/`test_migration_0006.py`
+  (not a regression from C2; documented baseline shift after `6e31983`).
+- `DATABASE_URL="sqlite:///./ci_check.db" alembic upgrade head &&
+  alembic check` → "No new upgrade operations detected." After C2 the
+  guard is now actively enforcing the `ix_patients_pseudonym` absence
+  (rather than silently filtering it).
+
+### Files changed
+
+#### `90c51e3` — `ix_patients_pseudonym` drift resolution
+
+- `backend/models/patient.py` — `pseudonym: str = Field(index=True)` →
+  `pseudonym: str = Field()` with an 8-line comment documenting the
+  access-path analysis pointing at `idx_patients_user_active`.
+- `backend/alembic/env.py` — removed `"ix_patients_pseudonym"` from
+  `_MIGRATION_ONLY_INDEXES`; trimmed the comment that referenced the
+  deferred `0013_*`.
+- `backend/tests/test_patient_model.py` — new
+  `test_patient_pseudonym_has_no_standalone_index` asserts no
+  single-column index over `pseudonym` exists in
+  `SQLModel.metadata.tables["patients"].indexes`.
+- `docs/ai/AUDIT_2026-05-29_schema.md` — "Resolved by model-declaration
+  drop (2026-05-29)" annotation under the proposed `0013_*` sketch.
+
+#### `222c708` — partial-wiring assert in `AuthService._audit`
+
+- `backend/services/auth_service.py` — `assert (background is None) ==
+  (db_factory is None), …` at the top of `_audit`. Docstring updated to
+  call out the loud-failure intent.
+
+#### C1 / C3 (no commits)
+
+- C1 produced no diff (null result). C3 produced a review report
+  delivered inline; the actionable findings are tracked in `TASKS.md`
+  "From 2026-05-29 evening code review".
+
+### What is NOT done yet
+
+- **T1 / T2 / T3 missing tests** for the BackgroundTasks audit path.
+  Tracked in `TASKS.md`. Not blocking, but the C3 review explicitly
+  rated this Medium-risk because the design is sound but
+  end-to-end-untested.
+- **M4 — `AuthService.refresh` happy path has no audit row.**
+  Pre-existing omission flagged by C3. Compliance gap if token rotation
+  is security-relevant.
+- **`VARCHAR(36)` → `UUID` type alignment** (the other suppression in
+  `env.py`'s `compare_type=False`) still open. Mirrors 0008/0009 dialect
+  pattern. Low severity, cosmetic until autogenerate is on.
+- **Drop redundant single-column `ix_*_user_id` indexes** after Postgres
+  EXPLAIN confirms 0011 composites are picked. Needs live-Neon EXPLAIN.
+- **Ruff baseline is now 4 errors**, all `I001` import-sort in alembic
+  migration tests (one new in `test_migration_0012.py` from `6e31983`).
+  Auto-fixable via `ruff check --fix`; left as-is because the pattern
+  is repo-wide and a holistic ruff cleanup is its own task.
+
+### Risks / Attention
+
+- **C2 changed the contract of `Patient.pseudonym`** — the model used
+  to declare an index, now doesn't. Live Neon never had the index
+  (drift was passive), so no behavior change in prod. Local dev
+  (`create_all`) will stop creating the index on fresh DBs; that
+  matches the new declaration. The test regression-guards the
+  intent.
+- **C2's call-site audit was code-only.** If there's a query path the
+  agent missed (e.g. a future search endpoint that does
+  `Patient.pseudonym = …` without a `user_id` predicate), the index
+  drop would cost. A live Postgres EXPLAIN of the search query was not
+  performed.
+- **M2's `assert` runs in production** — Python `-O` would strip it,
+  but the project does not run with `-O`. If a partial wiring slips
+  through review, the production worker will raise `AssertionError`
+  instead of silently degrading. That is the intended posture.
+- Owner WIP from earlier sessions (`anamnesis_engine` /
+  `phonological_analyzer` / `anamnesis_catalog` /
+  `test_phonological_analyzer`) — none of C1/C2/C3 touched these files.
+
+### Next concrete action
+
+Pick from `TASKS.md` "Next". The two highest-value remaining items are:
+  (i) Write T1/T2/T3 from the C3 review (BackgroundTasks audit end-to-end
+      coverage). Bounded, agent-safe, would close the C3 "Medium risk"
+      rating.
+  (ii) Fix M4 — wire an audit row into `AuthService.refresh` happy path.
+       One method change; matches the existing `_audit` pattern.
+
+Everything else open is LOW-severity.
+
+### Ideal next prompt
+
+```text
+Read docs/ai/HANDOFF.md (latest "Session Summary"), then
+docs/ai/TASKS.md "From 2026-05-29 evening code review".
+
+Current situation: main is at 222c708, 0 ahead of origin/main. The
+audit-BackgroundTasks refactor (6c18482) was reviewed by C3 and judged
+safe-as-landed with one assert guard now applied (222c708). What
+remains from that review is T1/T2/T3 (missing end-to-end tests) and M4
+(refresh has no audit row).
+
+Your task: write T1 + T2 + T3 as concrete pytest cases. T1 calls
+audit.log_in_background with a real BackgroundTasks(), invokes the
+queued task manually, asserts the AuditLog row was inserted in a fresh
+session. T2 extends test_admin_routes.py to query GET /admin/audit
+after the lock action and confirm the admin.user_locked row landed.
+T3 mocks the DB factory to raise on commit and asserts
+_persist_with_fresh_session swallows the exception, calls
+logger.exception, and does NOT crash the worker.
+
+After that, update docs/ai state files.
+```
+
+---
+
+## Previous session — 2026-05-29 (evening) — B1/B2/B3 batch
 
 **Agent:** Claude Code
 **Date:** 2026-05-29 (evening)
@@ -653,23 +824,23 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 ## Open Items
 
 - [ ] **M-6** — anamnesis completion logic, blocked on owner WIP.
-- [ ] **Extend BackgroundTasks audit wiring** to the remaining routers
-      (`reports.py`, `sessions.py`, `soap.py`, etc. — anywhere a sync
-      `self.audit.log(...)` still lives). B1 covered auth / auth_admin /
-      patients only.
-- [ ] **`ix_patients_pseudonym` resolution** — model declares
-      `index=True`; B2 suppressed it via `_MIGRATION_ONLY_INDEXES` in
-      `backend/alembic/env.py`. Decide: land a 0013 that creates it on
-      Neon, OR drop the `index=True` declaration on the model.
+- [ ] **T1 / T2 / T3** — missing end-to-end tests for the audit
+      BackgroundTasks path; see `TASKS.md` "From 2026-05-29 evening code
+      review".
+- [ ] **M4** — `AuthService.refresh` happy path has no audit row.
+      Pre-existing; surfaced by the C3 review.
 - [ ] **Type-encoding (`VARCHAR(36)` → `UUID`)** across 13 legacy-id
       columns. Suppressed via `compare_type=False`; real alignment via
-      a future `0013_*` mirroring 0008/0009.
+      a future migration mirroring 0008/0009.
 - [ ] Drop redundant single-column `ix_*_user_id` indexes after Postgres
       EXPLAIN confirms 0011 composites are picked.
 - [ ] **`alembic check` only runs against SQLite in CI.** For Neon
       parity, an occasional manual `DATABASE_URL=$NEON_URL alembic check
       --autogenerate` is still useful — Postgres-specific drift (partial
       indexes, jsonb defaults) is invisible to the SQLite guard.
+- [ ] **Ruff baseline is now 4 errors** (was 3) — `I001` import-sort
+      across alembic migration tests including `test_migration_0012.py`.
+      Auto-fixable; left for a holistic cleanup.
 - [ ] Pre-existing Vercel preview deploy failure — separate deployment-config
       issue. Out of scope unless explicitly requested.
 
@@ -679,9 +850,9 @@ Today's direct-to-`main` commits (no PR): `129333c`, `cbf4d72`,
 
 | Check | Status | Notes |
 | --- | --- | --- |
-| `python -m pytest` (backend) | **422 passed**, locally green after `33c542e` | full suite (419 + 3 new `test_migration_0012`) |
+| `python -m pytest` (backend) | **423 passed**, locally green after `222c708` | full suite (422 + 1 new `test_patient_pseudonym_has_no_standalone_index`) |
 | `npm test` (frontend unit) | green via pre-push hook on `33c542e` | 43 test files |
-| `alembic check` | **No new upgrade operations detected** after `6e31983` | new CI guard, runs after pytest in `backend-test` |
+| `alembic check` | **No new upgrade operations detected** after `90c51e3` | C2 removed `ix_patients_pseudonym` from the filter; guard now actively enforces it |
 | `npx playwright test` (E2E) | last green in PR #6 CI | 32 cases / 11 specs, chromium-only |
 | `npm run build` | passed | with `/backend-api` default, **not** absolute host |
 | `ruff check`, `mypy`, `eslint`, `tsc` | passed locally on touched files; 3 pre-existing ruff errors in alembic migration tests + 3 pre-existing mypy errors in `alembic/versions/0010`/`0011` remain unchanged from baseline | |

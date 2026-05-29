@@ -8,21 +8,19 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (evening)
+- **Date:** 2026-05-29 (late evening)
 - **Updated by:** Claude Code
-- **Session focus:** Second parallel-agent wave (B1, B2, B3) — B1 deferred audit_service writes to BackgroundTasks, B2 landed `0012_align_declared_fks` + `alembic check` CI guard, B3 fixed the `test_no_api_key_references` worktree footgun. Three commits pushed; the schema-drift bug class is now structurally prevented at PR time.
+- **Session focus:** Third parallel-agent wave (C1, C2, C3). C1 was a null-result audit-wiring check (the "remaining routers" anticipated in the prior handoff don't actually emit audit events). C2 dropped the dead `ix_patients_pseudonym` index declaration. C3 reviewed `6c18482` and flagged a defensive assert (applied inline as M2). Two commits pushed.
 
 ---
 
 ## Current Goal
 
-No agent-driven goal active. The three follow-ups dispatched this evening
-(B1, B2, B3) all landed and were pushed to `origin/main`:
-`6c18482` / `6e31983` / `33c542e`. The remaining open `TASKS.md` "Next"
-items are all LOW-severity (`ix_patients_pseudonym`, `VARCHAR(36)→UUID`
-type alignment, dropping redundant single-column `ix_*_user_id` indexes
-after EXPLAIN, and extending the BackgroundTasks audit wiring to the
-remaining routers).
+No agent-driven goal active. The three follow-ups dispatched this late
+evening (C1 null, C2, C3+M2) all landed; remaining `TASKS.md` "Next" is
+LOW-severity follow-ups (T1/T2/T3 missing BG-tests, M4 refresh audit
+gap, `VARCHAR(36)→UUID` type alignment, dropping redundant
+single-column `ix_*_user_id` indexes after EXPLAIN).
 
 **M-6** (anamnesis completion logic) remains the outstanding audit item
 and is still blocked on owner-driven WIP in
@@ -38,9 +36,13 @@ explicitly hands them over.
 main
 ```
 
-Local `main` is **at `origin/main`** (`33c542e`, 0 ahead / 0 behind).
+Local `main` is **at `origin/main`** (`222c708`, 0 ahead / 0 behind
+after the upcoming docs commit pushes).
 Today's commits (newest first):
 
+- `222c708` — `fix(backend): assert (background, db_factory) pass together in AuthService._audit`
+- `90c51e3` — `fix(backend): drop ix_patients_pseudonym index declaration; alembic check now strict`
+- `c73d16c` — `docs(ai): record B1/B2/B3 evening batch and surface the next routers to wire`
 - `33c542e` — `fix(tests): scope test_no_api_key_references exclusion to repo-relative parts`
 - `6e31983` — `feat(backend): land 0012_align_declared_fks migration + alembic check CI guard`
 - `6c18482` — `perf(backend): defer audit_service.log() writes to BackgroundTasks`
@@ -48,8 +50,8 @@ Today's commits (newest first):
 - `0467587` — `perf(backend): make auth email path async end-to-end`
 - `c0980ab` — `perf(backend): skip per-request DB fetch in get_optional_user; add AuthIdentity`
 
-Working tree carries the docs/ai state-file refresh for this evening
-session.
+Working tree carries the docs/ai state-file refresh for this late
+evening session.
 
 ---
 
@@ -57,6 +59,34 @@ session.
 
 ### Done (recent — see `TASKS.md` "Done" for the full log)
 
+- [x] **`AuthService._audit` partial-wiring assert** (M2 from C3 review,
+      `222c708`, 2026-05-29 late evening) — `assert (background is None)
+      == (db_factory is None)` so a future route refactor that wires
+      only one of the two new deps fails loud instead of silently
+      degrading to the sync audit path. The C3 review of `6c18482`
+      flagged this as the highest-confidence Medium-risk follow-up.
+- [x] **`ix_patients_pseudonym` drift resolved** (C2, `90c51e3`,
+      2026-05-29 late evening) — model-declaration drop chosen over a
+      0013 index migration. Call-site audit: `routers/patients.py:113`
+      uses `ILIKE '%q%'` (leading wildcard, B-tree useless; gin_trgm_ops
+      would be needed) and is always co-anded with user_id +
+      deleted_at, which `idx_patients_user_active` from 0011 covers;
+      `routers/reports.py:57` only projects pseudonym on a JOIN over PK.
+      Filter entry removed from `_MIGRATION_ONLY_INDEXES` so
+      `alembic check` now actively enforces the absence. New
+      `test_patient_pseudonym_has_no_standalone_index` regression guard.
+- [x] **C1 — audit-wiring extension audit** (C1, no commit) — grep
+      confirmed every audit-emitting site was already converted in
+      `6c18482`. The "remaining routers" called out in the prior
+      handoff (`reports.py`, `sessions.py`, etc.) have zero audit
+      references; HANDOFF anticipated work that doesn't exist. 31 tool
+      calls, null diff, useful negative result.
+- [x] **C3 — code review of `6c18482`** (C3, report only) — read-only
+      review of the B1 BackgroundTasks audit refactor whose final
+      summary was lost to a socket error. No Critical, three High judged
+      safe-as-landed, one Medium applied inline (M2), three missing
+      tests (T1/T2/T3) and one pre-existing gap (M4) tracked in
+      `TASKS.md`.
 - [x] **`test_no_api_key_references` scoped exclusions** (B3,
       `33c542e`, 2026-05-29 evening) — switched from absolute
       `path.parts` to `relative_to(root).parts`; added `.claude` +
@@ -215,9 +245,9 @@ backend/tests/test_phonological_analyzer.py  — owner WIP, do not touch
 
 ```text
 Branch: main
-HEAD:   33c542e fix(tests): scope test_no_api_key_references exclusion to repo-relative parts
+HEAD:   222c708 fix(backend): assert (background, db_factory) pass together in AuthService._audit
 Behind: 0
-Ahead:  0
+Ahead:  2 (90c51e3, 222c708 — about to push along with this docs commit)
 Uncommitted:
   M docs/ai/CURRENT.md
   M docs/ai/TASKS.md
@@ -264,31 +294,37 @@ Uncommitted:
 
 ## Next Step
 
-The natural next item is extending the audit-BackgroundTasks wiring from
-`routers/auth.py` / `routers/auth_admin.py` / `routers/patients.py` to
-the remaining routers (grep `self.audit.log(` or `audit_service.log(`
-for the call sites — `routers/reports.py`, `routers/sessions.py`,
-`routers/soap.py` are the likely ones). The deferred path is already
-implemented in `services/audit_service.py`; this is mechanical wiring of
-two new deps (`background_tasks: BackgroundTasks` +
-`db_factory: DBSessionFactory = Depends(get_db_factory)`) into each route.
+The two highest-value remaining items are the C3-review follow-ups:
 
-Otherwise pick from `TASKS.md` "Next" column. Remaining items are all
-LOW-severity: `ix_patients_pseudonym` resolution, `VARCHAR(36)→UUID`
-type alignment (0013), dropping redundant single-column `ix_*_user_id`
-indexes after EXPLAIN verification on Neon. Don't touch
-`anamnesis_engine.py`, `phonological_analyzer.py`, `anamnesis_catalog.py`,
-or `test_phonological_analyzer.py` until the owner explicitly hands them
-over.
+(i) Write **T1 + T2 + T3** as concrete pytest cases. T1 calls
+    `audit.log_in_background` with a real `BackgroundTasks()`, invokes
+    the queued task manually, asserts the `AuditLog` row was inserted
+    in a fresh session. T2 extends `test_admin_routes.py` to query
+    `GET /admin/audit` after the lock action and confirm the
+    `admin.user_locked` row landed. T3 mocks the DB factory to raise on
+    commit and asserts `_persist_with_fresh_session` swallows the
+    exception, calls `logger.exception`, and does NOT crash the worker.
+    Closing these would move the C3 risk rating from Medium to Low.
+
+(ii) **Fix M4** — wire an audit row into `AuthService.refresh` happy
+     path. One method change; matches the existing `_audit` pattern.
+
+Everything else open is LOW-severity (`VARCHAR(36)→UUID` type
+alignment, dropping redundant single-column `ix_*_user_id` indexes
+after EXPLAIN verification on Neon, the 4-error ruff `I001` baseline
+cleanup). Don't touch `anamnesis_engine.py`, `phonological_analyzer.py`,
+`anamnesis_catalog.py`, or `test_phonological_analyzer.py` until the
+owner explicitly hands them over.
 
 ---
 
 ## Notes for Next Agent
 
 - Read this file plus `HANDOFF.md` first; both are current as of 2026-05-29
-  (evening). For the schema-drift context, see the chain of session
-  entries in `HANDOFF.md`: evening (B1/B2/B3 — closing the FK class) →
-  PM (A1/A2/A3 — perf + audit) → earlier 2026-05-29 (the original
+  (late evening). For the schema-drift context, see the chain of session
+  entries in `HANDOFF.md`: late evening (C1/C2/C3 — pseudonym drift +
+  C3 review of B1) → evening (B1/B2/B3 — closing the FK class) → PM
+  (A1/A2/A3 — perf + audit) → earlier 2026-05-29 (the original
   schema-drift hotfix).
 - The full architectural picture is in `PROJECT.md`.
 - Don't trust the cached "9 routers / 11 services / 6 CI jobs / 35 tests"

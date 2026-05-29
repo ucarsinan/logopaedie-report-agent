@@ -34,17 +34,31 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ### From 2026-05-29 schema audit (`AUDIT_2026-05-29_schema.md`)
 
-- [ ] **`ix_patients_pseudonym` index** — declared `index=True` on model,
-      never created by migration 0007. Currently excluded from
-      `alembic check` via the `_MIGRATION_ONLY_INDEXES` filter in
-      `backend/alembic/env.py`; land a `0013_*` to either create it on Neon
-      (if the slow `pseudonym` lookup actually matters) or drop the
-      declaration on the model side. Low severity.
 - [ ] **Type-encoding cleanup (`VARCHAR(36)` → `UUID`)** across 13
       legacy-id columns. Suppressed via `compare_type=False` in
       `backend/alembic/env.py` so `alembic check` stays green; the real
       alignment should mirror the 0008/0009 dialect-gated `ALTER TYPE`
       pattern. Low priority.
+
+### From 2026-05-29 evening code review (`6c18482` review)
+
+- [ ] **T1: `log_in_background` end-to-end test.** No existing test calls
+      `AuditService.log_in_background(BackgroundTasks(), factory, …)`,
+      manually runs the queued task, and asserts the `AuditLog` row was
+      inserted. Catches `_factory` / session-lifecycle regressions.
+- [ ] **T2: admin-route audit row landing.** `test_admin_routes.py`
+      asserts on lock behavior but never queries `GET /admin/audit` to
+      confirm the `admin.user_locked` row materialized — TestClient runs
+      BG tasks before returning, so an in-test verification would catch
+      a broken factory.
+- [ ] **T3: DB-failure fail-open test.** Sync path has
+      `test_audit_log_failure_raises_fail_closed`; no equivalent test for
+      the background path that asserts the exception is caught,
+      `logger.exception` is called, and the worker does not crash.
+- [ ] **M4 follow-up: `AuthService.refresh` happy path has no audit row.**
+      Pre-existing omission flagged in the C3 review; every other auth
+      operation logs an audit, refresh doesn't. Compliance gap if
+      token-rotation is security-relevant.
 
 ### Other
 
@@ -55,6 +69,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] Code-review hardening on `6c18482` (parallel sub-agent C3 + M2 follow-up): `AuthService._audit` now asserts `(background is None) == (db_factory is None)` so partial wiring fails loud instead of silently degrading to the sync path (`222c708`) — 2026-05-29
+- [x] `ix_patients_pseudonym` drift resolution (parallel sub-agent C2): dropped the `index=True` declaration from `Patient.pseudonym` (call-site audit showed only `ILIKE '%q%'` searches always co-anded with `user_id`/`deleted_at`; `idx_patients_user_active` from 0011 covers the access path); removed the entry from `_MIGRATION_ONLY_INDEXES` so `alembic check` now actively guards against re-introducing it (`90c51e3`) — 2026-05-29
+- [x] BackgroundTasks audit-wiring audit (parallel sub-agent C1): grep confirmed every audit emit site in the codebase was already converted in `6c18482` — `reports.py`, `sessions.py`, `soap.py`, etc. don't emit audit events. No code change required; HANDOFF's anticipation of "remaining routers" was incorrect. (No commit.) — 2026-05-29
 - [x] `test_no_api_key_references` exclusion fix (parallel sub-agent B3): switched from absolute `path.parts` to `relative_to(root).parts`; added `.claude` + `worktrees` to the exclusion set so agent-worktree dispatch no longer false-fails the suite (`33c542e`) — 2026-05-29
 - [x] `0012_align_declared_fks` migration + `alembic check` CI guard (parallel sub-agent B2): emits 7 declared-but-missing FKs idempotently (no-op on Neon for therapyplanrecord), tunes `alembic/env.py` (add `models.patient` import, `compare_type=False`, `include_object` filter), CI step runs after pytest (`6e31983`) — 2026-05-29
 - [x] `audit_service.log()` writes deferred via FastAPI BackgroundTasks (parallel sub-agent B1): new `log_in_background` + `get_db_factory` plumbing in `database.py`; sync `log()` preserved for test direct-callers; routes in auth/auth_admin/patients wire the deferred path (`6c18482`) — 2026-05-29
