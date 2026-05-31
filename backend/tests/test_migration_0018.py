@@ -42,9 +42,10 @@ from uuid import uuid4
 import pytest
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, text
 
-from alembic import command, op
+from alembic import command
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 _ALEMBIC_DIR = BACKEND_DIR / "alembic"
@@ -143,7 +144,7 @@ def _apply_0018(db_url: str, direction: str) -> None:
     eng = create_engine(db_url)
     with eng.connect() as conn:
         ctx = MigrationContext.configure(conn)
-        with op.Operations.context(ctx):
+        with Operations.context(ctx):
             if direction == "upgrade":
                 module.upgrade()
             elif direction == "downgrade":
