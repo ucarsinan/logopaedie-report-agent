@@ -52,12 +52,29 @@ depends_on = None
 # migration runs. We do not assume any FK currently uses this name (the
 # three created inline by 0002 don't); we just drop whatever is there by
 # its reflected name and recreate with this canonical one.
+#
+# Note `soaprecord.user_id` (already UUID per 0009) and
+# `therapyplanrecord.user_id` (already UUID per 0010, FK formalized by 0012)
+# are listed too: even though their *column* type is already UUID, the FK
+# still references `users.id` and Postgres refuses to ALTER a PK column
+# while any dependent FK exists. The `_column_is_varchar` guard in step 2
+# skips the redundant ALTER TYPE for them; step 1 (drop) and step 3
+# (recreate) must still run so the users.id PK swap can go through.
 _FK_SPECS: list[tuple[str, str, str, str, str, str]] = [
     ("user_sessions", "user_id", "users", "id", "CASCADE", "fk_user_sessions_user_id_users"),
     ("email_tokens", "user_id", "users", "id", "CASCADE", "fk_email_tokens_user_id_users"),
     ("audit_log", "user_id", "users", "id", "SET NULL", "fk_audit_log_user_id_users"),
     ("patients", "user_id", "users", "id", "CASCADE", "fk_patients_user_id_users"),
     ("reports", "user_id", "users", "id", "CASCADE", "fk_reports_user_id_users"),
+    ("soaprecord", "user_id", "users", "id", "CASCADE", "fk_soaprecord_user_id_users"),
+    (
+        "therapyplanrecord",
+        "user_id",
+        "users",
+        "id",
+        "CASCADE",
+        "fk_therapyplanrecord_user_id_users",
+    ),
     (
         "consent_records",
         "recorded_by",
