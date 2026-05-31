@@ -218,6 +218,24 @@ VARCHAR(36) on Neon despite the model declaring UUID:
 > `email_tokens.id` converted as 0014 (2026-05-31) — same rationale: no incoming FK. 11 columns remain.
 > `user_sessions.id` converted as 0015 (2026-05-31) — leaf PK, no incoming FKs (confirmed by grep against models + alembic versions). 10 remain.
 > `consent_records.id` converted as 0016 (2026-05-31) — same rationale: no incoming FKs. 9 remain.
+> **users.id cluster converted as 0017 (2026-05-31).** Coordinated drop/ALTER/recreate
+> across PK + 6 declared FKs (`user_sessions.user_id`, `email_tokens.user_id`,
+> `audit_log.user_id`, `patients.user_id`, `reports.user_id`,
+> `consent_records.recorded_by`). FK names discovered via `inspector.get_foreign_keys()`
+> for idempotency. **Drift caught in the process:** `0002_auth_tables.py` declared
+> 3 FKs inline at table-creation **without explicit names** (`user_sessions.user_id`,
+> `email_tokens.user_id`, `audit_log.user_id` — see `0002_auth_tables.py:41,56,68`),
+> so Postgres assigned them server-default `<table>_<col>_fkey` names. 0017 renames
+> them to the canonical `fk_<table>_<col>_users` convention during the recreate.
+> Grep confirmed nothing in the codebase pins on the old names. 2 columns remain.
+> **patients.id cluster converted as 0018 (2026-05-31).** Coordinated drop/ALTER/recreate
+> across PK + `consent_records.patient_id`. **Design call:** `reports.patient_id`
+> was already UUID (0008), but Postgres refuses to `ALTER TYPE` a referenced PK
+> column while any dependent FK exists — even when the referencing column type
+> already matches. 0018 therefore drops + recreates `fk_reports_patient_id_patients`
+> alongside the consent FK so the PK swap can go through. Not empirically tested
+> on Postgres (test path skipped pending Postgres CI) — verify on first live
+> deploy. **0 columns remain — drift class fully closed end-to-end.**
 
 This is low severity (SQLAlchemy's UUID/text implicit casts make INSERTs work)
 but it is a real divergence and it's why the GUID TypeDecorator exists.

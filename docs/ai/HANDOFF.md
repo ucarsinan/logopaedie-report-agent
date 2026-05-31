@@ -8,18 +8,149 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-31 (afternoon — G-wave + push)
+- **Date:** 2026-05-31 (evening — H-wave)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent. G-wave extended the 0013 pattern to
-  `email_tokens.id` (0014), `user_sessions.id` (0015), `consent_records.id`
-  (0016) — all 3 are leaf PKs with no incoming FKs and were safe to
-  convert in isolation. **9 columns remain**, all clustered around
-  `users.id` (the PK + ~7 FKs pointing to it from
-  `*.user_id`/`consent_records.recorded_by`); these need a coordinated
-  drop-FKs / ALTER-types / recreate-FKs migration. Plus
-  `patients.id` (PK) + `consent_records.patient_id` (FK) — a small
-  2-column coordinated cluster. Plus F2 marker drift, redundant
-  index drop (needs Neon EXPLAIN).
+- **Handoff to:** next agent. H-wave **closes the VARCHAR(36)→UUID
+  drift class end-to-end**. The 9 remaining columns from A3's audit
+  landed across two coordinated cluster migrations:
+  `0017_users_id_uuid_cluster` (PK + 6 declared FKs) and
+  `0018_patients_id_uuid_cluster` (PK + `consent_records.patient_id`,
+  plus a drop/recreate of `fk_reports_patient_id_patients` to let
+  Postgres swap the PK type underneath). F2 added explicit
+  `@pytest.mark.asyncio` markers across 19 bare async tests.
+  Outstanding from TASKS.md "Next": redundant `ix_*_user_id` index
+  drop (needs Neon EXPLAIN, not agent-safe), Vercel preview deploy
+  (out of scope), M-6 anamnesis completion (owner-WIP).
+
+---
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-05-31 (evening — H-wave)
+**Role(s):** Coordinator + Implementer + Scribe (three parallel sub-agents H1/H2/F2)
+
+### What was done
+
+- **H1**: landed `0017_users_id_uuid_cluster` migration (`a557a4f`).
+  Coordinated drop/ALTER/recreate of the `users.id` reference cluster:
+  PK + 6 declared FKs from `user_sessions.user_id`,
+  `email_tokens.user_id`, `audit_log.user_id`, `patients.user_id`,
+  `reports.user_id`, `consent_records.recorded_by`. Postgres-only via
+  dialect gate; SQLite no-op (GUID TypeDecorator already stores
+  CHAR(36)). FK names discovered via `inspector.get_foreign_keys()` to
+  stay idempotent against environments where 0002 left
+  server-default names. New finding worth recording in the audit:
+  **0002 creates 3 FKs inline at table-creation without explicit
+  names** — Postgres gives them `*_fkey` defaults. 0017 renames them
+  to the canonical `fk_<table>_<col>_users` convention during the
+  recreate; nothing in the codebase pins on the old names (grep
+  confirmed).
+- **H2**: landed `0018_patients_id_uuid_cluster` migration
+  (`b24d6ee`). PK + `consent_records.patient_id`. **Design call worth
+  flagging**: `reports.patient_id` was already UUID (0008), but
+  Postgres refuses to `ALTER TYPE` a referenced PK column while ANY
+  dependent FK exists — even when the referencing type already
+  matches. 0018 therefore drops + recreates
+  `fk_reports_patient_id_patients` so the PK swap can go through. The
+  recreate uses the canonical name and `ON DELETE SET NULL` from 0012.
+  This was not empirically tested on Postgres (test path skipped
+  pending Postgres CI) — verify on first live deploy of 0018.
+- **F2**: added explicit `@pytest.mark.asyncio` markers to 19 bare
+  `async def test_*` functions across 3 files (`test_audit_service.py`
+  1, `test_email_service.py` 3, `test_auth_service.py` 15). Added
+  `import pytest` to `test_email_service.py` (the only touched file
+  missing it). Pure hygiene against potential future
+  `asyncio_mode = strict` migrations. No semantic change.
+  Landed as `b5bca62`.
+- **Mypy follow-up** (`0833506`): H2's sandboxed-versions test fixture
+  used `op.Operations.context(ctx)` against the alembic.op proxy
+  module; mypy couldn't statically resolve the attribute. Replaced
+  with `from alembic.operations import Operations` + plain
+  `Operations.context(ctx)`. One-line cleanup.
+- Worktree-coordination note for future H-style waves: H2's worktree
+  was forked before 0017 existed, so the test for 0018 had to use a
+  sandboxed `versions/` copy (0001..0016 minus 0018) to walk the
+  alembic chain without choking on the missing 0017. The sandbox is
+  now functionally unnecessary (0017 is in main) but harmless; left
+  in place because rewriting the test to use the real `versions/`
+  dir would be a separate cleanup PR with no behavior change.
+- Verified before push: `ruff check .` → All checks passed. `mypy`
+  → 0 errors on H-wave files (3 pre-existing in 0010/0011 unchanged).
+  `DATABASE_URL=sqlite:///./ci_check.db alembic upgrade head` →
+  0001→0018 clean. `alembic check` → "No new upgrade operations
+  detected". `alembic downgrade base` → full chain reverses cleanly.
+  `pytest -q` → **448 passed, 9 skipped** (was 440+4 after G-wave;
+  +8 SQLite passes + +5 Postgres skip-markers from H1/H2's new tests;
+  F2 is semantically a no-op).
+
+### Files changed
+
+#### `b5bca62` — F2 asyncio markers
+
+- `backend/tests/test_audit_service.py` — +1 `@pytest.mark.asyncio`
+  on T1 (`test_log_in_background_persists_via_fresh_session`).
+- `backend/tests/test_email_service.py` — +3 markers; added
+  `import pytest`.
+- `backend/tests/test_auth_service.py` — +15 markers across the
+  register/verify/login/refresh/password suite.
+
+#### `a557a4f` — 0017 users.id cluster
+
+- `backend/alembic/versions/0017_users_id_uuid_cluster.py` (new) —
+  drop 6 FKs (3 server-default-named from 0002, 3 canonical from
+  0012), ALTER 7 columns to UUID, recreate 6 FKs with canonical names.
+- `backend/tests/test_migration_0017.py` (new) — SQLite no-op pass +
+  2 Postgres-skipped assertions.
+
+#### `b24d6ee` — 0018 patients.id cluster
+
+- `backend/alembic/versions/0018_patients_id_uuid_cluster.py` (new) —
+  drop `fk_consent_records_patient_id_patients` and
+  `fk_reports_patient_id_patients`, ALTER `patients.id` +
+  `consent_records.patient_id` to UUID, recreate both FKs.
+- `backend/tests/test_migration_0018.py` (new) — SQLite no-op pass +
+  Postgres-skipped FK/type assertions. Uses sandboxed `versions/`
+  copy fixture (now functionally unnecessary but harmless).
+
+#### `0833506` — mypy: Operations import in 0018 test
+
+- `backend/tests/test_migration_0018.py` — `from alembic import op`
+  → `from alembic.operations import Operations`; one usage updated.
+
+### What is NOT done yet
+
+- **Drop redundant single-column `ix_*_user_id` indexes** (audit
+  2026-05-29 performance). Needs live Neon EXPLAIN to confirm the
+  composite indexes from 0011 are picked. Not agent-safe; owner
+  decision.
+- **Vercel preview deploy** — pre-existing failure, separate
+  config issue, out of scope for CI green-up.
+- **M-6** — anamnesis completion logic. Blocked on owner-WIP.
+
+### Risks / Attention
+
+- 0017 renames 3 server-default FK names on Postgres (`*_fkey` →
+  `fk_<table>_<col>_users`). Grep confirmed no code pins on the old
+  names; if a future agent introduces tooling that hardcodes FK names
+  by reading from `pg_constraint`, those will surface here first.
+- 0018's `fk_reports_patient_id_patients` drop/recreate logic is a
+  documented design choice without an end-to-end Postgres test —
+  see CURRENT.md "Key things the next agent should know" §2.
+
+### Next concrete action
+
+Push the H-wave + docs commit. Then either pick up the redundant-index
+work (with the owner's blessing once they have EXPLAIN output) or wait
+for the owner-WIP block to clear so M-6 becomes actionable.
+
+### Ideal next prompt
+
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. The VARCHAR(36)→UUID
+> drift class is fully closed across the 13-column audit. Decide
+> between (a) helping the owner unblock M-6 once they hand over the
+> anamnesis WIP, or (b) preparing the redundant `ix_*_user_id` drop
+> migration after EXPLAIN evidence is in.
 
 ---
 

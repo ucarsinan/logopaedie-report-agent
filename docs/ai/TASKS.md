@@ -32,20 +32,8 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
-### From 2026-05-29 schema audit (`AUDIT_2026-05-29_schema.md`)
-
-- [ ] **Type-encoding cleanup (`VARCHAR(36)` → `UUID`)** across 13
-      legacy-id columns. Suppressed via `compare_type=False` in
-      `backend/alembic/env.py` so `alembic check` stays green; the real
-      alignment should mirror the 0008/0009 dialect-gated `ALTER TYPE`
-      pattern. Low priority.
-
 ### Open follow-ups
 
-- [ ] **`@pytest.mark.asyncio` on T1** (F2 from the E3 review). T1
-      (`test_log_in_background_persists_via_fresh_session`) is a bare
-      `async def` test relying on `asyncio_mode = "auto"`; an explicit
-      marker would survive config drift. Low priority.
 - [ ] **Frontend `end-of-file-fixer` baseline** — visible after E1's
       pre-commit `--all-files` run. 5 `frontend/public/*.svg` files
       were missing trailing newlines and were fixed as part of `e089942`.
@@ -60,6 +48,9 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **Type-encoding cleanup (`VARCHAR(36)` → `UUID`) — 13/13 columns CLOSED.** 0008/0009 handled `reports.patient_id` + `soaprecord.user_id` early; 0013/0014/0015/0016 (E2 + G1/G2/G3) handled the 4 leaf PKs; 0017/0018 (H1/H2) closed the 9-column users.id + patients.id clusters via coordinated drop-FKs / ALTER-types / recreate-FKs pattern. `alembic check` clean end-to-end on the resulting 0001→0018 chain. (`a557a4f` + `b24d6ee` + earlier waves) — 2026-05-31
+- [x] **F2** — explicit `@pytest.mark.asyncio` markers on 19 bare `async def test_*` across 3 backend test files (parallel sub-agent F2). Pure hygiene against potential future `asyncio_mode = "strict"` migrations; pytest counts unchanged. `import pytest` added to `test_email_service.py` (only touched file that was missing it) (`b5bca62`) — 2026-05-31
+- [x] `0017_users_id_uuid_cluster` + `0018_patients_id_uuid_cluster` VARCHAR(36)→UUID alignment for the 9 columns clustered around `users.id` (7 cols: PK + 6 FKs) and `patients.id` (2 cols: PK + `consent_records.patient_id`) — parallel sub-agents H1/H2. Coordinated drop/ALTER/recreate-FKs pattern. Drift finding worth flagging: 0002 created 3 FKs inline without explicit names; 0017 renames them to canonical `fk_<table>_<col>_users` during recreate. Followup mypy cleanup (`0833506`) replaced `op.Operations.context()` with explicit `from alembic.operations import Operations` (`a557a4f` / `b24d6ee` / `0833506`) — 2026-05-31
 - [x] `0014`+`0015`+`0016` VARCHAR(36)→UUID alignment for `email_tokens.id`, `user_sessions.id`, `consent_records.id` (parallel sub-agents G1/G2/G3). All leaf PKs, no incoming FKs; each migration mirrors `0013` pattern. 9 columns from A3's audit remain (all are FKs to `users.id` or `users.id` itself — coordinated cluster) (`facf364` / `559ed9f` / `aadea60`) — 2026-05-31
 - [x] F1: T3's audit-logger re-enable scoped via `monkeypatch.setattr` (E3-review follow-up). Was a bare module-level mutation that would have leaked into later tests; now restored at teardown (`16aad7e`) — 2026-05-29
 - [x] `0013_audit_log_id_uuid_type` migration (parallel sub-agent E2). Postgres-only conditional `ALTER TABLE audit_log ALTER COLUMN id TYPE uuid USING id::uuid`, SQLite no-op via dialect gate. Proof-of-pattern for the broader `VARCHAR(36)→UUID` cleanup; chose `audit_log.id` as safest first target (no incoming FKs to cascade-break). `test_migration_0013.py` covers SQLite no-op + Postgres-only skip-marker (`0e5d302`) — 2026-05-29
