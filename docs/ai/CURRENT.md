@@ -8,9 +8,9 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (overnight)
+- **Date:** 2026-05-31 (morning)
 - **Updated by:** Claude Code
-- **Session focus:** Fourth parallel-agent wave (D1, D2, D3). D1 wrote T1+T2+T3 end-to-end tests for the BackgroundTasks audit path (closing C3's Medium-risk rating). D2 wired the refresh audit row (M4). D3 attempted to clear the 4-error ruff baseline but hit the same pre-commit-vs-`ruff check` conflict noted in `9c27c7e`; conflict promoted to a TASKS follow-up. Two commits pushed.
+- **Session focus:** Fifth parallel-agent wave (E1, E2, E3) + F1 inline. E1 found the real cause behind the stuck I001 baseline — a ruff version pin skew, not the hook-id conflict we assumed — and cleared it by bumping ruff to 0.15.15. E2 landed `0013_audit_log_id_uuid_type` as proof-of-pattern for the broader VARCHAR(36)→UUID alignment. E3 reviewed D1/D2 and flagged F1 (T3 logger leak), applied inline. Pre-push gotcha discovered: the hook false-fails on unstaged changes — commit docs first.
 
 ---
 
@@ -36,18 +36,20 @@ explicitly hands them over.
 main
 ```
 
-Local `main` is **at `origin/main`** (`44ff83b`, 0 ahead / 0 behind
-after the upcoming docs commit pushes).
+Local `main` is **3 ahead of `origin/main`** (E1/E2/F1 commits not yet
+pushed). About to push: `e089942` + `0e5d302` + `16aad7e` + this docs
+commit.
 Today's commits (newest first):
 
+- `16aad7e` — `fix(tests): scope T3's audit-logger re-enable via monkeypatch (F1 from E3 review)`
+- `0e5d302` — `feat(backend): land 0013_audit_log_id_uuid_type migration`
+- `e089942` — `chore(tooling): bump ruff to 0.15.15 + clear the I001 baseline`
+- `1abc5a5` — `docs(ai): record D1/D2/D3 overnight batch — T1/T2/T3 + M4 done, D3 blocked`
 - `44ff83b` — `feat(backend): emit audit row on AuthService.refresh happy path`
 - `3d57bc1` — `test(backend): add T1+T2+T3 end-to-end tests for audit BackgroundTasks path`
 - `166c09d` — `docs(ai): record C1/C2/C3 late-evening batch and surface T1/T2/T3/M4 follow-ups`
 - `222c708` — `fix(backend): assert (background, db_factory) pass together in AuthService._audit`
 - `90c51e3` — `fix(backend): drop ix_patients_pseudonym index declaration; alembic check now strict`
-- `c73d16c` — `docs(ai): record B1/B2/B3 evening batch and surface the next routers to wire`
-- `33c542e` — `fix(tests): scope test_no_api_key_references exclusion to repo-relative parts`
-- `6e31983` — `feat(backend): land 0012_align_declared_fks migration + alembic check CI guard`
 - `6c18482` — `perf(backend): defer audit_service.log() writes to BackgroundTasks`
 - `1a53f79` — `docs(ai): record A1/A2 commits and persist A3 schema audit`
 - `0467587` — `perf(backend): make auth email path async end-to-end`

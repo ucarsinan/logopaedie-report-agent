@@ -42,18 +42,14 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ### Open follow-ups
 
-- [ ] **Resolve the pre-commit-vs-`ruff check` I001 conflict.** Sub-agent
-      D3 attempted to clear the 4 `I001` import-sort errors in
-      `tests/test_alembic_migrations.py` / `test_migration_0005.py` /
-      `test_migration_0006.py` / `test_migration_0012.py`. The worktree
-      `ruff check --fix` produced a sort that ruff check accepted; but
-      the project's `.pre-commit-config.yaml` "ruff (legacy alias)" hook
-      enforces a DIFFERENT sort that ruff check then rejects.
-      Circular conflict — same one noted in `9c27c7e`'s commit message.
-      Real fix needs a `.pre-commit-config.yaml` adjustment (replace the
-      legacy alias with `ruff check --fix` so it respects the same
-      config) or a `pyproject.toml` isort tweak. Out of scope for a
-      "test-files-only" agent; needs to touch the hook config.
+- [ ] **`@pytest.mark.asyncio` on T1** (F2 from the E3 review). T1
+      (`test_log_in_background_persists_via_fresh_session`) is a bare
+      `async def` test relying on `asyncio_mode = "auto"`; an explicit
+      marker would survive config drift. Low priority.
+- [ ] **Frontend `end-of-file-fixer` baseline** — visible after E1's
+      pre-commit `--all-files` run. 5 `frontend/public/*.svg` files
+      were missing trailing newlines and were fixed as part of `e089942`.
+      No further frontend hygiene gap surfaced; leave as a watch item.
 
 ### Other
 
@@ -64,6 +60,10 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] F1: T3's audit-logger re-enable scoped via `monkeypatch.setattr` (E3-review follow-up). Was a bare module-level mutation that would have leaked into later tests; now restored at teardown (`16aad7e`) — 2026-05-29
+- [x] `0013_audit_log_id_uuid_type` migration (parallel sub-agent E2). Postgres-only conditional `ALTER TABLE audit_log ALTER COLUMN id TYPE uuid USING id::uuid`, SQLite no-op via dialect gate. Proof-of-pattern for the broader `VARCHAR(36)→UUID` cleanup; chose `audit_log.id` as safest first target (no incoming FKs to cascade-break). `test_migration_0013.py` covers SQLite no-op + Postgres-only skip-marker (`0e5d302`) — 2026-05-29
+- [x] Ruff version skew + I001 baseline cleared (parallel sub-agent E1). Real root cause was NOT a hook-id circular conflict — it was a version pin skew (`.pre-commit-config.yaml` and `requirements-dev.txt` both pinned ruff 0.11.12, dev CLI was 0.15.10). Bumped both to 0.15.15, renamed deprecated `id: ruff` → `id: ruff-check`. `ruff check .` → All checks passed!. Also fixed 5 SVG trailing-newline issues surfaced by `pre-commit run --all-files` (`e089942`) — 2026-05-29
+- [x] Code-review pass on `3d57bc1` (D1) + `44ff83b` (D2) by parallel sub-agent E3. No Critical, one High (F1, applied), two Medium (F2 deferred, M2 informational), four Lows (all confirmations that D2 is correct). Approval: both safe to keep as landed. Risk: Low (report inline in chat) — 2026-05-29
 - [x] M4: `AuthService.refresh` happy path now emits `event="user.token_refreshed"` audit row (parallel sub-agent D2). Metadata: `{"old_session_id": ..., "new_session_id": ...}`. Route was already wired with `background_tasks` + `db_factory` from B1; only the svc-side emit was missing (`44ff83b`) — 2026-05-29
 - [x] T1 + T2 + T3 end-to-end tests for the BackgroundTasks audit path (parallel sub-agent D1): T1 drives `log_in_background` directly + asserts fresh-session landing; T2 hits admin lock route + asserts row via `GET /admin/audit`; T3 monkeypatches `Session.commit` to raise + asserts the worker swallows + `logger.exception` is called. T3 verified by removing the `except` clause and watching it fail (`3d57bc1`) — 2026-05-29
 - [x] Code-review hardening on `6c18482` (parallel sub-agent C3 + M2 follow-up): `AuthService._audit` now asserts `(background is None) == (db_factory is None)` so partial wiring fails loud instead of silently degrading to the sync path (`222c708`) — 2026-05-29

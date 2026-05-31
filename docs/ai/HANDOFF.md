@@ -8,16 +8,197 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-29 (overnight)
+- **Date:** 2026-05-31 (morning)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent picking from `TASKS.md` "Next" — only the
-  LOW-severity follow-ups remain (`VARCHAR(36)→UUID` type alignment, drop
-  redundant single-column indexes after EXPLAIN, the pre-commit-vs-ruff
-  I001 hook conflict).
+- **Handoff to:** next agent picking from `TASKS.md` "Next" — the
+  remaining items are the 12-of-13 unconverted `VARCHAR(36)→UUID`
+  columns (extending E2's 0013 pattern to the full set), the redundant
+  single-column `ix_*_user_id` indexes (needs Neon EXPLAIN), and small
+  follow-ups (F2 marker, frontend EOF baseline).
 
 ---
 
 ## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-05-29 (early morning, fifth wave)
+**Role(s):** Coordinator + Implementer + Scribe (three parallel sub-agents E1/E2/E3 + F1 inline)
+
+### What was done
+
+- Fifth parallel-agent wave dispatched in worktree isolation against
+  the open follow-ups left after the D-wave:
+  - **E1**: clear the 4-error `ruff I001` baseline. Discovery was
+    the actual story: it wasn't a hook-id circular conflict at all,
+    it was a **ruff version pin skew**. `.pre-commit-config.yaml` and
+    `backend/requirements-dev.txt` both pinned `ruff 0.11.12`; the
+    dev CLI ran 0.15.10. The newer ruff's isort splits
+    `from alembic.config import Config` into the third-party block,
+    something 0.11.12 didn't flag. Bumped both pins to `0.15.15`,
+    renamed deprecated `id: ruff` → `id: ruff-check`, ran
+    `ruff check --fix` on the 4 affected test files. `ruff check .`
+    now reports "All checks passed!". `pre-commit run --all-files`
+    also auto-fixed missing trailing newlines on 5
+    `frontend/public/*.svg` files (pre-existing baseline, included
+    in the same commit). Landed as **`e089942`**.
+  - **E2**: land `0013_audit_log_id_uuid_type` migration — the first
+    `VARCHAR(36) → UUID` type alignment from A3's audit. Mirrors
+    `0008`/`0009`: dialect-gated Postgres-only `ALTER TABLE audit_log
+    ALTER COLUMN id TYPE uuid USING id::uuid`. SQLite is a no-op
+    (GUID TypeDecorator already stores as CHAR(36)). Chose
+    `audit_log.id` as the safest first target because no other table
+    has an FK pointing at it. `test_migration_0013.py` covers
+    SQLite no-op + Postgres-only skip-marker. Convention note: agent
+    used the short `revision = "0013"` form matching `0001..0012`,
+    not the long form the brief suggested. Landed as **`0e5d302`**.
+  - **E3**: read-only code review of `3d57bc1` (D1) + `44ff83b`
+    (D2). Verdict: no Critical, one High (F1 — T3 logger leak),
+    two Medium (F2 — `@pytest.mark.asyncio` marker drift,
+    M2 — informational), four Lows (all confirmations that D2 is
+    correct: emit ordering, `db.refresh(new_sess)` placement,
+    UUID str-casting, post-commit timing). Approval: both safe to
+    keep as landed. Risk: Low (was Medium after C3; D1/D2 closed
+    enough gaps that the audit BG-tasks chain is now well-tested).
+  - **F1 (inline applied from E3 review)**: T3's bare
+    `audit_logger.disabled = False` + `propagate = True`
+    module-level mutation would leak into later tests in the
+    session, silently re-enabling a logger alembic intentionally
+    disabled. Swapped for `monkeypatch.setattr` so pytest restores
+    the originals at teardown. Test already accepts `monkeypatch`,
+    so zero new fixture wiring. Landed as **`16aad7e`**.
+- Pre-push gotcha surfaced: the hook stashes unstaged changes
+  before running pytest, then re-applies them. The framework
+  interprets the unstash as "the hook modified files" and aborts
+  the push. Workaround: commit unstaged changes before invoking
+  `git push`. Recorded for future agents.
+- One transient pytest error during pre-push run on
+  `test_phonological_validation.py::test_valid_pairs_still_accepted`
+  (SQLAlchemy FK e3q8) did NOT reproduce in two subsequent
+  full-suite runs locally — classified as flaky test-collection
+  ordering, not a regression from this batch. Confirmed: the test
+  passes both in isolation (`pytest tests/test_phonological_validation.py
+  -v` → 3/3) and in the full suite (`pytest -q` → 430 passed, 1
+  skipped).
+- Verified before push: **430 passed, 1 skipped** (was 427
+  baseline; +3 from E2's new `test_migration_0013` cases, 1 skipped
+  for the Postgres-only marker). `ruff check .` → **All checks
+  passed!** (baseline 0 ruff errors). `mypy` clean on touched
+  files (3 pre-existing errors in `alembic/versions/0010`/`0011`
+  remain). `DATABASE_URL=sqlite:///./ci_check.db alembic upgrade
+  head && alembic check` → "No new upgrade operations detected"
+  (now traverses 0010→0011→0012→0013).
+
+### Files changed
+
+#### `e089942` — ruff 0.15.15 bump + I001 cleared
+
+- `.pre-commit-config.yaml` — `rev: v0.11.12` → `v0.15.15`,
+  `id: ruff` → `id: ruff-check`.
+- `backend/requirements-dev.txt` — `ruff==0.11.12` → `ruff==0.15.15`.
+- `backend/tests/test_alembic_migrations.py`,
+  `backend/tests/test_migration_0005.py`,
+  `backend/tests/test_migration_0006.py`,
+  `backend/tests/test_migration_0012.py` — `ruff check --fix`
+  reordered imports.
+- `frontend/public/file.svg`, `globe.svg`, `next.svg`,
+  `vercel.svg`, `window.svg` — trailing newlines added by
+  `pre-commit run --all-files` end-of-file-fixer.
+
+#### `0e5d302` — 0013_audit_log_id_uuid_type
+
+- `backend/alembic/versions/0013_audit_log_id_uuid_type.py` (new)
+  — Postgres-only conditional `ALTER COLUMN id TYPE uuid USING
+  id::uuid`; downgrade is the reverse.
+- `backend/tests/test_migration_0013.py` (new) — SQLite no-op
+  pass + 1 Postgres-only test marked `@pytest.mark.skipif`.
+- `docs/ai/AUDIT_2026-05-29_schema.md` — annotation under the
+  "Type encoding drift" section noting `audit_log.id` is now
+  converted as `0013`.
+
+#### `16aad7e` — F1 logger-isolation fix in T3
+
+- `backend/tests/test_audit_service.py` — swap module-level
+  `audit_logger.disabled = False` / `propagate = True` for
+  `monkeypatch.setattr` so pytest auto-restores at teardown.
+  Docstring updated to explain the intent.
+
+### What is NOT done yet
+
+- **12 of the 13 `VARCHAR(36) → UUID` columns are still
+  unconverted.** Each requires either independent ALTER (if the
+  column has no incoming FKs, like `audit_log.id` was) or
+  coordinated drop-FKs / ALTER / recreate-FKs. The largest cluster
+  is `users.id` (referenced by ~7 tables); convert those last.
+- **`alembic/env.py` `compare_type=False` still globally
+  suppresses type drift.** Flipping it to `True` and addressing
+  each `_MIGRATION_ONLY_TYPES` filter entry is a separate cleanup
+  that follows after all 13 conversions land.
+- **F2 — explicit `@pytest.mark.asyncio` on T1.** Low priority;
+  config-drift insurance.
+- **Drop redundant single-column `ix_*_user_id` indexes** after
+  Postgres EXPLAIN. Needs live-Neon EXPLAIN; out of scope for
+  agents without Neon access.
+
+### Risks / Attention
+
+- **Pre-push hook false-fails on unstaged changes** (see "Pre-push
+  gotcha" above). If a future round commits + pushes immediately
+  without committing docs first, the hook will abort. Workflow
+  rule for future agents: commit docs BEFORE pushing.
+- **`0013_audit_log_id_uuid_type` is Postgres-only on Neon.** On
+  upgrade, the column is rewritten — Postgres locks the table
+  during ALTER COLUMN TYPE. `audit_log` may be large in
+  production. Run during low-traffic window.
+- **E2 chose the short revision form** (`"0013"` not the long
+  form). Subsequent migrations should follow the same convention
+  to keep the chain consistent.
+- **Worktree-vs-pre-commit verification gap (carried from D3)**.
+  E1 hit and worked around it by running `pre-commit run
+  --all-files` in the worktree. Future agents touching hooks /
+  config should explicitly include this step.
+- Owner WIP files (`anamnesis_engine`, `phonological_analyzer`,
+  `anamnesis_catalog`, `test_phonological_analyzer`) — untouched
+  by all of E1/E2/E3/F1.
+
+### Next concrete action
+
+Pick from `TASKS.md` "Next" / "Open follow-ups". Highest-value
+items:
+  (i) Extend the `VARCHAR(36) → UUID` alignment to the next batch
+      of safe columns. Candidates with no incoming FKs:
+      `email_tokens.id`, `user_sessions.id`, `consent_records.id`.
+      Each can be its own migration mirroring `0013` exactly. The
+      `users.id` cluster requires coordinated FK drops/recreates
+      and should be the last to land.
+  (ii) F2: add `@pytest.mark.asyncio` decorator to T1 in
+      `test_audit_service.py` for explicit-marker insurance
+      against `asyncio_mode = "auto"` config drift. One-line
+      change.
+
+Everything else open is LOW-severity.
+
+### Ideal next prompt
+
+```text
+Read docs/ai/HANDOFF.md (latest "Session Summary"), then
+docs/ai/AUDIT_2026-05-29_schema.md.
+
+Current situation: main is at 16aad7e (after the upcoming docs commit
+pushes), 0 ahead of origin/main. E2 landed 0013 as the proof-of-pattern
+for the VARCHAR(36) → UUID alignment; 12 columns remain.
+
+Your task: pick the next safe-to-convert column (no incoming FKs from
+other tables — candidates are email_tokens.id, user_sessions.id,
+consent_records.id) and write 0014_*_id_uuid_type.py mirroring 0013
+exactly. Add a corresponding test_migration_0014.py. Verify with
+`DATABASE_URL=sqlite:///./ci_check.db alembic upgrade head && alembic
+check` plus full pytest. After that, update docs/ai state files BEFORE
+pushing (the pre-push hook false-fails on unstaged changes).
+```
+
+---
+
+## Previous session — 2026-05-29 (overnight) — D1/D2/D3 batch
 
 **Agent:** Claude Code
 **Date:** 2026-05-29 (overnight)
