@@ -8,13 +8,18 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-31 (morning)
+- **Date:** 2026-05-31 (afternoon — G-wave + push)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent picking from `TASKS.md` "Next" — the
-  remaining items are the 12-of-13 unconverted `VARCHAR(36)→UUID`
-  columns (extending E2's 0013 pattern to the full set), the redundant
-  single-column `ix_*_user_id` indexes (needs Neon EXPLAIN), and small
-  follow-ups (F2 marker, frontend EOF baseline).
+- **Handoff to:** next agent. G-wave extended the 0013 pattern to
+  `email_tokens.id` (0014), `user_sessions.id` (0015), `consent_records.id`
+  (0016) — all 3 are leaf PKs with no incoming FKs and were safe to
+  convert in isolation. **9 columns remain**, all clustered around
+  `users.id` (the PK + ~7 FKs pointing to it from
+  `*.user_id`/`consent_records.recorded_by`); these need a coordinated
+  drop-FKs / ALTER-types / recreate-FKs migration. Plus
+  `patients.id` (PK) + `consent_records.patient_id` (FK) — a small
+  2-column coordinated cluster. Plus F2 marker drift, redundant
+  index drop (needs Neon EXPLAIN).
 
 ---
 

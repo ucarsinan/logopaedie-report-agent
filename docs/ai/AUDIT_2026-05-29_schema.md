@@ -215,6 +215,9 @@ VARCHAR(36) on Neon despite the model declaring UUID:
 > `audit_log.id` converted as 0013 (2026-05-29). Picked first because no other
 > table has an incoming FK on `audit_log.id`, so the type swap doesn't cascade.
 > The remaining 12 columns still need their own coordinated migrations.
+> `email_tokens.id` converted as 0014 (2026-05-31) — same rationale: no incoming FK. 11 columns remain.
+> `user_sessions.id` converted as 0015 (2026-05-31) — leaf PK, no incoming FKs (confirmed by grep against models + alembic versions). 10 remain.
+> `consent_records.id` converted as 0016 (2026-05-31) — same rationale: no incoming FKs. 9 remain.
 
 This is low severity (SQLAlchemy's UUID/text implicit casts make INSERTs work)
 but it is a real divergence and it's why the GUID TypeDecorator exists.
