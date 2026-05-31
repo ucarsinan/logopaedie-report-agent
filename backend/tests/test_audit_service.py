@@ -89,6 +89,7 @@ def test_audit_log_failure_raises_fail_closed(db):
 # ── T1: log_in_background end-to-end on direct call ──────────────────────────
 
 
+@pytest.mark.asyncio
 async def test_log_in_background_persists_via_fresh_session(engine):
     """Schedule an audit emit via BackgroundTasks, drive the queued task, and
     confirm the row landed using a *third* session.

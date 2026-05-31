@@ -28,6 +28,7 @@ def deps(monkeypatch):
         yield svc, db, email
 
 
+@pytest.mark.asyncio
 async def test_register_creates_user_and_sends_verify_email(deps):
     svc, db, email = deps
     await svc.register(db, email_addr="alice@example.com", password="longpassword12", ip="1.1.1.1", ua="pytest")
@@ -39,6 +40,7 @@ async def test_register_creates_user_and_sends_verify_email(deps):
     assert email.sent[0][0] == "verify"
 
 
+@pytest.mark.asyncio
 async def test_register_duplicate_email_no_email_sent(deps):
     svc, db, email = deps
     await svc.register(db, email_addr="dup@example.com", password="longpassword12", ip=None, ua=None)
@@ -48,6 +50,7 @@ async def test_register_duplicate_email_no_email_sent(deps):
     assert len(db.exec(select(User)).all()) == 1
 
 
+@pytest.mark.asyncio
 async def test_verify_email_valid_token_marks_verified(deps):
     svc, db, email = deps
     await svc.register(db, email_addr="v@example.com", password="longpassword12", ip=None, ua=None)
@@ -58,6 +61,7 @@ async def test_verify_email_valid_token_marks_verified(deps):
     assert user.email_verified_at is not None
 
 
+@pytest.mark.asyncio
 async def test_verify_email_reused_token_rejected(deps):
     svc, db, email = deps
     await svc.register(db, email_addr="r@example.com", password="longpassword12", ip=None, ua=None)
@@ -69,6 +73,7 @@ async def test_verify_email_reused_token_rejected(deps):
         svc.verify_email(db, token=plain_token, ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_verify_email_expired_token_rejected(deps):
     svc, db, email = deps
     await svc.register(db, email_addr="e@example.com", password="longpassword12", ip=None, ua=None)
@@ -93,6 +98,7 @@ async def _make_verified_user(svc: AuthService, db, email_svc, email: str, passw
     svc.verify_email(db, token=plain_token, ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_login_unverified_raises_email_not_verified(deps):
     svc, db, _email = deps
     await svc.register(db, email_addr="u@example.com", password="longpassword12", ip=None, ua=None)
@@ -102,6 +108,7 @@ async def test_login_unverified_raises_email_not_verified(deps):
         svc.login(db, email_addr="u@example.com", password="longpassword12", ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_login_wrong_password_generic(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "good@example.com")
@@ -119,6 +126,7 @@ def test_login_unknown_email_generic(deps):
         svc.login(db, email_addr="nobody@example.com", password="longpassword12", ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_login_success_returns_tokens(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "ok@example.com")
@@ -129,6 +137,7 @@ async def test_login_success_returns_tokens(deps):
     assert len(sessions) == 1
 
 
+@pytest.mark.asyncio
 async def test_login_lockout_after_10_fails(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "lock@example.com")
@@ -141,6 +150,7 @@ async def test_login_lockout_after_10_fails(deps):
         svc.login(db, email_addr="lock@example.com", password="longpassword12", ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_refresh_rotates_token(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "rot@example.com")
@@ -153,6 +163,7 @@ async def test_refresh_rotates_token(deps):
         svc.refresh(db, refresh_token=first["refresh_token"], ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_refresh_happy_path_emits_audit_row(deps):
     """M4: token rotation is security-relevant and must be auditable.
 
@@ -189,6 +200,7 @@ async def test_refresh_happy_path_emits_audit_row(deps):
     assert row.metadata_json.get("new_session_id") == str(new_session.id)
 
 
+@pytest.mark.asyncio
 async def test_refresh_reuse_revokes_all_sessions(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "reuse@example.com")
@@ -210,12 +222,14 @@ async def test_refresh_reuse_revokes_all_sessions(deps):
 # ── Task 3.4: password reset / change ────────────────────────────────────────
 
 
+@pytest.mark.asyncio
 async def test_password_reset_request_unknown_email_silent(deps):
     svc, db, email = deps
     await svc.request_password_reset(db, email_addr="ghost@example.com", ip=None, ua=None)
     assert email.sent == []
 
 
+@pytest.mark.asyncio
 async def test_password_reset_confirm_revokes_all_sessions(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "reset@example.com")
@@ -230,6 +244,7 @@ async def test_password_reset_confirm_revokes_all_sessions(deps):
     svc.login(db, email_addr="reset@example.com", password="newlongpassword34", ip=None, ua=None)
 
 
+@pytest.mark.asyncio
 async def test_password_change_revokes_other_sessions_only(deps):
     svc, db, email = deps
     await _make_verified_user(svc, db, email, "ch@example.com")

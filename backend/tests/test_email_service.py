@@ -1,5 +1,7 @@
 import inspect
 
+import pytest
+
 from services.email_service import EmailService, FakeEmailService
 
 
@@ -22,6 +24,7 @@ def test_fake_email_service_send_methods_are_async():
     assert inspect.iscoroutinefunction(FakeEmailService.send_password_reset)
 
 
+@pytest.mark.asyncio
 async def test_email_service_console_fallback_when_no_api_key(capsys, monkeypatch):
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
     monkeypatch.setenv("APP_URL", "http://localhost:3000")
@@ -34,6 +37,7 @@ async def test_email_service_console_fallback_when_no_api_key(capsys, monkeypatc
     assert "tok123" in out
 
 
+@pytest.mark.asyncio
 async def test_email_service_reset_template_contains_reset_link(capsys, monkeypatch):
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
     monkeypatch.setenv("APP_URL", "http://localhost:3000")
@@ -44,6 +48,7 @@ async def test_email_service_reset_template_contains_reset_link(capsys, monkeypa
     assert "reset-password?token=resettok" in out
 
 
+@pytest.mark.asyncio
 async def test_fake_email_service_records_calls():
     fake = FakeEmailService()
     await fake.send_verify_email("x@example.com", "t1")
