@@ -32,6 +32,53 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
+### From 2026-06-01 I3 security/perf sweep (deferred items)
+
+- [ ] **S-6** — `X-Forwarded-For` trust in preview deploys: `client_ip_key`
+      in `backend/middleware/rate_limiter.py:55-69` only enforces the
+      `TRUSTED_PROXY` gate when `_is_production()` returns true. In
+      Vercel `preview` and any non-Vercel staging, an attacker can
+      rotate per-IP buckets via crafted XFF. Needs deploy-env audit.
+- [ ] **S-7** (informational) — `change_password` does not invalidate
+      in-flight access tokens (only revokes other refresh sessions).
+      Combined with the optimistic `get_optional_user` (no DB check),
+      a stolen access token survives a password change up to its
+      expiry. Would need a `jti`/`session_hash` block list keyed in
+      Redis with TTL == access_token TTL.
+- [ ] **S-8** (informational) — `get_optional_user` does not check
+      `locked_until` / `email_verified` / `revoked_at`. Documented
+      trade-off from `c0980ab`. Only safe while every consumer reads
+      `user.id` and nothing else; add a runtime guard if more
+      handlers adopt `AuthIdentity`.
+- [ ] **P-1** — `GET /auth/sessions` has no `limit`/`offset`. Add
+      `limit=Query(50, le=200)` + offset.
+- [ ] **P-3** — `change_password` and `enable_2fa` revoke sessions
+      via a Python `for ... db.add()` loop instead of a single
+      `sa_update(UserSession).where(...).values(...)`. Mirror what
+      `refresh()` does.
+- [ ] **P-5** — `routers/reports.py` runs a `COUNT(*)` on a filtered
+      subquery per list page. Return estimated count, or only
+      compute exact count on page 1, or move to cursor pagination.
+- [ ] **Rate-limit 429 headers** — `RateLimitExceeded` handler in
+      `backend/main.py:162-167` returns a bare JSON body with no
+      `Retry-After` / `X-RateLimit-*`. One-line follow-up for
+      client back-off.
+
+### From 2026-06-01 I2 test-coverage audit (deferred items)
+
+- [ ] **`auth_service.start_2fa_setup` + `disable_2fa`** — J1 added
+      audit-emit + rate-limit assertions but I2's full happy-path
+      service unit suite is still missing. Add: provisioning URI
+      shape, encrypted-secret round-trip, recovery-code generation;
+      `disable_2fa` requires valid TOTP/recovery + audit emit;
+      `login_2fa` challenge expiry + replay rejection (sync unit
+      tests, not just route tests).
+- [ ] **`patient_service` + `totp_service` error-path gap** — both
+      have `raises=0` in their test files. Add: duplicate
+      `system_id` collision; update on non-owned record; invalid
+      date strings in `derive_age_group`; tampered ciphertext in
+      `decrypt`; TOTP drift-window boundaries.
+
 ### Open follow-ups
 
 - [ ] **Frontend `end-of-file-fixer` baseline** — visible after E1's
@@ -48,6 +95,12 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **J-wave** (post-H-wave audit follow-ups) — three parallel sub-agents:
+      J1 security bundle (S-1 email PII → SHA-256 email_hash; S-3 `/auth/2fa/setup` rate-limit `3/hour` + audit emit `user.2fa_setup_started`; S-4 `_audit` assert→RuntimeError; S-5 `hmac.compare_digest` for service-token bearer) — `869c77f`;
+      J2 rate-limits `30/min` on `/auth/logout` + `GET/DELETE /auth/sessions` — `de96f6c`;
+      J3 +9 tests for `session_store.save/get_or_raise/get_authorized`, +6 tests for `audit_service.query`, plus latent `_apply_0018` transaction fix from I1 Medium [3] — `102e592`. **474 passed, 9 skipped** (was 448+9). — 2026-06-01
+- [x] **I-wave audits** (read-only): I1 H-wave code-review (caught Critical 0017 FK gap, see next item), I2 backend test-coverage audit (`session_store` + `audit_service.query` zero direct refs, etc.), I3 security/perf sweep (S-1 email PII, S-3 unaudited 2FA setup, etc.). Reports inline in chat; key findings captured in CURRENT.md "Key things the next agent should know". — 2026-06-01
+- [x] **Critical fix: 0017 missing soaprecord+therapyplanrecord FK drops.** Migration would have failed on first Postgres deploy with "cannot alter type of a column used in a foreign key constraint". Added both to `_FK_SPECS`; `_column_is_varchar` guard correctly skips the redundant ALTER for their already-UUID columns. SQLite was no-op so CI never caught it. Caught by I1 review. (`bf04e8b`) — 2026-06-01
 - [x] **Type-encoding cleanup (`VARCHAR(36)` → `UUID`) — 13/13 columns CLOSED.** 0008/0009 handled `reports.patient_id` + `soaprecord.user_id` early; 0013/0014/0015/0016 (E2 + G1/G2/G3) handled the 4 leaf PKs; 0017/0018 (H1/H2) closed the 9-column users.id + patients.id clusters via coordinated drop-FKs / ALTER-types / recreate-FKs pattern. `alembic check` clean end-to-end on the resulting 0001→0018 chain. (`a557a4f` + `b24d6ee` + earlier waves) — 2026-05-31
 - [x] **F2** — explicit `@pytest.mark.asyncio` markers on 19 bare `async def test_*` across 3 backend test files (parallel sub-agent F2). Pure hygiene against potential future `asyncio_mode = "strict"` migrations; pytest counts unchanged. `import pytest` added to `test_email_service.py` (only touched file that was missing it) (`b5bca62`) — 2026-05-31
 - [x] `0017_users_id_uuid_cluster` + `0018_patients_id_uuid_cluster` VARCHAR(36)→UUID alignment for the 9 columns clustered around `users.id` (7 cols: PK + 6 FKs) and `patients.id` (2 cols: PK + `consent_records.patient_id`) — parallel sub-agents H1/H2. Coordinated drop/ALTER/recreate-FKs pattern. Drift finding worth flagging: 0002 created 3 FKs inline without explicit names; 0017 renames them to canonical `fk_<table>_<col>_users` during recreate. Followup mypy cleanup (`0833506`) replaced `op.Operations.context()` with explicit `from alembic.operations import Operations` (`a557a4f` / `b24d6ee` / `0833506`) — 2026-05-31

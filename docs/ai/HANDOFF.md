@@ -8,19 +8,209 @@
 
 ## Last Updated
 
-- **Date:** 2026-05-31 (evening — H-wave)
+- **Date:** 2026-06-01 (morning — J-wave + H-wave Critical follow-up)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent. H-wave **closes the VARCHAR(36)→UUID
-  drift class end-to-end**. The 9 remaining columns from A3's audit
-  landed across two coordinated cluster migrations:
-  `0017_users_id_uuid_cluster` (PK + 6 declared FKs) and
-  `0018_patients_id_uuid_cluster` (PK + `consent_records.patient_id`,
-  plus a drop/recreate of `fk_reports_patient_id_patients` to let
-  Postgres swap the PK type underneath). F2 added explicit
-  `@pytest.mark.asyncio` markers across 19 bare async tests.
-  Outstanding from TASKS.md "Next": redundant `ix_*_user_id` index
-  drop (needs Neon EXPLAIN, not agent-safe), Vercel preview deploy
-  (out of scope), M-6 anamnesis completion (owner-WIP).
+- **Handoff to:** next agent. Post-H-wave audit cycle: three
+  read-only review/audit agents (I1 code review, I2 test-coverage,
+  I3 security/perf) caught a **Critical bug in 0017** — missing
+  `soaprecord.user_id` and `therapyplanrecord.user_id` FK drops
+  meant the migration would have failed on first Postgres deploy.
+  Fixed as `bf04e8b`. Then three parallel implementation agents
+  (J1/J2/J3) bundled the high/medium audit findings into landed
+  fixes: J1 security hardening (S-1/S-3/S-4/S-5), J2 three new
+  rate limits (S-2), J3 closed `session_store` + `audit_service.query`
+  test gaps plus the latent `_apply_0018` transaction bug (I1
+  Medium [3]). Outstanding: redundant `ix_*_user_id` index drop
+  (needs Neon EXPLAIN), I3 deferred items (S-6/S-7/S-8, P-1/P-3/P-5),
+  more direct service-unit tests for `auth_service` 2FA methods,
+  M-6 anamnesis completion (owner-WIP).
+
+---
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-06-01 (morning — I/J-wave + H-wave Critical follow-up)
+**Role(s):** Coordinator + Reviewer + Implementer + Scribe (three read-only
+audit agents I1/I2/I3 + one critical-fix inline + three parallel
+implementation agents J1/J2/J3)
+
+### What was done
+
+#### Phase 1 — Read-only audits (I-wave, three parallel agents)
+
+- **I1** (code-review agent): independent review of the H-wave
+  (commits `b5bca62` + `a557a4f` + `b24d6ee` + `0833506`). Verdict:
+  **one Critical issue** — `0017_users_id_uuid_cluster` was missing
+  `soaprecord.user_id` and `therapyplanrecord.user_id` from its
+  `_FK_SPECS`. Both FKs reference `users.id` (CASCADE), formalized
+  by 0012. Their `user_id` columns are already UUID (per 0009/0010),
+  but Postgres still refuses to `ALTER TYPE` on a referenced PK while
+  any dependent FK exists — same rule that drove H2's design call on
+  `fk_reports_patient_id_patients`. SQLite is no-op so CI passed; first
+  Postgres deploy would have raised "cannot alter type of a column
+  used in a foreign key constraint". Also found two Medium (0017
+  downgrade naming acceptable per grep; `_apply_0018` test harness
+  using `eng.connect()` without a transaction) and two Lows (hardcoded
+  `skipif(True)` class-wide pattern; F2 markers verified clean).
+- **I2** (test-coverage audit): scanned `backend/services/` for
+  modules with thin or missing unit coverage. Critical gaps:
+  `session_store.save/get_or_raise/get_authorized` — ZERO direct
+  references in any test file; `audit_service.query` — same; and
+  `auth_service.start_2fa_setup` + `disable_2fa` — ZERO references
+  even in route tests. P1 picks: `token_service`, `totp_service`
+  (no `raises` tests), `patient_service`, `demo_quota` (no Redis-fail
+  test). Report only — no code written.
+- **I3** (security + performance sweep): audited backend diffs since
+  `5af7c4a`. **High S-1**: email PII in `audit_log.metadata_json`
+  across 3 register/reset/resend emit sites — GDPR-relevant since
+  `/admin/audit` exposes the table unredacted. Medium: S-2 (3 unrated
+  auth routes), S-3 (`/auth/2fa/setup` no rate limit + no audit
+  emit — silent secret rotation possible under stolen access token),
+  S-4 (`AuthService._audit` invariant `assert` strippable under
+  `python -O`), S-6 (XFF trust in preview deploys outside the
+  `_is_production()` gate). Low: S-5 (service-token bearer compare
+  not constant-time), S-7 (access tokens not invalidated on
+  password change), S-8 (`get_optional_user` doesn't check
+  `locked_until`/`email_verified`/`revoked_at` — documented trade-off
+  from `c0980ab`). Perf: P-1/P-3/P-5 list-route pagination & bulk
+  update opportunities.
+
+#### Phase 2 — Critical hotfix (inline)
+
+- **0017 FK-graph fix** (`bf04e8b`): added `soaprecord` and
+  `therapyplanrecord` entries to `_FK_SPECS` in
+  `backend/alembic/versions/0017_users_id_uuid_cluster.py`. The
+  `_column_is_varchar` guard in step 2 correctly skips the redundant
+  ALTER TYPE for the already-UUID FK columns; step 1 (drop) and
+  step 3 (recreate) now cover the full FK graph so the `users.id` PK
+  swap goes through on Postgres. Pushed to `origin/main`
+  immediately.
+
+#### Phase 3 — Implementation wave (J-wave, three parallel agents)
+
+- **J1** (security bundle, `869c77f`):
+  - S-1: replaced raw email in audit metadata with `email_hash`
+    (SHA-256 of lowercased email, first 32 hex chars) across the 3
+    emit sites in `auth_service.py`. New helper `_hash_email()`.
+  - S-3: `POST /auth/2fa/setup` now has `@limiter.limit("3/hour")`
+    and emits `event="user.2fa_setup_started"` audit row.
+    `start_2fa_setup` signature gained keyword-only
+    `ip/ua/background/db_factory` args (all defaulting to `None`
+    so existing callers keep working).
+  - S-4: `_audit` invariant `assert` replaced with explicit `if /
+    raise RuntimeError(...)`.
+  - S-5: `middleware/service_token.py` switched bearer compare to
+    `hmac.compare_digest`.
+  - 8 new tests across `test_auth_service.py`, `test_2fa_routes.py`,
+    `test_service_token_middleware.py`.
+- **J2** (rate limits, `de96f6c`):
+  - Added `@limiter.limit("30/minute")` to `/auth/logout`,
+    `GET /auth/sessions`, `DELETE /auth/sessions/{session_id}`.
+    Reordered `Request` to first position on two handlers to match
+    file convention.
+  - 3 new tests in `test_auth_routes.py` reusing the existing
+    `unique_ip_headers` fixture + autouse `_reset_rate_limiter`.
+  - Awareness note: custom `RateLimitExceeded` handler in `main.py`
+    returns a JSON body with German `"Zu viele Anfragen"` and **no
+    `Retry-After` / `X-RateLimit-*` headers** — one-line follow-up
+    if clients should back off intelligently.
+- **J3** (test gaps + 0018 harness fix, `102e592`):
+  - 9 new tests for `session_store` covering `save`, `get_or_raise`,
+    `get_authorized` (owner / non-owner / anonymous demo session
+    branches). Confirmed Fernet ciphertext at Redis layer.
+  - 6 new tests for `audit_service.query` (filter by user / event /
+    combined; pagination; ordering; limit clamping). Confirmed
+    `audit_service.query` has **no time-range filter** — if needed
+    that's a separate service extension.
+  - 0018 test `_apply_0018` switched from `eng.connect()` to
+    `eng.begin()` so DDL would actually persist on a hypothetical
+    Postgres test path.
+  - Doc inline correction: `get_authorized` takes `user_id: str |
+    None`, not a `user` object (contradicts I2's phrasing).
+
+### Files changed
+
+#### `bf04e8b` — Critical 0017 fix
+
+- `backend/alembic/versions/0017_users_id_uuid_cluster.py` — added
+  `soaprecord` and `therapyplanrecord` to `_FK_SPECS` with explanatory
+  comment about the `_column_is_varchar` guard handling
+  already-UUID columns.
+
+#### `102e592` — J3 test coverage + 0018 fix
+
+- `backend/tests/test_session_store.py` — +9 tests.
+- `backend/tests/test_audit_service.py` — +6 tests.
+- `backend/tests/test_migration_0018.py` — `_apply_0018` transaction
+  fix.
+
+#### `869c77f` — J1 security bundle
+
+- `backend/services/auth_service.py` — `_hash_email` helper, 3 audit
+  emits switched from `email` to `email_hash`, `assert → raise` in
+  `_audit`, `start_2fa_setup` signature extended + audit emit.
+- `backend/routers/auth.py` — 2FA setup route: limiter +
+  background_tasks + db_factory wiring (this route only).
+- `backend/middleware/service_token.py` — `hmac.compare_digest`.
+- `backend/tests/test_auth_service.py` — +5 tests.
+- `backend/tests/test_2fa_routes.py` — +2 tests.
+- `backend/tests/test_service_token_middleware.py` — +1 test.
+
+#### `de96f6c` — J2 rate limits
+
+- `backend/routers/auth.py` — `@limiter.limit("30/minute")` +
+  `Request` position fix on `logout` and `delete_session`.
+- `backend/tests/test_auth_routes.py` — +3 tests.
+
+### What is NOT done yet
+
+- **Drop redundant single-column `ix_*_user_id` indexes** — needs
+  live Neon EXPLAIN. Not agent-safe.
+- **I3 deferred:** S-6 (preview-env XFF trust audit), S-7 (access
+  token revocation on password change), S-8 (`get_optional_user`
+  lock/verify checks — informational), P-1 (sessions pagination),
+  P-3 (bulk-update consolidation in change_password / enable_2fa),
+  P-5 (reports list COUNT optimization).
+- **I2 deferred:** more direct service unit tests for `auth_service`
+  2FA methods (J1 added audit-emit + rate-limit assertions but
+  not the full happy-path unit suite); `patient_service` +
+  `totp_service` `raises=0` error-path gap.
+- **Rate-limit 429 headers** — bare JSON, no `Retry-After`.
+- **Vercel preview deploy** — pre-existing failure, out of scope.
+- **M-6** — anamnesis completion logic. Blocked on owner-WIP.
+
+### Risks / Attention
+
+- The `_audit` change from `AssertionError` → `RuntimeError` is the
+  only "wider blast radius" change in J1: any test or external tool
+  that catches the specific `AssertionError` for the partial-wiring
+  invariant will need updating. Grep confirmed no test does — but
+  worth a final check if a future agent reports a confusing pytest
+  failure here.
+- The email PII change broke `metadata_json["email"]` for the 3
+  affected event types. External alerting / dashboards keyed on
+  raw email will silently fail to match. Switch them to
+  `metadata_json["email_hash"]` (SHA-256 lowercase, first 32 hex).
+- 0017 + 0018 still have only SQLite no-op coverage on the
+  Postgres-specific paths. The Critical bug in 0017 (caught by I1)
+  proves this pattern can hide real defects. **A Postgres
+  testcontainer in CI is the structural fix and should be on the
+  roadmap.**
+
+### Next concrete action
+
+Push the J-wave + this docs commit. Then either pick up an I3 deferred
+item (S-6 preview-XFF audit is the highest-value next security item),
+or wait for the owner-WIP block to clear so M-6 becomes actionable.
+
+### Ideal next prompt
+
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. The post-H-wave audit
+> cycle is closed. Decide between (a) picking up I3 deferred items
+> (S-6/S-7 or P-1/P-3/P-5), (b) adding more direct service-unit
+> tests for `auth_service.start_2fa_setup`/`disable_2fa` per I2,
+> or (c) waiting for the M-6 owner-WIP block to clear.
 
 ---
 
