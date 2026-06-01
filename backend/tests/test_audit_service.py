@@ -214,3 +214,164 @@ def test_log_in_background_swallows_db_failure_and_logs(engine, monkeypatch, cap
     # logger.exception attaches the originating exception via exc_info.
     assert failure_records[0].exc_info is not None
     assert failure_records[0].exc_info[0] is OperationalError
+
+
+# ── query() ──────────────────────────────────────────────────────────────────
+#
+# AuditService.query supports: ``event``, ``user_id``, ``limit``, ``offset``.
+# There is NO time-range filter on the current API surface (verified by reading
+# the implementation). If/when ``since``/``until`` are added, extend these
+# tests rather than introducing a parallel suite.
+
+
+def _insert_audit(
+    db: Session,
+    *,
+    user_id,
+    event: str,
+    ip: str | None = None,
+    user_agent: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """Tiny helper: commit one AuditLog row via the service.
+
+    Uses ``AuditService.log`` directly so we exercise the same insertion path
+    the production code uses (rather than constructing rows manually and
+    bypassing the service contract).
+    """
+    AuditService().log(
+        db,
+        user_id=user_id,
+        event=event,
+        ip=ip,
+        user_agent=user_agent,
+        metadata=metadata or {},
+    )
+
+
+def test_query_filter_by_user_id(db):
+    """``user_id`` narrows to rows owned by that user only."""
+    user_a = User(email="qa@example.com", password_hash="x")
+    user_b = User(email="qb@example.com", password_hash="x")
+    db.add(user_a)
+    db.add(user_b)
+    db.commit()
+    db.refresh(user_a)
+    db.refresh(user_b)
+
+    for i in range(3):
+        _insert_audit(db, user_id=user_a.id, event=f"a.event.{i}")
+    for i in range(2):
+        _insert_audit(db, user_id=user_b.id, event=f"b.event.{i}")
+
+    results = AuditService().query(db, user_id=user_a.id)
+    assert len(results) == 3
+    assert {row.user_id for row in results} == {user_a.id}
+
+
+def test_query_filter_by_event(db):
+    """``event`` narrows to that exact event name (the param is ``event``, not ``event_type``)."""
+    user = User(email="qe@example.com", password_hash="x")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    _insert_audit(db, user_id=user.id, event="login.success")
+    _insert_audit(db, user_id=user.id, event="login.success")
+    _insert_audit(db, user_id=user.id, event="login.fail")
+    _insert_audit(db, user_id=user.id, event="logout")
+
+    results = AuditService().query(db, event="login.success")
+    assert len(results) == 2
+    assert {row.event for row in results} == {"login.success"}
+
+
+def test_query_filter_combined_user_and_event(db):
+    """Combining ``user_id`` and ``event`` AND-s the filters."""
+    user_a = User(email="qc1@example.com", password_hash="x")
+    user_b = User(email="qc2@example.com", password_hash="x")
+    db.add(user_a)
+    db.add(user_b)
+    db.commit()
+    db.refresh(user_a)
+    db.refresh(user_b)
+
+    _insert_audit(db, user_id=user_a.id, event="login.success")
+    _insert_audit(db, user_id=user_a.id, event="login.fail")
+    _insert_audit(db, user_id=user_b.id, event="login.success")
+
+    results = AuditService().query(db, user_id=user_a.id, event="login.success")
+    assert len(results) == 1
+    assert results[0].user_id == user_a.id
+    assert results[0].event == "login.success"
+
+
+def test_query_pagination(db):
+    """``limit`` + ``offset`` walk the result set in newest-first chunks."""
+    user = User(email="qp@example.com", password_hash="x")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    for i in range(5):
+        _insert_audit(db, user_id=user.id, event=f"paginate.{i}")
+
+    svc = AuditService()
+    page_a = svc.query(db, user_id=user.id, limit=2, offset=0)
+    page_b = svc.query(db, user_id=user.id, limit=2, offset=2)
+    page_c = svc.query(db, user_id=user.id, limit=2, offset=4)
+
+    assert len(page_a) == 2
+    assert len(page_b) == 2
+    assert len(page_c) == 1
+
+    # Pages must be disjoint — every row id appears in at most one page.
+    ids_a = {row.id for row in page_a}
+    ids_b = {row.id for row in page_b}
+    ids_c = {row.id for row in page_c}
+    assert ids_a.isdisjoint(ids_b)
+    assert ids_b.isdisjoint(ids_c)
+    assert ids_a.isdisjoint(ids_c)
+    # Union covers all 5 rows we inserted.
+    assert ids_a | ids_b | ids_c == {row.id for row in db.exec(select(AuditLog)).all()}
+
+
+def test_query_orders_newest_first(db):
+    """``created_at DESC`` — the most recently inserted row leads the page."""
+    user = User(email="qo@example.com", password_hash="x")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    _insert_audit(db, user_id=user.id, event="ordering.first")
+    _insert_audit(db, user_id=user.id, event="ordering.second")
+    _insert_audit(db, user_id=user.id, event="ordering.third")
+
+    results = AuditService().query(db, user_id=user.id)
+    # newest first → last inserted is at index 0
+    assert results[0].event == "ordering.third"
+    assert results[-1].event == "ordering.first"
+    # Monotonically non-increasing timestamps.
+    timestamps = [r.created_at for r in results]
+    assert timestamps == sorted(timestamps, reverse=True)
+
+
+def test_query_limit_is_clamped_to_safe_range(db):
+    """``limit`` is clamped to [1, 200] regardless of caller input.
+
+    Pins the defensive clamp in the implementation — a caller passing
+    ``limit=0`` or ``limit=10_000`` should not be able to wedge or DoS the
+    audit endpoint.
+    """
+    user = User(email="qlc@example.com", password_hash="x")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    _insert_audit(db, user_id=user.id, event="clamp.row")
+
+    svc = AuditService()
+    # limit=0 -> clamped up to 1
+    assert len(svc.query(db, user_id=user.id, limit=0)) == 1
+    # limit=10_000 -> clamped down to 200 (we only have 1 row, so still 1, but it does not raise)
+    assert len(svc.query(db, user_id=user.id, limit=10_000)) == 1

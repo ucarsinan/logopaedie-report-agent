@@ -142,7 +142,12 @@ def _apply_0018(db_url: str, direction: str) -> None:
     """
     module = _load_migration_module()
     eng = create_engine(db_url)
-    with eng.connect() as conn:
+    # ``eng.begin()`` opens a transaction and autocommits on exit. The previous
+    # ``eng.connect()`` form ran the migration body outside any transaction —
+    # latent bug if the Postgres-skipped path is ever activated against a real
+    # engine (the ALTER TYPE / FK recreate would be dropped on connection
+    # close). Match the round-trip tests above which already use ``eng.begin()``.
+    with eng.begin() as conn:
         ctx = MigrationContext.configure(conn)
         with Operations.context(ctx):
             if direction == "upgrade":
