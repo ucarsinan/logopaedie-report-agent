@@ -221,9 +221,10 @@ def refresh(
 
 
 @router.post("/logout")
+@limiter.limit("30/minute")
 def logout(
-    body: LogoutIn,
     request: Request,
+    body: LogoutIn,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     db_factory: DBSessionFactory = Depends(get_db_factory),
@@ -441,6 +442,7 @@ def twofa_enable(
 
 
 @router.get("/sessions")
+@limiter.limit("30/minute")
 def list_sessions(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -472,9 +474,10 @@ def list_sessions(
 
 
 @router.delete("/sessions/{session_id}")
+@limiter.limit("30/minute")
 def delete_session(
-    session_id: UUID,
     request: Request,
+    session_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:

@@ -220,3 +220,56 @@ def test_rate_limit_password_change_5_per_min(client, unique_ip_headers):
         headers=headers,
     )
     assert res.status_code == 429
+
+
+def _assert_rate_limit_payload(res) -> None:
+    """The app's custom exception handler returns a JSON body for 429s in
+    German — that's the project's rate-limit signal in lieu of a Retry-After
+    header (see ``rate_limit_exceeded_handler`` in ``main.py``).
+    """
+    assert res.status_code == 429
+    assert "Zu viele Anfragen" in res.json().get("detail", "")
+
+
+def test_rate_limit_logout_30_per_min(client, unique_ip_headers):
+    """S-2: /auth/logout accepts an attacker-supplied refresh_token and probes
+    the DB on every call — slowapi limit 30/minute/IP, 31st call returns 429.
+    """
+    c, _ = client
+    for _ in range(30):
+        c.post("/auth/logout", json={"refresh_token": "garbage"}, headers=unique_ip_headers)
+    res = c.post("/auth/logout", json={"refresh_token": "garbage"}, headers=unique_ip_headers)
+    _assert_rate_limit_payload(res)
+
+
+def test_rate_limit_list_sessions_30_per_min(client, unique_ip_headers):
+    """S-2: GET /auth/sessions is auth-gated but write-amplifying (one DB scan
+    per call) — slowapi limit 30/minute/IP, 31st call returns 429.
+    """
+    c, email = client
+    c.post("/auth/register", json={"email": "ls@example.com", "password": "longpassword12"})
+    c.post("/auth/verify-email", json={"token": email.sent[-1][2]})
+    tokens = c.post("/auth/login", json={"email": "ls@example.com", "password": "longpassword12"}).json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}", **unique_ip_headers}
+    for _ in range(30):
+        c.get("/auth/sessions", headers=headers)
+    res = c.get("/auth/sessions", headers=headers)
+    _assert_rate_limit_payload(res)
+
+
+def test_rate_limit_delete_session_30_per_min(client, unique_ip_headers):
+    """S-2: DELETE /auth/sessions/{id} is auth-gated but DB-touching — slowapi
+    limit 30/minute/IP, 31st call returns 429. The handler returns 404 for the
+    unknown UUID below, but the limit decorator runs first and still counts
+    every call, so the 31st attempt is rejected with 429 before the handler.
+    """
+    c, email = client
+    c.post("/auth/register", json={"email": "ds@example.com", "password": "longpassword12"})
+    c.post("/auth/verify-email", json={"token": email.sent[-1][2]})
+    tokens = c.post("/auth/login", json={"email": "ds@example.com", "password": "longpassword12"}).json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}", **unique_ip_headers}
+    target = "00000000-0000-0000-0000-000000000000"
+    for _ in range(30):
+        c.delete(f"/auth/sessions/{target}", headers=headers)
+    res = c.delete(f"/auth/sessions/{target}", headers=headers)
+    _assert_rate_limit_payload(res)
