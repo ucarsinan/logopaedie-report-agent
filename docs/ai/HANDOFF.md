@@ -8,6 +8,159 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-01 (afternoon — L-wave partial)
+- **Updated by:** Claude Code
+- **Handoff to:** next agent. L-wave dispatched 3 parallel agents
+  for the remaining K-wave-deferred items: L1 (S-7 access-token
+  revocation), L2 (disable_2fa P-3 + X-RateLimit headers), L3
+  (J/K code review). **2 of 3 hit Anthropic socket-close errors
+  mid-run.** L1 never committed (only stubbed the service file) —
+  discarded. L2 finished writing changes in its worktree but never
+  committed; **disable_2fa portion salvaged inline as `24ce58f`**,
+  X-RateLimit-* headers dropped (broke 85 tests via slowapi's
+  Response-type contract — needs a deeper refactor, not a flag
+  flip). L3 ran to completion: caught H-1 frontend type widening
+  (applied inline as `b39c72b`) plus 5 medium/low items now in
+  TASKS.md. **510 passed** (was 508+9). Outstanding: S-7 retry
+  (re-dispatch with same brief), X-RateLimit-* refactor, L3 medium
+  items (TRUSTED_PROXY deploy doc, `derive_age_group` clinical
+  misclassification, bare `assert` cleanups), and the unchanged
+  M-6 anamnesis WIP block.
+
+---
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-06-01 (afternoon — L-wave partial)
+**Role(s):** Coordinator + Salvage-Inline-Fixer + Scribe
+
+### What was done
+
+- **L-wave dispatch**: 3 parallel agents (L1 S-7, L2 disable_2fa +
+  X-RateLimit, L3 J/K code review). L1 and L2 both crashed on
+  Anthropic socket-close errors before committing. L3 completed.
+- **L1 (S-7 access-token revocation)** — discarded:
+  - Approach picked (correctly) was the simpler per-user
+    `revoked_until` Redis cutoff vs. JWT `iat`, no `jti` emit
+    needed.
+  - At crash time the worktree had only the new
+    `backend/services/access_token_blocklist.py` skeleton and a
+    dirty `auth_service.py`; dependencies.py integration + tests
+    never landed.
+  - Worktree removed; re-dispatch with the original brief is the
+    right move.
+- **L2 (disable_2fa P-3 + X-RateLimit headers)** — partial salvage:
+  - **disable_2fa portion (kept, salvaged inline)**: same bulk
+    `sa.update` + `_atomic` pattern as K1's enable_2fa, with the
+    `_current_session_hash` preserve semantic. +2 service-unit
+    tests (`deps_with_2fa` fixture). Landed as `24ce58f`.
+  - **X-RateLimit-* portion (dropped)**: setting
+    `headers_enabled=True` in `_build_limiter` + adding
+    `SlowAPIMiddleware` to `main.py` resulted in 85 test failures
+    with slowapi's `parameter "response" must be an instance of
+    starlette.responses.Response` error. Most routes return plain
+    dicts; the middleware addition didn't catch them. Real fix
+    requires either selective response wrapping or a slowapi
+    version bump — not a single-commit task. Noted in TASKS.md.
+- **L3 (J/K code review)** — completed, 1800-word report. Findings
+  triage:
+  - **H-1 (verified)**: `frontend/src/types/index.ts:193`
+    declared `total: number` but K1's backend change makes it
+    `int | None`. Applied inline as `b39c72b`: type widened to
+    `number | null`, `HistoryModule.tsx:76` now has `res.total ?? 0`
+    null guard.
+  - **H-2**: `TRUSTED_PROXY` not documented in any deployment
+    artifact (`.env.example` doesn't exist in the repo;
+    `vercel.json` has no env block). Without explicit operator
+    config, first prod deploy collapses per-IP rate limits under
+    one Vercel-edge bucket. `.env.example` creation **blocked by
+    repo permission denylist** for env-files — must be added
+    manually. Documented in TASKS.md.
+  - **M-1**: `_audit` partial-wiring `RuntimeError` → HTTP 500
+    + lost audit row. Intended fail-loud posture; worth a
+    docstring note.
+  - **M-2**: `Retry-After` = bucket window not time-to-slot.
+    slowapi API limitation; conservative-correct.
+  - **M-3**: `derive_age_group` silently misclassifies future/pre-1900
+    DOB. Feeds the AI clinical report. Owner decision required.
+  - **L-1, L-2**: cosmetic — `deps_with_2fa` vs. inline TOTP
+    wiring duplication; 3 service methods still using bare
+    `assert self.totp is not None` (same class as J1's S-4 fix).
+  - **Confirmations** (good news, verified): 0017 FK fix is
+    correct + complete; no SQLAlchemy event-listeners hit by K1's
+    bulk update; `_atomic()` is not a transaction boundary (the
+    surrounding `db.commit()` provides it); K2's
+    `_assert_trusted_proxy_configured` fires at module load
+    (boot-time check, gated on `_is_production()`).
+
+### Files changed
+
+#### `24ce58f` — disable_2fa bulk salvage
+
+- `backend/services/auth_service.py` — `disable_2fa` for-loop
+  replaced with `sa.update + _atomic`, mirroring `enable_2fa`.
+- `backend/tests/test_auth_service.py` — +2 tests reusing
+  `deps_with_2fa` fixture.
+
+#### `b39c72b` — frontend H-1 type widening
+
+- `frontend/src/types/index.ts` — `total: number | null`.
+- `frontend/src/features/history/HistoryModule.tsx` —
+  `setTotal(res.total ?? 0)`.
+
+### What is NOT done yet
+
+- **S-7 access-token revocation** — L1 crash; re-dispatch with
+  the same brief. The approach (per-user cutoff in Redis) is
+  correct.
+- **X-RateLimit-* headers** — L2's attempt failed. Needs deeper
+  refactor: either selective `JSONResponse` wrapping on
+  rate-limited routes or a slowapi version bump that handles
+  non-Response returns.
+- **L3 H-2 `.env.example` for TRUSTED_PROXY** — blocked by the
+  env-file permission denylist; add the line manually.
+- **L3 M-3 `derive_age_group`** — owner decision on whether to
+  clamp / raise / accept.
+- **L3 L-1, L-2** — cosmetic cleanups (fixture duplication +
+  bare asserts).
+- Pre-existing items: redundant `ix_*_user_id` indexes (Neon
+  EXPLAIN), Vercel preview deploy, M-6 anamnesis (owner-WIP).
+
+### Risks / Attention
+
+- **Network volatility during this session** — 2 of 3 L-wave
+  agents died on socket-close errors. The worktrees were
+  retrievable but only L2 was far enough along to salvage. If
+  re-dispatching, expect to verify each agent's progress
+  carefully via `git worktree status` before assuming completion.
+- **`TRUSTED_PROXY` deploy gap** (L3 H-2) is the highest-priority
+  unaddressed item — silent per-IP rate-limit collapse on the
+  first prod deploy after K2. The fix is one line in an env file
+  + one entry in `vercel.json`, but the env file is gated.
+
+### Next concrete action
+
+Push the disable_2fa + frontend type-widening commits + this docs
+commit. Then either retry L1 (S-7 implementation) when network is
+healthy, OR shift focus to one of the lower-effort items: L3 M-3
+clinical misclassification (15 minutes with owner approval), L3
+L-2 bare asserts (15 minutes, no decision needed).
+
+### Ideal next prompt
+
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. The L-wave landed
+> only partial gains due to network issues. Decide between (a)
+> retrying L1 (S-7 access-token revocation, ~half-day, well-scoped
+> from the L-wave brief), (b) tackling the L3 medium-priority
+> items (`derive_age_group` clamping + bare `assert` cleanups,
+> ~30 minutes total), or (c) waiting for owner judgment on M-3
+> and M-6.
+
+---
+
+## Previous Session Summary (kept for chain-of-context)
+
 - **Date:** 2026-06-01 (mid-morning — K-wave)
 - **Updated by:** Claude Code
 - **Handoff to:** next agent. K-wave (3 parallel agents) closed the

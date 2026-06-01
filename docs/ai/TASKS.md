@@ -34,19 +34,11 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ### From 2026-06-01 I3 security/perf (still open — low-severity / owner-decision)
 
-- [ ] **S-7** (informational) — `change_password` does not invalidate
-      in-flight access tokens (only revokes other refresh sessions).
-      Would need a `jti`/`session_hash` block list keyed in Redis
-      with TTL == access_token TTL. Estimated half-day implementation.
 - [ ] **S-8** (informational) — `get_optional_user` does not check
       `locked_until` / `email_verified` / `revoked_at`. Documented
       trade-off from `c0980ab`. Only safe while every consumer reads
       `user.id` and nothing else; add a runtime guard if more
       handlers adopt `AuthIdentity`.
-- [ ] **`disable_2fa` bulk-update consolidation** — K1 fixed
-      `change_password` + `enable_2fa` (P-3) but `disable_2fa` has
-      the same per-row loop pattern. Small follow-up (1-line change
-      + 1 test).
 - [ ] **Optional X-RateLimit-* headers** — slowapi plumbing exists
       (`headers_enabled=True`) but `_build_limiter` doesn't enable
       it. K2 added `Retry-After` only.
@@ -74,6 +66,11 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **L-wave** (post-K-wave deferred closure attempt — partial). Three parallel agents dispatched; two hit Anthropic socket-close errors mid-run.
+      L1 (S-7 access-token revocation) discarded — only stubbed service file, no commit.
+      L2 (disable_2fa P-3 + X-RateLimit-* headers) **disable_2fa portion salvaged inline** as `24ce58f` (same bulk `sa.update` pattern as change_password/enable_2fa); `headers_enabled=True` + SlowAPIMiddleware addition **dropped** (broke 85 tests via slowapi's `parameter response must be Response` error — not solvable by middleware-order alone).
+      L3 (independent J/K code review) **completed** — caught H-1 (frontend type widening, applied inline as `b39c72b`), H-2 (TRUSTED_PROXY missing from deploy artifacts), and 4 medium/low items now in "Next" below.
+      510 passed, 9 skipped (was 508+9; +2 disable_2fa tests). — 2026-06-01
 - [x] **K-wave** (post-J-wave deferred closure) — three parallel sub-agents:
       K1 perf trio (P-1 `GET /auth/sessions` pagination + P-3 bulk-update consolidation in `change_password`/`enable_2fa` + P-5 `GET /reports` COUNT opt-in via `include_total`) — `77da09a`;
       K2 security hygiene (S-6 `TRUSTED_PROXY`-gated XFF — **breaking config change**, operator must set `TRUSTED_PROXY` for production XFF trust; 429 `Retry-After` header) — `63ce9e0`;
