@@ -381,3 +381,234 @@ async def test_password_change_revokes_other_sessions_only(deps):
     active = db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()
     assert len(active) == 1
     svc.refresh(db, refresh_token=s1["refresh_token"], ip=None, ua=None)
+
+
+# ── I2 deferred: 2FA service-unit tests (start / disable / login_2fa) ────────
+
+
+@pytest.fixture
+def deps_with_2fa(deps, monkeypatch):
+    """Wire a real TOTPService + an in-memory ChallengeStore into the deps fixture."""
+    import fakeredis
+    from cryptography.fernet import Fernet
+
+    from services.challenge_store import ChallengeStore
+    from services.totp_service import TOTPService
+
+    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    svc, db, email = deps
+    svc.totp = TOTPService()
+    svc.challenges = ChallengeStore(fakeredis.FakeStrictRedis(decode_responses=True))
+    return svc, db, email
+
+
+@pytest.mark.asyncio
+async def test_start_2fa_setup_returns_provisioning_uri_with_secret_and_issuer(deps_with_2fa):
+    """start_2fa_setup: provisioning_uri must follow otpauth shape and embed
+    the issuer + the (encoded) secret; the stored secret must be encrypted, not plaintext.
+    """
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    svc, db, email = deps_with_2fa
+    await _make_verified_user(svc, db, email, "uri@example.com")
+    user = db.exec(select(User).where(User.email == "uri@example.com")).one()
+
+    result = svc.start_2fa_setup(db, user)
+    secret_plain = result["secret"]
+    uri = result["provisioning_uri"]
+
+    parsed = urlparse(uri)
+    assert parsed.scheme == "otpauth"
+    assert parsed.netloc == "totp"
+    qs = parse_qs(parsed.query)
+    assert qs["secret"] == [secret_plain]
+    assert qs["issuer"] == ["Logopaedie Report Agent"]
+    # Path embeds "issuer:email" — pyotp URL-encodes the colon/space
+    assert "uri@example.com" in unquote(parsed.path)
+
+    # Persisted secret on the user row must NOT be plaintext — it's a Fernet ciphertext
+    db.refresh(user)
+    assert user.totp_secret is not None
+    assert user.totp_secret != secret_plain
+    assert svc.totp.decrypt(user.totp_secret) == secret_plain
+    # totp_enabled stays False until the user submits a code via /2fa/enable
+    assert user.totp_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_start_2fa_setup_with_background_uses_deferred_audit_path(deps_with_2fa):
+    """J1 wired background+db_factory into start_2fa_setup. When both are
+    passed, the audit row must go through BackgroundTasks (deferred), not
+    through the synchronous fail-closed log path.
+    """
+    from models.auth import AuditLog
+
+    svc, db, email = deps_with_2fa
+    await _make_verified_user(svc, db, email, "bg-setup@example.com")
+    user = db.exec(select(User).where(User.email == "bg-setup@example.com")).one()
+
+    class _RecordingBg:
+        def __init__(self) -> None:
+            self.tasks: list[tuple] = []
+
+        def add_task(self, fn, *args, **kwargs) -> None:
+            self.tasks.append((fn, args, kwargs))
+
+    bg = _RecordingBg()
+    db_factory_stub = lambda: db  # noqa: E731
+
+    # Before: zero audit rows on disk
+    pre = db.exec(select(AuditLog).where(AuditLog.event == "user.2fa_setup_started")).all()
+
+    svc.start_2fa_setup(
+        db,
+        user,
+        ip="2.2.2.2",
+        ua="pytest-bg",
+        background=bg,  # type: ignore[arg-type]
+        db_factory=db_factory_stub,  # type: ignore[arg-type]
+    )
+
+    # Synchronous audit must NOT have fired (deferred path was taken)
+    after = db.exec(select(AuditLog).where(AuditLog.event == "user.2fa_setup_started")).all()
+    assert len(after) == len(pre)
+    # ...but BackgroundTasks captured exactly one deferred task
+    assert len(bg.tasks) == 1
+
+
+@pytest.mark.asyncio
+async def test_disable_2fa_invalid_code_rejected_service_unit(deps_with_2fa):
+    """disable_2fa: a wrong TOTP code (even with the right password) must
+    raise HTTPException(400, "Verification failed") and must NOT clear the
+    stored secret. Drives the service directly to skip route layers.
+    """
+    from fastapi import HTTPException
+
+    svc, db, email_svc = deps_with_2fa
+    await _make_verified_user(svc, db, email_svc, "dis-bad@example.com")
+    user = db.exec(select(User).where(User.email == "dis-bad@example.com")).one()
+    # Bring 2FA fully online by hand (mirrors the route flow)
+    secret = svc.totp.generate_secret()
+    user.totp_secret = svc.totp.encrypt(secret)
+    user.totp_enabled = True
+    db.add(user)
+    db.commit()
+    original_secret = user.totp_secret
+
+    with pytest.raises(HTTPException) as exc:
+        svc.disable_2fa(
+            db,
+            user,
+            "longpassword12",
+            "000000",  # wrong code
+            ip=None,
+            ua=None,
+        )
+    assert exc.value.status_code == 400
+
+    db.refresh(user)
+    assert user.totp_secret == original_secret
+    assert user.totp_enabled is True
+
+
+@pytest.mark.asyncio
+async def test_disable_2fa_happy_path_clears_secret_and_emits_audit(deps_with_2fa):
+    """disable_2fa: correct password + valid TOTP code clears the secret,
+    flips totp_enabled to False, and emits a ``user.2fa_disabled`` audit row.
+    """
+    import pyotp
+
+    from models.auth import AuditLog
+
+    svc, db, email_svc = deps_with_2fa
+    await _make_verified_user(svc, db, email_svc, "dis-ok@example.com")
+    user = db.exec(select(User).where(User.email == "dis-ok@example.com")).one()
+    secret = svc.totp.generate_secret()
+    user.totp_secret = svc.totp.encrypt(secret)
+    user.totp_enabled = True
+    db.add(user)
+    db.commit()
+
+    svc.disable_2fa(
+        db,
+        user,
+        "longpassword12",
+        pyotp.TOTP(secret).now(),
+        ip="3.3.3.3",
+        ua="pytest-dis",
+    )
+
+    db.refresh(user)
+    assert user.totp_secret is None
+    assert user.totp_enabled is False
+    assert user.last_totp_step is None
+
+    rows = db.exec(select(AuditLog).where(AuditLog.event == "user.2fa_disabled")).all()
+    assert len(rows) == 1
+    assert rows[0].user_id == user.id
+    assert rows[0].ip_address == "3.3.3.3"
+    assert rows[0].user_agent == "pytest-dis"
+
+
+@pytest.mark.asyncio
+async def test_login_2fa_replay_rejected_service_unit(deps_with_2fa):
+    """login_2fa: passing the same TOTP code twice within the drift window
+    must reject the second use via the ``last_totp_step`` mechanism. The
+    second call gets a *fresh* challenge — replay protection is on the code
+    itself, not the challenge.
+    """
+    import pyotp
+    from fastapi import HTTPException
+
+    svc, db, email_svc = deps_with_2fa
+    await _make_verified_user(svc, db, email_svc, "replay@example.com")
+    user = db.exec(select(User).where(User.email == "replay@example.com")).one()
+    secret = svc.totp.generate_secret()
+    user.totp_secret = svc.totp.encrypt(secret)
+    user.totp_enabled = True
+    db.add(user)
+    db.commit()
+
+    code = pyotp.TOTP(secret).now()
+
+    # First use: issue a challenge via login() and consume it
+    first = svc.login(db, email_addr="replay@example.com", password="longpassword12", ip=None, ua=None)
+    assert first.get("step") == "2fa_required"
+    ok = svc.login_2fa(db, challenge_id=first["challenge_id"], code=code, ip=None, ua=None)
+    assert "access_token" in ok
+
+    # Second use: new challenge, same code (same TOTP step) — must be rejected
+    second = svc.login(db, email_addr="replay@example.com", password="longpassword12", ip=None, ua=None)
+    with pytest.raises(HTTPException) as exc:
+        svc.login_2fa(db, challenge_id=second["challenge_id"], code=code, ip=None, ua=None)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_2fa_stale_challenge_rejected_service_unit(deps_with_2fa):
+    """login_2fa: an unknown / already-consumed / expired challenge_id must
+    be rejected with HTTPException(401). We simulate expiry by deleting the
+    challenge from the store before submitting the code.
+    """
+    import pyotp
+    from fastapi import HTTPException
+
+    svc, db, email_svc = deps_with_2fa
+    await _make_verified_user(svc, db, email_svc, "expiry@example.com")
+    user = db.exec(select(User).where(User.email == "expiry@example.com")).one()
+    secret = svc.totp.generate_secret()
+    user.totp_secret = svc.totp.encrypt(secret)
+    user.totp_enabled = True
+    db.add(user)
+    db.commit()
+
+    step1 = svc.login(db, email_addr="expiry@example.com", password="longpassword12", ip=None, ua=None)
+    challenge_id = step1["challenge_id"]
+
+    # Forcibly drop the challenge row to simulate TTL expiry
+    svc.challenges._client.delete(svc.challenges._key(challenge_id))
+
+    with pytest.raises(HTTPException) as exc:
+        svc.login_2fa(db, challenge_id=challenge_id, code=pyotp.TOTP(secret).now(), ip=None, ua=None)
+    assert exc.value.status_code == 401
+    assert "challenge" in str(exc.value.detail).lower()
