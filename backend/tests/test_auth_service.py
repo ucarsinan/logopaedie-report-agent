@@ -736,3 +736,102 @@ async def test_enable_2fa_without_current_hash_revokes_all(deps, monkeypatch):
     # No _current_session_hash attribute → revoke ALL active sessions
     svc.enable_2fa(db, user, code, ip=None, ua=None)
     assert db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all() == []
+
+
+@pytest.mark.asyncio
+async def test_disable_2fa_bulk_revokes_other_sessions_keeps_current(deps_with_2fa):
+    """K-wave deferred: disable_2fa should revoke every active session except
+    the current one (identified by ``_current_session_hash``) in one bulk
+    UPDATE — mirrors enable_2fa's P-3 pattern."""
+    import pyotp
+
+    svc, db, email_svc = deps_with_2fa
+    await _make_verified_user(svc, db, email_svc, "dis-bulk@example.com")
+    user = db.exec(select(User).where(User.email == "dis-bulk@example.com")).one()
+
+    # Pre-enable 2FA so disable_2fa has something to disable
+    secret = svc.totp.generate_secret()
+    user.totp_secret = svc.totp.encrypt(secret)
+    user.totp_enabled = True
+    db.add(user)
+    db.commit()
+
+    # Spin up three active sessions for this user
+    _, hash_first = svc.tokens.encode_refresh()
+    _, hash_second = svc.tokens.encode_refresh()
+    _, hash_third = svc.tokens.encode_refresh()
+    now = datetime.now(UTC)
+    for h in (hash_first, hash_second, hash_third):
+        db.add(
+            UserSession(
+                user_id=user.id,
+                refresh_token_hash=h,
+                user_agent="pytest",
+                ip_address=None,
+                expires_at=now + svc.REFRESH_TTL,
+            )
+        )
+    db.commit()
+    assert len(db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()) == 3
+
+    # Pin the first session as the "current" one — should survive
+    user._current_session_hash = hash_first  # type: ignore[attr-defined]
+
+    svc.disable_2fa(
+        db,
+        user,
+        "longpassword12",
+        pyotp.TOTP(secret).now(),
+        ip=None,
+        ua=None,
+    )
+
+    active = db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()
+    assert len(active) == 1
+    assert active[0].refresh_token_hash == hash_first
+    db.refresh(user)
+    assert user.totp_enabled is False
+    assert user.totp_secret is None
+
+
+@pytest.mark.asyncio
+async def test_disable_2fa_without_current_hash_revokes_all(deps_with_2fa):
+    """K-wave deferred: disable_2fa without ``_current_session_hash`` revokes
+    ALL active sessions (bulk UPDATE without the exclusion clause)."""
+    import pyotp
+
+    svc, db, email_svc = deps_with_2fa
+    await _make_verified_user(svc, db, email_svc, "dis-bulk-all@example.com")
+    user = db.exec(select(User).where(User.email == "dis-bulk-all@example.com")).one()
+
+    secret = svc.totp.generate_secret()
+    user.totp_secret = svc.totp.encrypt(secret)
+    user.totp_enabled = True
+    db.add(user)
+    db.commit()
+
+    now = datetime.now(UTC)
+    for _ in range(2):
+        _, h = svc.tokens.encode_refresh()
+        db.add(
+            UserSession(
+                user_id=user.id,
+                refresh_token_hash=h,
+                user_agent="pytest",
+                ip_address=None,
+                expires_at=now + svc.REFRESH_TTL,
+            )
+        )
+    db.commit()
+    assert len(db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()) == 2
+
+    # No `_current_session_hash` set → all sessions revoked
+    svc.disable_2fa(
+        db,
+        user,
+        "longpassword12",
+        pyotp.TOTP(secret).now(),
+        ip=None,
+        ua=None,
+    )
+    assert db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all() == []

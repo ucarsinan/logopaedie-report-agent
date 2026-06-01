@@ -864,15 +864,22 @@ class AuthService:
         user.totp_enabled = False
         user.last_totp_step = None
         db.add(user)
-        # Revoke ALL active sessions on 2FA disable
-        for s in db.exec(
-            select(UserSession).where(
-                UserSession.user_id == user.id,
-                UserSession.revoked_at.is_(None),  # type: ignore[arg-type]
-            )
-        ).all():
-            s.revoked_at = _utcnow()
-            db.add(s)
+
+        # P-3: single bulk UPDATE instead of per-row .add() in a Python loop.
+        # Mirrors enable_2fa: when the caller sets `_current_session_hash` on
+        # the user (router does this from `request.state.session_hash` aka the
+        # JWT sid claim) we preserve that session via the SQL `!=` predicate.
+        # Without the attribute → revoke ALL active sessions, matching the
+        # prior unconditional behaviour.
+        current_hash = getattr(user, "_current_session_hash", None)
+        now = _utcnow()
+        stmt = sa_update(UserSession).where(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        if current_hash:
+            stmt = stmt.where(UserSession.refresh_token_hash != current_hash)
+        db.execute(_atomic(stmt.values(revoked_at=now)))
         db.commit()
         self._audit(
             db,
