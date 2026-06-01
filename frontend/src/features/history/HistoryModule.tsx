@@ -73,7 +73,7 @@ export function HistoryModule() {
       .list(params)
       .then((res) => {
         setReports(res.items);
-        setTotal(res.total);
+        setTotal(res.total ?? 0);
         setPage(res.page);
       })
       .catch((e: Error) => setFetchError(e.message))

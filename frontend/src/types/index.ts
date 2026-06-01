@@ -190,7 +190,7 @@ export interface ConsentRecord {
 
 export interface ReportListResponse {
   items: ReportSummary[];
-  total: number;
+  total: number | null;
   page: number;
   limit: number;
 }
