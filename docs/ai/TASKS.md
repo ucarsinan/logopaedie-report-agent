@@ -32,52 +32,31 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
-### From 2026-06-01 I3 security/perf sweep (deferred items)
+### From 2026-06-01 I3 security/perf (still open — low-severity / owner-decision)
 
-- [ ] **S-6** — `X-Forwarded-For` trust in preview deploys: `client_ip_key`
-      in `backend/middleware/rate_limiter.py:55-69` only enforces the
-      `TRUSTED_PROXY` gate when `_is_production()` returns true. In
-      Vercel `preview` and any non-Vercel staging, an attacker can
-      rotate per-IP buckets via crafted XFF. Needs deploy-env audit.
 - [ ] **S-7** (informational) — `change_password` does not invalidate
       in-flight access tokens (only revokes other refresh sessions).
-      Combined with the optimistic `get_optional_user` (no DB check),
-      a stolen access token survives a password change up to its
-      expiry. Would need a `jti`/`session_hash` block list keyed in
-      Redis with TTL == access_token TTL.
+      Would need a `jti`/`session_hash` block list keyed in Redis
+      with TTL == access_token TTL. Estimated half-day implementation.
 - [ ] **S-8** (informational) — `get_optional_user` does not check
       `locked_until` / `email_verified` / `revoked_at`. Documented
       trade-off from `c0980ab`. Only safe while every consumer reads
       `user.id` and nothing else; add a runtime guard if more
       handlers adopt `AuthIdentity`.
-- [ ] **P-1** — `GET /auth/sessions` has no `limit`/`offset`. Add
-      `limit=Query(50, le=200)` + offset.
-- [ ] **P-3** — `change_password` and `enable_2fa` revoke sessions
-      via a Python `for ... db.add()` loop instead of a single
-      `sa_update(UserSession).where(...).values(...)`. Mirror what
-      `refresh()` does.
-- [ ] **P-5** — `routers/reports.py` runs a `COUNT(*)` on a filtered
-      subquery per list page. Return estimated count, or only
-      compute exact count on page 1, or move to cursor pagination.
-- [ ] **Rate-limit 429 headers** — `RateLimitExceeded` handler in
-      `backend/main.py:162-167` returns a bare JSON body with no
-      `Retry-After` / `X-RateLimit-*`. One-line follow-up for
-      client back-off.
-
-### From 2026-06-01 I2 test-coverage audit (deferred items)
-
-- [ ] **`auth_service.start_2fa_setup` + `disable_2fa`** — J1 added
-      audit-emit + rate-limit assertions but I2's full happy-path
-      service unit suite is still missing. Add: provisioning URI
-      shape, encrypted-secret round-trip, recovery-code generation;
-      `disable_2fa` requires valid TOTP/recovery + audit emit;
-      `login_2fa` challenge expiry + replay rejection (sync unit
-      tests, not just route tests).
-- [ ] **`patient_service` + `totp_service` error-path gap** — both
-      have `raises=0` in their test files. Add: duplicate
-      `system_id` collision; update on non-owned record; invalid
-      date strings in `derive_age_group`; tampered ciphertext in
-      `decrypt`; TOTP drift-window boundaries.
+- [ ] **`disable_2fa` bulk-update consolidation** — K1 fixed
+      `change_password` + `enable_2fa` (P-3) but `disable_2fa` has
+      the same per-row loop pattern. Small follow-up (1-line change
+      + 1 test).
+- [ ] **Optional X-RateLimit-* headers** — slowapi plumbing exists
+      (`headers_enabled=True`) but `_build_limiter` doesn't enable
+      it. K2 added `Retry-After` only.
+- [ ] **TRUSTED_PROXY deploy-env audit** — K2's S-6 fix means
+      production `TRUSTED_PROXY` must be set explicitly or XFF is
+      ignored. On Vercel edge IPs rotate, so all traffic may bucket
+      under one IP and collapse per-IP rate limits. Operator needs
+      to either (a) determine the actual proxy IP, or (b) redesign
+      the rate-limit strategy (e.g., bucket by user_id for
+      authenticated routes).
 
 ### Open follow-ups
 
@@ -95,6 +74,10 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **K-wave** (post-J-wave deferred closure) — three parallel sub-agents:
+      K1 perf trio (P-1 `GET /auth/sessions` pagination + P-3 bulk-update consolidation in `change_password`/`enable_2fa` + P-5 `GET /reports` COUNT opt-in via `include_total`) — `77da09a`;
+      K2 security hygiene (S-6 `TRUSTED_PROXY`-gated XFF — **breaking config change**, operator must set `TRUSTED_PROXY` for production XFF trust; 429 `Retry-After` header) — `63ce9e0`;
+      K3 +18 service tests (auth_service 2FA paths + patient_service + totp_service error branches) — `1b22548`. **508 passed, 9 skipped** (was 474+9). Inline fixes during integration: K1↔K3 merge conflict in `test_auth_service.py` (kept both sets), K1 test env-var bug (`TOTP_ENCRYPTION_KEY` → `SESSION_ENCRYPTION_KEY`). — 2026-06-01
 - [x] **J-wave** (post-H-wave audit follow-ups) — three parallel sub-agents:
       J1 security bundle (S-1 email PII → SHA-256 email_hash; S-3 `/auth/2fa/setup` rate-limit `3/hour` + audit emit `user.2fa_setup_started`; S-4 `_audit` assert→RuntimeError; S-5 `hmac.compare_digest` for service-token bearer) — `869c77f`;
       J2 rate-limits `30/min` on `/auth/logout` + `GET/DELETE /auth/sessions` — `de96f6c`;

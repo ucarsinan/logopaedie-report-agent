@@ -8,22 +8,204 @@
 
 ## Last Updated
 
-- **Date:** 2026-06-01 (morning — J-wave + H-wave Critical follow-up)
+- **Date:** 2026-06-01 (mid-morning — K-wave)
 - **Updated by:** Claude Code
-- **Handoff to:** next agent. Post-H-wave audit cycle: three
-  read-only review/audit agents (I1 code review, I2 test-coverage,
-  I3 security/perf) caught a **Critical bug in 0017** — missing
-  `soaprecord.user_id` and `therapyplanrecord.user_id` FK drops
-  meant the migration would have failed on first Postgres deploy.
-  Fixed as `bf04e8b`. Then three parallel implementation agents
-  (J1/J2/J3) bundled the high/medium audit findings into landed
-  fixes: J1 security hardening (S-1/S-3/S-4/S-5), J2 three new
-  rate limits (S-2), J3 closed `session_store` + `audit_service.query`
-  test gaps plus the latent `_apply_0018` transaction bug (I1
-  Medium [3]). Outstanding: redundant `ix_*_user_id` index drop
-  (needs Neon EXPLAIN), I3 deferred items (S-6/S-7/S-8, P-1/P-3/P-5),
-  more direct service-unit tests for `auth_service` 2FA methods,
-  M-6 anamnesis completion (owner-WIP).
+- **Handoff to:** next agent. K-wave (3 parallel agents) closed the
+  remaining I3-deferred + I2-deferred items: K1 perf trio (P-1
+  sessions pagination + P-3 bulk-update consolidation in
+  change_password/enable_2fa + P-5 reports COUNT opt-in), K2 security
+  hygiene (`TRUSTED_PROXY` strict XFF gate + 429 `Retry-After`
+  header), K3 +18 service tests (2FA happy paths + patient_service
+  + totp_service error branches). One merge conflict
+  (test_auth_service.py K1↔K3) and one K1 test bug
+  (`TOTP_ENCRYPTION_KEY` → `SESSION_ENCRYPTION_KEY`) resolved
+  inline. **Breaking config change for production**: `TRUSTED_PROXY`
+  must now be set explicitly or XFF is ignored — Vercel deploys
+  need operator attention. Outstanding (all low/informational): S-7
+  access-token revoke on password change, S-8 `get_optional_user`
+  state checks, redundant `ix_*_user_id` index drop (Neon EXPLAIN),
+  M-6 anamnesis (owner-WIP), Vercel preview (out of scope).
+
+---
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-06-01 (mid-morning — K-wave)
+**Role(s):** Coordinator + Implementer + Conflict-Resolver + Scribe
+(three parallel sub-agents K1/K2/K3 + inline merge-conflict resolution
++ K1 test-bug fix)
+
+### What was done
+
+#### Phase 1 — K-wave (3 parallel agents, all from worktree-forks of `8a00903`)
+
+- **K1** (perf bundle, `77da09a`):
+  - **P-1**: `GET /auth/sessions` now accepts `limit` (Pydantic v2
+    `Query(50, ge=1, le=200)`) and `offset` (`Query(0, ge=0)`).
+    Previously unbounded; default cap is 50.
+  - **P-3**: `AuthService.change_password` and `enable_2fa` replaced
+    the `for s in db.exec(...).all(): s.revoked_at = ...; db.add(s)`
+    loop with a single `sa.update(UserSession).where(...).values(...)`
+    wrapped in the existing `_atomic()` helper. Matches
+    `AuthService.refresh()` style.
+  - **P-5**: `GET /reports` now has `include_total: bool = True`
+    query param. Default behavior unchanged (returns `total: int`);
+    `include_total=false` skips the COUNT subquery and returns
+    `total: None`. Strategy (a) per the brief — smaller blast
+    radius than cursor pagination.
+  - +12 tests (5 P-1 in `test_auth_routes.py`, 4 P-3 in
+    `test_auth_service.py`, 3 P-5 in `test_reports_extra.py`).
+  - Side note from K1: `disable_2fa` has the same per-row loop
+    pattern as `change_password`/`enable_2fa`. Not in K1's scope;
+    follow-up opportunity for pattern consistency.
+- **K2** (security hygiene, `63ce9e0`):
+  - **S-6**: `client_ip_key` in `middleware/rate_limiter.py` no
+    longer gates XFF trust on `_is_production()`. Trust is now
+    bound to `TRUSTED_PROXY` env var being set AND matching the
+    inbound socket IP. Preview deploys and non-Vercel staging are
+    safe by default; enabling XFF requires deliberate config.
+  - **429 `Retry-After` header**: `RateLimitExceeded` handler in
+    `main.py` now includes `Retry-After` computed from
+    `exc.limit.limit.get_expiry()` (slowapi 0.1.9 doesn't expose
+    `retry_after` directly), wrapped in `contextlib.suppress` with
+    a 60s fallback so header building can never turn a 429 into a
+    500.
+  - +4 tests (3 XFF gate variants + 1 Retry-After).
+  - Updated `conftest.py` to pin `TRUSTED_PROXY="testclient"` so
+    the existing `unique_ip_headers` fixture keeps isolating
+    buckets per test under the new semantics.
+  - Updated existing `test_client_key_uses_first_forwarded_ip` to
+    set `TRUSTED_PROXY` (its old assumption "XFF always trusted in
+    tests" no longer holds).
+  - Optional `X-RateLimit-*` headers NOT added — slowapi has the
+    plumbing (`headers_enabled=True`) but the project's
+    `_build_limiter` doesn't enable it.
+  - **Production-config caveat surfaced**: `TRUSTED_PROXY` is now a
+    stronger contract (string compare to socket IP, not just "any
+    truthy value"). Vercel edge IPs rotate, so operators must
+    either set `TRUSTED_PROXY` to a known reverse-proxy IP if one
+    exists in front of the function, or accept the more
+    conservative per-instance bucketing. Worth a deploy-env audit.
+- **K3** (test coverage uplift, `1b22548`):
+  - +6 tests for `auth_service` 2FA service paths
+    (`start_2fa_setup` shape, deferred-audit wiring, `disable_2fa`
+    invalid/happy, `login_2fa` replay + stale challenge — direct
+    service-unit, complementing the route-level coverage already
+    in `test_2fa_routes.py`).
+  - +7 tests for `patient_service` error branches (duplicate
+    `system_id` collision + retry; ownership contract on
+    `update_patient`; soft-delete read on the router helper;
+    `derive_age_group` edges).
+  - +5 tests for `totp_service` error branches (tampered
+    ciphertext, drift-window boundary, shape rejection, matched
+    step within window, special-char provisioning URI).
+  - **Contract findings worth knowing**: `update_patient` doesn't
+    enforce ownership at the service level (router does);
+    `derive_age_group` doesn't validate DOB ranges (future dates
+    silently become "kind"); `login_2fa` replay/expiry already
+    had route-level coverage so K3 added service-level.
+
+#### Phase 2 — Integration (inline)
+
+- **Merge conflict in `test_auth_service.py`**: K1 (P-3 sibling-revoke
+  tests) and K3 (2FA service-unit tests) both wanted to append to
+  the same file. Resolved by keeping BOTH sections; the file now
+  has K3's "I2 deferred: 2FA service-unit tests" block followed by
+  K1's "P-3: bulk-update consolidation" block.
+- **K1 test bug fix**: K1's two P-3 enable_2fa tests called
+  `monkeypatch.setenv("TOTP_ENCRYPTION_KEY", ...)` but
+  `services/totp_service.py:18` reads `SESSION_ENCRYPTION_KEY`.
+  Tests failed at integration time with `RuntimeError:
+  SESSION_ENCRYPTION_KEY env var is required`. Fixed both occurrences
+  inline before K1's commit landed.
+
+### Files changed
+
+#### `1b22548` — K3 test coverage uplift
+
+- `backend/tests/test_auth_service.py` — +6 tests, new
+  `deps_with_2fa` fixture.
+- `backend/tests/test_patient_service.py` — +7 tests.
+- `backend/tests/test_totp_service.py` — +5 tests.
+
+#### `77da09a` — K1 perf bundle
+
+- `backend/routers/auth.py` — `list_sessions` limit/offset.
+- `backend/services/auth_service.py` — bulk `sa.update` in
+  `change_password` + `enable_2fa`.
+- `backend/routers/reports.py` — `include_total` opt-in.
+- `backend/tests/test_auth_routes.py` — +5 P-1 tests.
+- `backend/tests/test_auth_service.py` — +4 P-3 tests (env var
+  fixed inline during integration).
+- `backend/tests/test_reports_extra.py` — +3 P-5 tests.
+
+#### `63ce9e0` — K2 security hygiene
+
+- `backend/middleware/rate_limiter.py` — `client_ip_key` polarity
+  flip, gated on `TRUSTED_PROXY` not `_is_production()`.
+- `backend/main.py` — `Retry-After` on 429 handler.
+- `backend/tests/conftest.py` — pin `TRUSTED_PROXY="testclient"`.
+- `backend/tests/test_rate_limiter.py` (or equivalent) — +3 XFF tests
+  + 1 Retry-After test, updated 1 existing test.
+
+### What is NOT done yet
+
+- **I3 S-7** (informational) — access-token revocation on password
+  change. Needs a `jti`/`session_hash` Redis blocklist with
+  TTL == access_token TTL. Owner-decision (was marked
+  informational).
+- **I3 S-8** (informational) — `get_optional_user` doesn't check
+  `locked_until`/`email_verified`/`revoked_at`. Documented trade-off
+  from `c0980ab`; safe while every handler reads only `user.id`.
+- **Drop redundant single-column `ix_*_user_id` indexes** — needs
+  live Neon EXPLAIN. Not agent-safe.
+- **`disable_2fa` bulk-update consolidation** — K1 noted this has
+  the same per-row loop pattern as the two methods it fixed. Small
+  follow-up.
+- **Optional `X-RateLimit-*` headers** — slowapi plumbing exists,
+  not enabled. K2 left it out per "minimal scope".
+- **TRUSTED_PROXY deploy-env audit** — see Risks below.
+- **Vercel preview deploy** — pre-existing failure, out of scope.
+- **M-6** — anamnesis completion logic. Blocked on owner-WIP.
+
+### Risks / Attention
+
+- **Production XFF / rate-limit collapse risk**: with `TRUSTED_PROXY`
+  unset (the new safe default), `client_ip_key` falls back to the
+  socket IP, which on Vercel is the edge proxy IP. All traffic from
+  Vercel will bucket under that single IP, collapsing per-IP rate
+  limits into a global limit. To restore per-user-IP rate limiting,
+  the operator must set `TRUSTED_PROXY` to the proxy IP that Vercel
+  routes through to the function (if any deterministic IP exists).
+  Vercel's documented edge IPs rotate, so this may require a
+  redesign of the rate-limit strategy (e.g., bucket by user_id for
+  authenticated routes, by socket IP for unauthenticated).
+- **`include_total` API contract**: the response `total` field on
+  `GET /reports` is now typed `int | None` rather than `int`.
+  Default callers (no query param) keep `total: int`, but the
+  TypeScript types in the frontend may need a one-line relaxation
+  if/when the frontend adopts the opt-in path.
+- **`update_patient` ownership at service level**: K3 surfaced
+  that the service does NOT enforce ownership — the router does
+  via `_get_active_or_404`. Any direct service call (background
+  job, internal tooling) bypasses authorization. Worth a comment
+  in the service docstring; not strictly broken.
+
+### Next concrete action
+
+Push the K-wave + this docs commit. Then triage S-7 (access-token
+revocation — meaningful security improvement, ~half-day) vs.
+`disable_2fa` bulk-update consolidation (15 minutes) vs. owner-WIP
+clearance for M-6.
+
+### Ideal next prompt
+
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. The post-H-wave audit
+> cycle is fully closed except S-7 (informational). Decide between
+> (a) implementing S-7 access-token revocation via a Redis blocklist,
+> (b) the small `disable_2fa` bulk-update follow-up, or (c) auditing
+> the production XFF / rate-limit posture surfaced by K2.
 
 ---
 
