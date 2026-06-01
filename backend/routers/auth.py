@@ -7,7 +7,7 @@ import hmac
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
@@ -445,6 +445,8 @@ def twofa_enable(
 @limiter.limit("30/minute")
 def list_sessions(
     request: Request,
+    limit: int = Query(50, ge=1, le=200, description="Max rows to return (1-200, default 50)"),
+    offset: int = Query(0, ge=0, description="Rows to skip for pagination (default 0)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[dict]:
@@ -458,6 +460,8 @@ def list_sessions(
             UserSession.expires_at > now,
         )
         .order_by(UserSession.last_used_at.desc())
+        .offset(offset)
+        .limit(limit)
     ).all()
     return [
         {

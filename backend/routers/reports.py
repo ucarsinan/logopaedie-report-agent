@@ -25,6 +25,14 @@ async def list_reports(
     to_date: str | None = Query(None, description="Filter to date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    include_total: bool = Query(
+        True,
+        description=(
+            "If true (default), return an exact `total` count of matching rows. "
+            "If false, `total` is set to None and the COUNT(*) query is skipped — "
+            "use this on subsequent pages once the first page returned the total."
+        ),
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -50,8 +58,18 @@ async def list_reports(
                 pass
         return q
 
-    count_query = select(func.count()).select_from(_apply_filters(select(ReportRecord)).subquery())
-    total = db.exec(count_query).one()
+    # P-5: COUNT(*) over the filtered set is the dominant cost on busy users.
+    # Strategy (a) from I3: skip the COUNT(*) when the caller explicitly opts
+    # out via `include_total=false` (returns total=None). Default behaviour
+    # remains unchanged so existing callers (frontend, fetch-helper) keep
+    # working — they can switch to include_total=false on page>1 to halve the
+    # DB round-trips once they cache the total from the first page.
+    total: int | None
+    if include_total:
+        count_query = select(func.count()).select_from(_apply_filters(select(ReportRecord)).subquery())
+        total = db.exec(count_query).one()
+    else:
+        total = None
 
     join_query = _apply_filters(
         select(ReportRecord, Patient.pseudonym.label("patient_pseudonym")).outerjoin(  # type: ignore[attr-defined]

@@ -508,6 +508,103 @@ async def test_disable_2fa_invalid_code_rejected_service_unit(deps_with_2fa):
 
     db.refresh(user)
     assert user.totp_secret == original_secret
+
+
+# ── P-3: bulk-update consolidation for sibling-session revocation ─────────────
+
+
+@pytest.mark.asyncio
+async def test_password_change_bulk_revokes_three_sibling_sessions(deps):
+    """P-3: three active sessions + current → only the current survives,
+    and the two siblings are revoked in a single bulk UPDATE."""
+    svc, db, email = deps
+    await _make_verified_user(svc, db, email, "bulk-pw@example.com")
+    s1 = svc.login(db, email_addr="bulk-pw@example.com", password="longpassword12", ip=None, ua=None)
+    _s2 = svc.login(db, email_addr="bulk-pw@example.com", password="longpassword12", ip=None, ua=None)
+    _s3 = svc.login(db, email_addr="bulk-pw@example.com", password="longpassword12", ip=None, ua=None)
+    user = db.exec(select(User).where(User.email == "bulk-pw@example.com")).one()
+    assert len(db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()) == 3
+
+    svc.change_password(
+        db,
+        user=user,
+        current_password="longpassword12",
+        new_password="newlongpassword34",
+        current_refresh_token=s1["refresh_token"],
+        ip=None,
+        ua=None,
+    )
+
+    sessions = db.exec(select(UserSession).where(UserSession.user_id == user.id)).all()
+    active = [s for s in sessions if s.revoked_at is None]
+    revoked = [s for s in sessions if s.revoked_at is not None]
+    assert len(active) == 1
+    assert len(revoked) == 2
+    # The surviving session is the one tied to s1's refresh_token_hash
+    s1_hash = svc.tokens.hash_refresh(s1["refresh_token"])
+    assert active[0].refresh_token_hash == s1_hash
+
+
+@pytest.mark.asyncio
+async def test_password_change_without_current_refresh_revokes_all(deps):
+    """P-3: when current_refresh_token is None, the bulk UPDATE has no
+    exclusion clause → all active sessions are revoked."""
+    svc, db, email = deps
+    await _make_verified_user(svc, db, email, "bulk-pw-all@example.com")
+    svc.login(db, email_addr="bulk-pw-all@example.com", password="longpassword12", ip=None, ua=None)
+    svc.login(db, email_addr="bulk-pw-all@example.com", password="longpassword12", ip=None, ua=None)
+    user = db.exec(select(User).where(User.email == "bulk-pw-all@example.com")).one()
+
+    svc.change_password(
+        db,
+        user=user,
+        current_password="longpassword12",
+        new_password="newlongpassword34",
+        current_refresh_token=None,
+        ip=None,
+        ua=None,
+    )
+    active = db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()
+    assert active == []
+
+
+@pytest.mark.asyncio
+async def test_enable_2fa_bulk_revokes_other_sessions_keeps_current(deps, monkeypatch):
+    """P-3: enable_2fa should revoke every active session except the
+    current one (identified by `_current_session_hash`) in one bulk UPDATE."""
+    import pyotp
+
+    from services.totp_service import TOTPService
+
+    svc, db, email = deps
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    svc.totp = TOTPService()
+
+    await _make_verified_user(svc, db, email, "bulk-2fa@example.com")
+    s1 = svc.login(db, email_addr="bulk-2fa@example.com", password="longpassword12", ip=None, ua=None)
+    svc.login(db, email_addr="bulk-2fa@example.com", password="longpassword12", ip=None, ua=None)
+    svc.login(db, email_addr="bulk-2fa@example.com", password="longpassword12", ip=None, ua=None)
+    user = db.exec(select(User).where(User.email == "bulk-2fa@example.com")).one()
+    assert len(db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all()) == 3
+
+    # Bootstrap a TOTP secret + valid code
+    setup = svc.start_2fa_setup(db, user)
+    db.refresh(user)
+    code = pyotp.TOTP(setup["secret"]).now()
+
+    # Mark s1 as the "current" session
+    s1_hash = svc.tokens.hash_refresh(s1["refresh_token"])
+    user._current_session_hash = s1_hash  # type: ignore[attr-defined]
+
+    svc.enable_2fa(db, user, code, ip=None, ua=None)
+
+    sessions = db.exec(select(UserSession).where(UserSession.user_id == user.id)).all()
+    active = [s for s in sessions if s.revoked_at is None]
+    assert len(active) == 1
+    assert active[0].refresh_token_hash == s1_hash
+    db.refresh(user)
     assert user.totp_enabled is True
 
 
@@ -612,3 +709,30 @@ async def test_login_2fa_stale_challenge_rejected_service_unit(deps_with_2fa):
         svc.login_2fa(db, challenge_id=challenge_id, code=pyotp.TOTP(secret).now(), ip=None, ua=None)
     assert exc.value.status_code == 401
     assert "challenge" in str(exc.value.detail).lower()
+
+
+@pytest.mark.asyncio
+async def test_enable_2fa_without_current_hash_revokes_all(deps, monkeypatch):
+    """P-3: enable_2fa with no `_current_session_hash` → all active
+    sessions revoked (bulk UPDATE without exclusion clause)."""
+    import pyotp
+
+    from services.totp_service import TOTPService
+
+    svc, db, email = deps
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    svc.totp = TOTPService()
+
+    await _make_verified_user(svc, db, email, "bulk-2fa-all@example.com")
+    svc.login(db, email_addr="bulk-2fa-all@example.com", password="longpassword12", ip=None, ua=None)
+    svc.login(db, email_addr="bulk-2fa-all@example.com", password="longpassword12", ip=None, ua=None)
+    user = db.exec(select(User).where(User.email == "bulk-2fa-all@example.com")).one()
+
+    setup = svc.start_2fa_setup(db, user)
+    db.refresh(user)
+    code = pyotp.TOTP(setup["secret"]).now()
+    # No _current_session_hash attribute → revoke ALL active sessions
+    svc.enable_2fa(db, user, code, ip=None, ua=None)
+    assert db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all() == []

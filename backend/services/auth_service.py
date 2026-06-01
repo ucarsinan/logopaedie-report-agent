@@ -636,13 +636,17 @@ class AuthService:
         user.password_hash = self.password.hash(new_password)
         user.updated_at = _utcnow()
         db.add(user)
+        # P-3: single bulk UPDATE instead of per-row .add() in a Python loop.
+        # Mirrors AuthService.refresh's reuse-detection burn-all pattern.
         current_hash = self.tokens.hash_refresh(current_refresh_token) if current_refresh_token else None
-        for s in db.exec(
-            select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
-        ).all():
-            if current_hash is None or s.refresh_token_hash != current_hash:
-                s.revoked_at = _utcnow()
-                db.add(s)
+        now = _utcnow()
+        stmt = sa_update(UserSession).where(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        if current_hash is not None:
+            stmt = stmt.where(UserSession.refresh_token_hash != current_hash)
+        db.execute(_atomic(stmt.values(revoked_at=now)))
         db.commit()
         self._audit(
             db,
@@ -892,8 +896,6 @@ class AuthService:
         background: BackgroundTasks | None = None,
         db_factory: DBSessionFactory | None = None,
     ) -> None:
-        import hmac as _hmac
-
         from fastapi import HTTPException
 
         assert self.totp is not None, "TOTPService not wired"
@@ -915,20 +917,22 @@ class AuthService:
         # Setting it here would block the very first login after enabling (same step window).
         db.add(user)
 
-        # Revoke OTHER active sessions; keep the current one (identified by session_hash)
-        # Gate 4A Finding #5: use hmac.compare_digest to prevent timing attacks on hash comparison
+        # P-3: single bulk UPDATE instead of per-row .add() in a Python loop.
+        # The current session is identified by `_current_session_hash` (the
+        # refresh_token_hash from the JWT sid claim) and is preserved via the
+        # SQL `!=` predicate. Refresh-token hashes are SHA-256 hex digests,
+        # so server-side `!=` is functionally equivalent to the previous
+        # `hmac.compare_digest` check (the hash is supplied by the already-
+        # authenticated user, not an attacker probing for equality).
         current_hash = getattr(user, "_current_session_hash", None)
-        sessions = db.exec(
-            select(UserSession).where(
-                UserSession.user_id == user.id,
-                UserSession.revoked_at.is_(None),
-            )
-        ).all()
-        for s in sessions:
-            if current_hash and _hmac.compare_digest(s.refresh_token_hash, current_hash):
-                continue
-            s.revoked_at = _utcnow()
-            db.add(s)
+        now = _utcnow()
+        stmt = sa_update(UserSession).where(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        if current_hash:
+            stmt = stmt.where(UserSession.refresh_token_hash != current_hash)
+        db.execute(_atomic(stmt.values(revoked_at=now)))
         db.commit()
         self._audit(
             db,

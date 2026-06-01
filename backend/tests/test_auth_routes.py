@@ -273,3 +273,64 @@ def test_rate_limit_delete_session_30_per_min(client, unique_ip_headers):
         c.delete(f"/auth/sessions/{target}", headers=headers)
     res = c.delete(f"/auth/sessions/{target}", headers=headers)
     _assert_rate_limit_payload(res)
+
+
+# ── P-1: pagination on GET /auth/sessions ─────────────────────────────────────
+
+
+def _login_3_times(c, email_obj, addr: str) -> str:
+    """Register, verify, then create 3 active sessions; return the latest access_token."""
+    c.post("/auth/register", json={"email": addr, "password": "longpassword12"})
+    c.post("/auth/verify-email", json={"token": email_obj.sent[-1][2]})
+    tokens = None
+    for _ in range(3):
+        tokens = c.post("/auth/login", json={"email": addr, "password": "longpassword12"}).json()
+    assert tokens is not None
+    return tokens["access_token"]
+
+
+def test_list_sessions_default_limit_returns_all(client):
+    """No query params → default limit=50 returns all 3 sessions."""
+    c, email = client
+    access = _login_3_times(c, email, "p1a@example.com")
+    res = c.get("/auth/sessions", headers={"Authorization": f"Bearer {access}"})
+    assert res.status_code == 200
+    assert len(res.json()) == 3
+
+
+def test_list_sessions_limit_clamps_page_size(client):
+    """limit=2 returns exactly 2 rows (the most recently used)."""
+    c, email = client
+    access = _login_3_times(c, email, "p1b@example.com")
+    res = c.get("/auth/sessions?limit=2", headers={"Authorization": f"Bearer {access}"})
+    assert res.status_code == 200
+    assert len(res.json()) == 2
+
+
+def test_list_sessions_offset_returns_next_batch(client):
+    """offset=2 with limit=2 returns the 3rd session, no overlap."""
+    c, email = client
+    access = _login_3_times(c, email, "p1c@example.com")
+    page1 = c.get("/auth/sessions?limit=2&offset=0", headers={"Authorization": f"Bearer {access}"}).json()
+    page2 = c.get("/auth/sessions?limit=2&offset=2", headers={"Authorization": f"Bearer {access}"}).json()
+    assert len(page1) == 2
+    assert len(page2) == 1
+    page1_ids = {s["id"] for s in page1}
+    page2_ids = {s["id"] for s in page2}
+    assert page1_ids.isdisjoint(page2_ids)
+
+
+def test_list_sessions_limit_over_cap_returns_422(client):
+    """limit > 200 violates the FastAPI Query(le=200) constraint and 422s."""
+    c, email = client
+    access = _login_3_times(c, email, "p1d@example.com")
+    res = c.get("/auth/sessions?limit=300", headers={"Authorization": f"Bearer {access}"})
+    assert res.status_code == 422
+
+
+def test_list_sessions_negative_offset_returns_422(client):
+    """offset must be ge=0 — negative offset is a validation error."""
+    c, email = client
+    access = _login_3_times(c, email, "p1e@example.com")
+    res = c.get("/auth/sessions?offset=-1", headers={"Authorization": f"Bearer {access}"})
+    assert res.status_code == 422

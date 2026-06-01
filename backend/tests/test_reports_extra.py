@@ -218,3 +218,67 @@ class TestReportFilters:
         data = res.json()
         assert len(data["items"]) == 2
         assert data["total"] == 5
+
+    def test_pagination_include_total_default_returns_count(self, reports_client):
+        """P-5: include_total defaults to True → exact count returned (backward compat)."""
+        _insert_records(
+            reports_client._engine,
+            [
+                ReportRecord(
+                    pseudonym=f"Q{i}",
+                    report_type="befundbericht",
+                    content_json="{}",
+                    user_id=TEST_USER_ID,
+                )
+                for i in range(7)
+            ],
+        )
+        # page=2 with no flag → total still computed (default include_total=True)
+        res = reports_client.get("/reports?page=2&limit=3")
+        assert res.status_code == 200
+        data = res.json()
+        assert len(data["items"]) == 3
+        assert data["total"] == 7
+
+    def test_pagination_include_total_false_skips_count(self, reports_client):
+        """P-5: include_total=false → total is None, items returned as usual."""
+        _insert_records(
+            reports_client._engine,
+            [
+                ReportRecord(
+                    pseudonym=f"R{i}",
+                    report_type="befundbericht",
+                    content_json="{}",
+                    user_id=TEST_USER_ID,
+                )
+                for i in range(5)
+            ],
+        )
+        res = reports_client.get("/reports?page=2&limit=2&include_total=false")
+        assert res.status_code == 200
+        data = res.json()
+        # Page 2 of 5 rows / limit 2 → 2 rows (rows 3-4)
+        assert len(data["items"]) == 2
+        assert data["total"] is None
+        assert data["page"] == 2
+        assert data["limit"] == 2
+
+    def test_pagination_include_total_false_first_page_also_skips(self, reports_client):
+        """P-5: include_total=false on page=1 still skips the COUNT (opt-in is global)."""
+        _insert_records(
+            reports_client._engine,
+            [
+                ReportRecord(
+                    pseudonym=f"S{i}",
+                    report_type="befundbericht",
+                    content_json="{}",
+                    user_id=TEST_USER_ID,
+                )
+                for i in range(3)
+            ],
+        )
+        res = reports_client.get("/reports?page=1&limit=10&include_total=false")
+        assert res.status_code == 200
+        data = res.json()
+        assert len(data["items"]) == 3
+        assert data["total"] is None
