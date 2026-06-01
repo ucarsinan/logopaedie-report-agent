@@ -46,6 +46,18 @@ def test_service_token_middleware_other_paths_passthrough(app):
     assert res.status_code == 200
 
 
+def test_service_token_middleware_one_byte_off_rejected(app):
+    """S-5: a single-byte-different bearer must still 401.
+
+    Pins the negative path after switching to ``hmac.compare_digest`` — the
+    constant-time compare must still reject mismatches; timing is not what
+    this test verifies, just that the comparison stays strict.
+    """
+    client = TestClient(app)
+    res = client.get("/health", headers={"Authorization": "Bearer svc-secrex"})
+    assert res.status_code == 401
+
+
 def test_service_token_middleware_inactive_when_env_unset(monkeypatch):
     monkeypatch.delenv("SERVICE_TOKEN", raising=False)
     app = FastAPI()

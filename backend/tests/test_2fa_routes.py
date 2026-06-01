@@ -456,6 +456,35 @@ def test_rate_limit_2fa_enable_5_per_min(client, unique_ip_headers):
     assert res.status_code == 429
 
 
+def test_rate_limit_2fa_setup_3_per_hour(client, unique_ip_headers):
+    """S-3: slowapi limit 3/hour/IP on /auth/2fa/setup — 4th call returns 429.
+
+    Prevents an attacker with a stolen access token from rapidly rotating the
+    TOTP secret while looking for a window the legitimate user doesn't notice.
+    """
+    tokens = register_and_login(client, "rlsetup@example.com", "correct horse battery 23")
+    headers = {**auth_headers(tokens), **unique_ip_headers}
+    for _ in range(3):
+        res = client.post("/auth/2fa/setup", headers=headers)
+        assert res.status_code == 200
+    res = client.post("/auth/2fa/setup", headers=headers)
+    assert res.status_code == 429
+
+
+def test_2fa_setup_emits_audit_event(client):
+    """S-3: POST /auth/2fa/setup must persist ``user.2fa_setup_started``."""
+    from models.auth import AuditLog
+
+    tokens = register_and_login(client, "audsetup@example.com", "correct horse battery 24")
+    res = client.post("/auth/2fa/setup", headers=auth_headers(tokens))
+    assert res.status_code == 200
+    with Session(client.engine) as db:
+        user = db.exec(select(User).where(User.email == "audsetup@example.com")).one()
+        rows = db.exec(select(AuditLog).where(AuditLog.event == "user.2fa_setup_started")).all()
+    assert len(rows) >= 1
+    assert any(r.user_id == user.id for r in rows)
+
+
 def test_rate_limit_2fa_disable_5_per_min(client, unique_ip_headers):
     """slowapi limit 5/minute/IP on /auth/2fa/disable — 6th call returns 429."""
     tokens = register_and_login(client, "rldis@example.com", "correct horse battery 22")

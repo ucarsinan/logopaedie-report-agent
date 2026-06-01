@@ -244,6 +244,124 @@ async def test_password_reset_confirm_revokes_all_sessions(deps):
     svc.login(db, email_addr="reset@example.com", password="newlongpassword34", ip=None, ua=None)
 
 
+# ── S-1: audit_log.metadata must not contain raw email ──────────────────────
+
+
+@pytest.mark.asyncio
+async def test_register_audit_metadata_uses_email_hash_not_raw_email(deps):
+    """S-1: ``user.register_attempt`` must store an email_hash, never raw email.
+
+    audit_log rows are admin-readable via /admin/audit and stored unencrypted,
+    so raw email turns the table into a GDPR-relevant PII store.
+    """
+    from models.auth import AuditLog
+
+    svc, db, _email = deps
+    await svc.register(db, email_addr="pii-register@example.com", password="longpassword12", ip=None, ua=None)
+    row = db.exec(select(AuditLog).where(AuditLog.event == "user.register_attempt")).one()
+    assert "email" not in row.metadata_json
+    assert "email_hash" in row.metadata_json
+    # Hash must be stable + correlate same email across emits
+    from services.auth_service import _hash_email
+
+    assert row.metadata_json["email_hash"] == _hash_email("pii-register@example.com")
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_audit_uses_email_hash(deps):
+    """S-1: ``password.reset_requested`` must store an email_hash, never raw email."""
+    from models.auth import AuditLog
+
+    svc, db, _email = deps
+    await svc.request_password_reset(db, email_addr="pii-reset@example.com", ip=None, ua=None)
+    row = db.exec(select(AuditLog).where(AuditLog.event == "password.reset_requested")).one()
+    assert "email" not in row.metadata_json
+    assert "email_hash" in row.metadata_json
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_audit_uses_email_hash(deps):
+    """S-1: ``user.resend_verification`` must store an email_hash, never raw email."""
+    from models.auth import AuditLog
+
+    svc, db, _email = deps
+    await svc.resend_verification(db, email_addr="pii-resend@example.com", ip=None, ua=None)
+    row = db.exec(select(AuditLog).where(AuditLog.event == "user.resend_verification")).one()
+    assert "email" not in row.metadata_json
+    assert "email_hash" in row.metadata_json
+
+
+# ── S-3: 2FA setup must emit audit event ─────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_start_2fa_setup_emits_audit_event(deps, monkeypatch):
+    """S-3: ``start_2fa_setup`` must emit ``user.2fa_setup_started``.
+
+    Without this, an attacker with a stolen access token could silently rotate
+    the TOTP secret and leave no trace for the user / admin to detect.
+    """
+    from cryptography.fernet import Fernet
+
+    from models.auth import AuditLog
+    from services.totp_service import TOTPService
+
+    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    svc, db, email = deps
+    # Wire a TOTPService into the existing AuthService (deps fixture omits it).
+    svc.totp = TOTPService()
+    await _make_verified_user(svc, db, email, "twofa-audit@example.com")
+    user = db.exec(select(User).where(User.email == "twofa-audit@example.com")).one()
+    svc.start_2fa_setup(db, user)
+    rows = db.exec(select(AuditLog).where(AuditLog.event == "user.2fa_setup_started")).all()
+    assert len(rows) == 1
+    assert rows[0].user_id == user.id
+    assert rows[0].metadata_json.get("user_id") == str(user.id)
+
+
+# ── S-4: ``_audit`` partial-wiring guard must raise (not assert) ─────────────
+
+
+def test_audit_partial_wiring_raises_runtime_error(deps):
+    """S-4: ``background`` and ``db_factory`` must be passed together.
+
+    A bare ``assert`` is stripped under ``python -O``; this test pins the
+    explicit ``RuntimeError`` so the guard survives optimization.
+    """
+    svc, db, _email = deps
+    db_factory_stub = lambda: db  # noqa: E731 — minimal callable for the test
+
+    # background=None, db_factory=callable → must raise
+    with pytest.raises(RuntimeError, match="background and db_factory must be passed together"):
+        svc._audit(
+            db,
+            None,
+            db_factory_stub,
+            user_id=None,
+            event="test.event",
+            ip=None,
+            user_agent=None,
+            metadata={},
+        )
+
+    # Symmetric: background=object, db_factory=None → must raise
+    class _FakeBg:
+        def add_task(self, *args, **kwargs):
+            pass
+
+    with pytest.raises(RuntimeError, match="background and db_factory must be passed together"):
+        svc._audit(
+            db,
+            _FakeBg(),  # type: ignore[arg-type]
+            None,
+            user_id=None,
+            event="test.event",
+            ip=None,
+            user_agent=None,
+            metadata={},
+        )
+
+
 @pytest.mark.asyncio
 async def test_password_change_revokes_other_sessions_only(deps):
     svc, db, email = deps

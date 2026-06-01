@@ -45,6 +45,17 @@ def _sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
+def _hash_email(email: str) -> str:
+    """Stable, non-reversible correlation key for audit metadata.
+
+    S-1 fix: ``audit_log.metadata_json`` is admin-readable via /admin/audit and
+    stored unencrypted, so raw email turns the table into a GDPR-relevant PII
+    store. Hashing keeps admins able to correlate rows for the same email
+    (e.g. enumeration attempts on register/reset) without retaining the PII.
+    """
+    return hashlib.sha256(email.lower().encode("utf-8")).hexdigest()[:32]
+
+
 def _atomic(stmt):
     """Add synchronize_session=False to skip ORM Python-side re-evaluation.
 
@@ -112,11 +123,15 @@ class AuthService:
 
         A partial wiring (one passed but not the other) would silently fall
         back to the sync path and re-introduce the per-request commit we just
-        removed; assert here so misuse fails loud instead of degrading quietly.
+        removed; raise here so misuse fails loud even under ``python -O``
+        (which strips ``assert``).
         """
-        assert (background is None) == (db_factory is None), (
-            "auth_service._audit: pass both background and db_factory, or neither"
-        )
+        if (background is None) != (db_factory is None):
+            raise RuntimeError(
+                "AuthService._audit: background and db_factory must be passed "
+                "together (both or neither). Partial wiring would silently "
+                "degrade to the sync audit path and lose request-scoped emits."
+            )
         if background is not None and db_factory is not None:
             self.audit.log_in_background(
                 background,
@@ -162,7 +177,7 @@ class AuthService:
             event="user.register_attempt",
             ip=ip,
             user_agent=ua,
-            metadata={"email": normalized},
+            metadata={"email_hash": _hash_email(normalized)},
         )
         if existing is not None:
             return
@@ -525,7 +540,7 @@ class AuthService:
             event="password.reset_requested",
             ip=ip,
             user_agent=ua,
-            metadata={"email": normalized},
+            metadata={"email_hash": _hash_email(normalized)},
         )
         if user is None:
             return
@@ -662,7 +677,7 @@ class AuthService:
             event="user.resend_verification",
             ip=ip,
             user_agent=ua,
-            metadata={"email": normalized},
+            metadata={"email_hash": _hash_email(normalized)},
         )
         if user is None or user.email_verified:
             return
@@ -680,13 +695,34 @@ class AuthService:
 
     # ---------- 2FA setup / enable / disable ----------
 
-    def start_2fa_setup(self, db: Session, user: User) -> dict[str, str]:
+    def start_2fa_setup(
+        self,
+        db: Session,
+        user: User,
+        *,
+        ip: str | None = None,
+        ua: str | None = None,
+        background: BackgroundTasks | None = None,
+        db_factory: DBSessionFactory | None = None,
+    ) -> dict[str, str]:
         assert self.totp is not None, "TOTPService not wired"
         secret = self.totp.generate_secret()
         user.totp_secret = self.totp.encrypt(secret)
         user.totp_enabled = False
         db.add(user)
         db.commit()
+        # S-3: emit audit so silent secret rotation under a stolen access token
+        # leaves a trace the user / admin can detect after the fact.
+        self._audit(
+            db,
+            background,
+            db_factory,
+            user_id=user.id,
+            event="user.2fa_setup_started",
+            ip=ip,
+            user_agent=ua,
+            metadata={"user_id": str(user.id)},
+        )
         return {
             "secret": secret,
             "provisioning_uri": self.totp.provisioning_uri(secret, user.email),

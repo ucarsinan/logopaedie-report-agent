@@ -357,12 +357,24 @@ async def resend(
 
 
 @router.post("/2fa/setup")
+@limiter.limit("3/hour")
 def twofa_setup(
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     svc: AuthService = Depends(get_auth_service),
     db: Session = Depends(get_db),
+    db_factory: DBSessionFactory = Depends(get_db_factory),
 ) -> dict[str, str]:
-    return svc.start_2fa_setup(db, current_user)
+    ip, ua = _client(request)
+    return svc.start_2fa_setup(
+        db,
+        current_user,
+        ip=ip,
+        ua=ua,
+        background=background_tasks,
+        db_factory=db_factory,
+    )
 
 
 class TwoFaEnableBody(BaseModel):
