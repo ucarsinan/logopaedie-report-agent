@@ -20,6 +20,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # singleton to memory:// once, regardless of import order.
 for _redis_var in ("RATE_LIMIT_REDIS_URL", "REDIS_URL", "KV_URL"):
     os.environ.pop(_redis_var, None)
+# client_ip_key only honors X-Forwarded-For when TRUSTED_PROXY matches the socket
+# IP. Starlette's TestClient reports ``request.client.host == "testclient"``, so
+# pinning TRUSTED_PROXY to that value keeps the ``unique_ip_headers`` fixture
+# below effective (each test gets its own rate-limit bucket via spoofed XFF).
+os.environ["TRUSTED_PROXY"] = "testclient"
 import middleware.rate_limiter  # noqa: E402,F401
 
 

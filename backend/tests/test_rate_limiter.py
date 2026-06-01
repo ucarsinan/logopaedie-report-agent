@@ -45,9 +45,11 @@ def test_storage_uri_defaults_to_memory(monkeypatch):
     assert _resolve_storage_uri() == "memory://"
 
 
-def test_client_key_uses_first_forwarded_ip():
+def test_client_key_uses_first_forwarded_ip(monkeypatch):
+    """When TRUSTED_PROXY matches the socket IP, the first XFF hop is honored."""
     from middleware.rate_limiter import client_ip_key
 
+    monkeypatch.setenv("TRUSTED_PROXY", "10.0.0.1")
     req = _fake_request({"x-forwarded-for": "203.0.113.7, 10.0.0.1"}, client_host="10.0.0.1")
     assert client_ip_key(req) == "203.0.113.7"
 
@@ -101,6 +103,67 @@ def test_trusted_proxy_assertion_skipped_outside_production(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.delenv("TRUSTED_PROXY", raising=False)
     _assert_trusted_proxy_configured()  # must not raise — dev/test mode
+
+
+def test_client_key_ignores_xff_when_trusted_proxy_unset(monkeypatch):
+    """S-6: with TRUSTED_PROXY unset, X-Forwarded-For must be ignored entirely.
+
+    Without an explicit opt-in, a caller can spoof XFF to rotate per-IP rate-limit
+    buckets. The key falls back to the direct socket IP regardless of XFF.
+    """
+    from middleware.rate_limiter import client_ip_key
+
+    monkeypatch.delenv("TRUSTED_PROXY", raising=False)
+    req = _fake_request({"x-forwarded-for": "1.2.3.4"}, client_host="127.0.0.1")
+    assert client_ip_key(req) == "127.0.0.1"
+
+
+def test_client_key_honors_xff_when_trusted_proxy_matches_socket(monkeypatch):
+    """S-6: with TRUSTED_PROXY matching the socket IP, the first XFF hop is honored."""
+    from middleware.rate_limiter import client_ip_key
+
+    monkeypatch.setenv("TRUSTED_PROXY", "127.0.0.1")
+    req = _fake_request({"x-forwarded-for": "1.2.3.4, 10.0.0.1"}, client_host="127.0.0.1")
+    assert client_ip_key(req) == "1.2.3.4"
+
+
+def test_client_key_ignores_xff_when_socket_is_not_trusted_proxy(monkeypatch):
+    """S-6 negative path: TRUSTED_PROXY set but inbound did not arrive via that proxy.
+
+    The request reaches the app directly (socket=127.0.0.1) instead of via the
+    declared proxy (10.0.0.5), so its XFF header is untrusted — fall back to the
+    socket IP.
+    """
+    from middleware.rate_limiter import client_ip_key
+
+    monkeypatch.setenv("TRUSTED_PROXY", "10.0.0.5")
+    req = _fake_request({"x-forwarded-for": "1.2.3.4"}, client_host="127.0.0.1")
+    assert client_ip_key(req) == "127.0.0.1"
+
+
+def test_429_response_includes_retry_after_header(client, mock_groq, unique_ip_headers):
+    """The custom 429 handler must surface Retry-After so clients can back off.
+
+    Login is throttled at 5/min; the 6th attempt within the same minute 429s.
+    """
+    mock_groq["chat"].return_value = "irrelevant"
+
+    # Trigger the per-IP login limit (5/minute). 6th call must 429.
+    for _ in range(5):
+        client.post(
+            "/auth/login",
+            json={"email": "nope@example.com", "password": "wrong"},
+            headers=unique_ip_headers,
+        )
+    res = client.post(
+        "/auth/login",
+        json={"email": "nope@example.com", "password": "wrong"},
+        headers=unique_ip_headers,
+    )
+    assert res.status_code == 429, res.text
+    retry_after = res.headers.get("retry-after")
+    assert retry_after is not None, "429 response must include Retry-After header"
+    assert int(retry_after) > 0
 
 
 def test_chat_does_not_500_when_rate_limit_backend_fails(client, session_id, mock_groq):

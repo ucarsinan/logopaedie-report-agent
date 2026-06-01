@@ -53,20 +53,40 @@ def _resolve_storage_uri() -> str:
 
 
 def client_ip_key(request) -> str:  # Starlette Request (duck-typed)
-    """Identify the client by its real IP, honoring the Vercel proxy's X-Forwarded-For.
+    """Identify the client by its real IP, honoring X-Forwarded-For only behind a known proxy.
 
-    Behind a proxy, request.client.host is the proxy IP — the same for every visitor —
-    which would make a single shared rate-limit bucket. The first hop in X-Forwarded-For
-    is the originating client. Trust of that header is gated at module-import time by
-    :func:`_assert_trusted_proxy_configured` — outside production we always trust it
-    (no front-proxy assumption to violate).
+    Behind a real proxy, ``request.client.host`` is the proxy IP — the same for every
+    visitor — which would make a single shared rate-limit bucket. The first hop in
+    ``X-Forwarded-For`` is then the originating client.
+
+    Trust of that header is gated **solely on the ``TRUSTED_PROXY`` env var**, not on
+    a production-mode heuristic. Two reasons:
+
+    * Preview deploys / non-Vercel staging often run with ``ENV != "production"``.
+      A blanket "trust XFF outside production" policy would let any caller rotate
+      per-IP buckets by spoofing the header in those environments.
+    * Making the trust opt-in by env var forces a deliberate config step in every
+      environment that legitimately sits behind a proxy.
+
+    Behaviour:
+
+    * ``TRUSTED_PROXY`` unset → ignore XFF entirely, key by direct socket IP.
+    * ``TRUSTED_PROXY`` set    → only honor XFF when the inbound socket IP matches
+      the configured proxy; otherwise fall back to the socket IP (the request did
+      not actually arrive through the trusted proxy, so its XFF is untrusted).
     """
+    trusted_proxy = os.environ.get("TRUSTED_PROXY", "").strip()
+    direct = str(get_remote_address(request))
+    if not trusted_proxy:
+        return direct
+    if direct != trusted_proxy:
+        return direct
     forwarded: str = request.headers.get("x-forwarded-for", "")
     if forwarded:
         first = forwarded.split(",")[0].strip()
         if first:
             return first
-    return str(get_remote_address(request))
+    return direct
 
 
 def _build_limiter(storage_uri: str) -> Limiter:

@@ -1,4 +1,5 @@
 # ruff: noqa: E402
+import contextlib
 import logging
 import os
 import sys
@@ -161,9 +162,20 @@ async def report_generation_error_handler(request: Request, exc: ReportGeneratio
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    # slowapi 0.1.x exposes the offending Limit via ``exc.limit`` and the
+    # underlying limits.RateLimitItem via ``exc.limit.limit``; the window in
+    # seconds is ``.get_expiry()``. There's no per-bucket ``retry_after`` on
+    # the exception itself, so we surface the limit window as the conservative
+    # client-side back-off — enough to let any client wait out the window.
+    retry_after = 60
+    # Defensive: never let header building turn a 429 into a 500.
+    with contextlib.suppress(Exception):
+        if exc.limit is not None:
+            retry_after = int(exc.limit.limit.get_expiry())
     return JSONResponse(
         status_code=429,
         content={"detail": "Zu viele Anfragen. Bitte warten Sie einen Moment."},
+        headers={"Retry-After": str(retry_after)},
     )
 
 
