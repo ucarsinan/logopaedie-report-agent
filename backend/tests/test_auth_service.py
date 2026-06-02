@@ -699,6 +699,33 @@ async def test_login_2fa_stale_challenge_rejected_service_unit(deps_with_2fa):
     assert "challenge" in str(exc.value.detail).lower()
 
 
+def test_login_2fa_raises_when_totp_service_missing(deps_with_2fa):
+    """N1: ``login_2fa`` must fail loud with an explicit RuntimeError when
+    TOTPService is not wired. The previous compound bare-``assert`` hid which
+    dependency was missing and was stripped under ``python -O``; the split
+    if/raise blocks now identify the offending dependency by name.
+    """
+    svc, db, _email = deps_with_2fa
+    # Detach the TOTPService while keeping the ChallengeStore wired
+    svc.totp = None
+
+    with pytest.raises(RuntimeError, match="TOTPService not wired"):
+        svc.login_2fa(db, challenge_id="anything", code="000000", ip=None, ua=None)
+
+
+def test_login_2fa_raises_when_challenge_store_missing(deps_with_2fa):
+    """N1: ``login_2fa`` must fail loud with an explicit RuntimeError when
+    ChallengeStore is not wired. Mirrors the TOTPService-missing test; both
+    halves of the previous compound assert are now individually testable.
+    """
+    svc, db, _email = deps_with_2fa
+    # Detach the ChallengeStore while keeping the TOTPService wired
+    svc.challenges = None
+
+    with pytest.raises(RuntimeError, match="ChallengeStore not wired"):
+        svc.login_2fa(db, challenge_id="anything", code="000000", ip=None, ua=None)
+
+
 @pytest.mark.asyncio
 async def test_enable_2fa_without_current_hash_revokes_all(deps_with_2fa):
     """P-3: enable_2fa with no `_current_session_hash` → all active

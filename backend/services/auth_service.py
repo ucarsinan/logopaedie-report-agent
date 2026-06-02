@@ -767,7 +767,19 @@ class AuthService:
 
         from fastapi import HTTPException
 
-        assert self.totp is not None and self.challenges is not None, "2FA services not wired"
+        if self.totp is None:
+            raise RuntimeError(
+                "AuthService.login_2fa: TOTPService not wired. This is a "
+                "service-configuration error; TOTP support must be enabled "
+                "before login_2fa can process challenges."
+            )
+        if self.challenges is None:
+            raise RuntimeError(
+                "AuthService.login_2fa: ChallengeStore not wired. This is a "
+                "service-configuration error; the in-memory or Redis-backed "
+                "challenge store must be wired before login_2fa can validate "
+                "challenge tokens."
+            )
         user_id_str = self.challenges.consume(challenge_id)
         if not user_id_str:
             raise HTTPException(status_code=401, detail="Invalid or expired challenge")
