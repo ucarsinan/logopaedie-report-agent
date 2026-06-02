@@ -295,21 +295,15 @@ async def test_resend_verification_audit_uses_email_hash(deps):
 
 
 @pytest.mark.asyncio
-async def test_start_2fa_setup_emits_audit_event(deps, monkeypatch):
+async def test_start_2fa_setup_emits_audit_event(deps_with_2fa):
     """S-3: ``start_2fa_setup`` must emit ``user.2fa_setup_started``.
 
     Without this, an attacker with a stolen access token could silently rotate
     the TOTP secret and leave no trace for the user / admin to detect.
     """
-    from cryptography.fernet import Fernet
-
     from models.auth import AuditLog
-    from services.totp_service import TOTPService
 
-    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
-    svc, db, email = deps
-    # Wire a TOTPService into the existing AuthService (deps fixture omits it).
-    svc.totp = TOTPService()
+    svc, db, email = deps_with_2fa
     await _make_verified_user(svc, db, email, "twofa-audit@example.com")
     user = db.exec(select(User).where(User.email == "twofa-audit@example.com")).one()
     svc.start_2fa_setup(db, user)
@@ -569,18 +563,12 @@ async def test_password_change_without_current_refresh_revokes_all(deps):
 
 
 @pytest.mark.asyncio
-async def test_enable_2fa_bulk_revokes_other_sessions_keeps_current(deps, monkeypatch):
+async def test_enable_2fa_bulk_revokes_other_sessions_keeps_current(deps_with_2fa):
     """P-3: enable_2fa should revoke every active session except the
     current one (identified by `_current_session_hash`) in one bulk UPDATE."""
     import pyotp
 
-    from services.totp_service import TOTPService
-
-    svc, db, email = deps
-    from cryptography.fernet import Fernet
-
-    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
-    svc.totp = TOTPService()
+    svc, db, email = deps_with_2fa
 
     await _make_verified_user(svc, db, email, "bulk-2fa@example.com")
     s1 = svc.login(db, email_addr="bulk-2fa@example.com", password="longpassword12", ip=None, ua=None)
@@ -712,18 +700,12 @@ async def test_login_2fa_stale_challenge_rejected_service_unit(deps_with_2fa):
 
 
 @pytest.mark.asyncio
-async def test_enable_2fa_without_current_hash_revokes_all(deps, monkeypatch):
+async def test_enable_2fa_without_current_hash_revokes_all(deps_with_2fa):
     """P-3: enable_2fa with no `_current_session_hash` → all active
     sessions revoked (bulk UPDATE without exclusion clause)."""
     import pyotp
 
-    from services.totp_service import TOTPService
-
-    svc, db, email = deps
-    from cryptography.fernet import Fernet
-
-    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
-    svc.totp = TOTPService()
+    svc, db, email = deps_with_2fa
 
     await _make_verified_user(svc, db, email, "bulk-2fa-all@example.com")
     svc.login(db, email_addr="bulk-2fa-all@example.com", password="longpassword12", ip=None, ua=None)

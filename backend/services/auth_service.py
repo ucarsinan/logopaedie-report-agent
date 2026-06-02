@@ -719,7 +719,12 @@ class AuthService:
         background: BackgroundTasks | None = None,
         db_factory: DBSessionFactory | None = None,
     ) -> dict[str, str]:
-        assert self.totp is not None, "TOTPService not wired"
+        if self.totp is None:
+            raise RuntimeError(
+                "AuthService.start_2fa_setup: TOTPService not wired. This is a "
+                "service-configuration error; TOTP support must be enabled "
+                "before initiating 2FA setup."
+            )
         secret = self.totp.generate_secret()
         user.totp_secret = self.totp.encrypt(secret)
         user.totp_enabled = False
@@ -862,7 +867,12 @@ class AuthService:
     ) -> None:
         from fastapi import HTTPException
 
-        assert self.totp is not None, "TOTPService not wired"
+        if self.totp is None:
+            raise RuntimeError(
+                "AuthService.disable_2fa: TOTPService not wired. This is a "
+                "service-configuration error; TOTP support must be enabled "
+                "before disabling 2FA."
+            )
         pw_ok = self.password.verify(current_password, user.password_hash)
         # Gate 4A Finding #3: always run TOTP verify (even without a secret) for timing equalization.
         # When no secret is stored, use the dummy secret so verify takes the same code-path.
@@ -915,7 +925,12 @@ class AuthService:
     ) -> None:
         from fastapi import HTTPException
 
-        assert self.totp is not None, "TOTPService not wired"
+        if self.totp is None:
+            raise RuntimeError(
+                "AuthService.enable_2fa: TOTPService not wired. This is a "
+                "service-configuration error; TOTP support must be enabled "
+                "before activating 2FA."
+            )
         if not user.totp_secret:
             raise HTTPException(status_code=400, detail="2FA not initialized")
         # Gate 4A Finding #4: guard against re-enabling when already enabled
