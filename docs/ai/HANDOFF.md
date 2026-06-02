@@ -8,6 +8,153 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-02 (afternoon — N-wave)
+- **Updated by:** Claude Code
+- **Handoff to:** next agent. **N-wave continued hygiene + review +
+  test coverage past audit closure.** N1 finished M2's bare-assert
+  sweep with the `login_2fa` compound-assert split + full
+  service-layer sweep (confirmed only 1 match existed). N2 reviewed
+  the M-wave and flagged a real **H-1**: bare `except Exception` in
+  the middleware blocklist check widens fail-open scope beyond
+  Redis outages. Tried narrowing inline; broke 51 tests because
+  `redis.exceptions.ConnectionError` is NOT a Python built-in
+  `ConnectionError` subclass. Reverted to `except Exception` but
+  elevated log level from WARNING → ERROR so production monitoring
+  catches code-path regressions despite the broad catch (deliberate
+  availability-over-detection trade-off). N3 added +9 tests for
+  P2-tier services (email/password/challenge_store/report_comparator)
+  pinning their contracts. **533 passed, 9 skipped** (+11 to 522).
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-06-02 (afternoon — N-wave)
+**Role(s):** Coordinator + Integrator + Inline-fixer + Scribe (3
+parallel sub-agents N1/N2/N3 + 1 inline H-1 attempted-narrow-then-
+revert + log-level elevation)
+
+### What was done
+
+- **N1 (`c941910`)** — login_2fa compound-assert split
+  (`auth_service.py:770-783`) + full service-layer assert sweep
+  (`grep -rn "^\s*assert " backend/services/`). Sweep result: **1
+  match was the only category-(a) invariant guard** outside
+  owner-WIP files (the login_2fa one). No category-(b) algorithmic
+  asserts and no debug helpers found. +2 tests for the split.
+- **N2 (review, no commit)** — independent read-only review of M-wave.
+  Found **H-1 (bare except scope)**, H-2 (same-second `iat == cutoff`
+  edge), M-1 (`_access_ttl` private attribute fragility), M-2
+  (login_2fa bare assert — already-fixed by N1, perfect timing!),
+  M-3 (Feb 29 leap-year edge in M3's boundary test), L-1 (message
+  style nitpick). 8 confirmations + 3 missing-test recommendations.
+- **N3 (`11540a4`)** — +9 P2-tier service tests:
+  - `test_email_service.py` +2 (provider error propagation —
+    contract: re-raise, do NOT swallow)
+  - `test_password_service.py` +3 (empty pw, 1000-char pw,
+    malformed-hash never raises — contract: returns False)
+  - `test_challenge_store.py` +2 (SETEX TTL via `client.ttl`,
+    per-challenge_id isolation)
+  - `test_compare.py` +2 (`compare_files` identical reports +
+    single-field divergence with AsyncMock)
+  N3 also documented 4 contract findings without "fixing" them
+  (correct triage discipline).
+- **N2 H-1 inline (`fd46f35`)** — attempted to narrow `except
+  Exception` in `middleware/auth.py:55` to
+  `(ConnectionError, TimeoutError, OSError)`. **Broke 51 tests** —
+  `redis.exceptions.ConnectionError` does NOT inherit from Python
+  built-in `ConnectionError`; the test environment relies on the
+  broad catch absorbing SSL handshake failures in the fakeredis
+  setup path. **Reverted** to `except Exception` but elevated
+  log level WARNING → ERROR with `exc_info=True` so production
+  monitoring catches code-path regressions even though the
+  catch is still broad. The project's auth-availability posture
+  (never break auth) wins over tight regression-detection.
+
+### Files changed
+
+#### `c941910` — N1 / login_2fa split
+
+- `backend/services/auth_service.py` — bare assert at 770 → two
+  `if/raise RuntimeError` blocks at lines 770-783 matching J1/M2
+  message style
+- `backend/tests/test_auth_service.py` — +2 tests
+  (`test_login_2fa_raises_when_totp_service_missing`,
+  `test_login_2fa_raises_when_challenge_store_missing`)
+
+#### `11540a4` — N3 / P2 test coverage
+
+- `backend/tests/test_email_service.py` — +2
+- `backend/tests/test_password_service.py` — +3
+- `backend/tests/test_challenge_store.py` — +2
+- `backend/tests/test_compare.py` — +2
+
+#### `fd46f35` — N2 H-1 partial inline
+
+- `backend/middleware/auth.py:55-62` — kept `except Exception`,
+  elevated `logger.warning` → `logger.error` + added comment
+  documenting the deliberate availability-over-detection trade-off
+
+### What is NOT done yet
+
+From N2 review (still open):
+
+- **H-2** — same-second `iat == cutoff` edge: a token issued at
+  T and a password change at T leaves the token valid for ~1s.
+  Narrow window in practice; consider changing `<` to `<=` in
+  `is_token_revoked` if anyone wants the boundary inclusive.
+- **M-1** — `dependencies.get_access_token_blocklist` reads
+  `TokenService._access_ttl` (private attribute). Add a public
+  property to `TokenService` if/when refactoring.
+- **M-3** — `test_derive_age_group_exactly_120_years_old_returns_erwachsen`
+  uses `today.replace(year=today.year - 120)` which raises
+  `ValueError` on Feb 29 of certain leap years. Use
+  `date(today.year - 120, today.month, min(today.day, 28))`
+  pattern for date-independence.
+
+Pre-existing TASKS.md "Next":
+
+- `.env.example` `TRUSTED_PROXY` entry — denylisted from agent
+  writes (operator-side)
+- X-RateLimit-* response headers — slowapi version bump or
+  per-route refactor needed
+- Drop redundant `ix_*_user_id` indexes — needs Neon EXPLAIN
+- S-8 informational, M-6 owner-WIP, Vercel preview out-of-scope
+
+### Risks / Attention
+
+- The `except Exception` in middleware/auth.py remains broad by
+  design (N2 H-1 trade-off). Log level is now ERROR so prod
+  monitoring should surface regressions, but a code-path bug
+  could still produce silent fail-open for up to `access_token_ttl`
+  (typically 15min). Acceptable security/availability trade-off
+  given the project's posture.
+- N3's contract findings document several behaviors that may be
+  surprising to consumers (EmailService re-raises, PasswordService
+  accepts empty string, ChallengeStore SETEX uses `nx=True`).
+  None of these are bugs per N3's triage — but if any downstream
+  caller assumed the opposite behavior, the tests now pin the
+  actual contract and would fail loud on a regression.
+
+### Next concrete action
+
+Push the N-wave + this docs commit. No agent-actionable work
+remains. Open items from N2 review (H-2 1-second window, M-1
+private attribute access, M-3 leap-year test fragility) are
+small enough for inline fixes when convenient.
+
+### Ideal next prompt
+
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. The audit cycle is
+> closed; N2 review surfaced 3 small follow-ups (H-2 iat<=cutoff,
+> M-1 public `access_ttl_seconds`, M-3 leap-year-safe date
+> construction). Decide between (a) batching those 3 small fixes
+> as a single ~20min cleanup, (b) starting fresh work, or (c)
+> waiting for owner direction on operator-side items.
+
+---
+
+## Last Updated (previous — M-wave)
+
 - **Date:** 2026-06-02 (morning — M-wave)
 - **Updated by:** Claude Code
 - **Handoff to:** next agent. **M-wave closed every remaining

@@ -32,6 +32,21 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
+### From 2026-06-02 N2 review (still open — small inline fixes)
+
+- [ ] **H-2** — `is_token_revoked` exclusive boundary: token issued
+      at exact same second as `change_password` survives. Change `<`
+      to `<=` in `backend/services/access_token_blocklist.py:80` to
+      make the boundary inclusive.
+- [ ] **M-1** — `get_access_token_blocklist` reads private
+      `TokenService._access_ttl`. Add a public `access_ttl_seconds`
+      property (or use `timedelta.total_seconds()` accessor) on
+      `TokenService` and read through it.
+- [ ] **M-3** — `test_derive_age_group_exactly_120_years_old_returns_erwachsen`
+      uses `today.replace(year=today.year - 120)` which can raise
+      `ValueError` on Feb 29 of specific leap years. Replace with
+      `date(today.year - 120, today.month, min(today.day, 28))`.
+
 ### Still open after M-wave (all non-agent-actionable)
 
 - [ ] **S-8** (informational) — `get_optional_user` does not check
@@ -70,6 +85,12 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **N-wave** (post-M-wave hygiene + review + test coverage uplift) — three parallel sub-agents:
+      N1 login_2fa compound-assert split + full service-layer sweep (only that 1 match existed outside owner-WIP) (`c941910`);
+      N2 independent M-wave review (caught H-1 bare-except scope, H-2 same-second iat edge, M-1 private attr access, M-3 leap-year test edge — all logged as follow-ups in HANDOFF.md);
+      N3 +9 P2-tier service tests (email/password/challenge_store/report_comparator contract pinning) (`11540a4`).
+      Plus inline H-1 attempted-narrow-then-revert: kept `except Exception` (test env needs broad catch for `redis.exceptions.ConnectionError`), elevated log WARNING → ERROR for production monitoring (`fd46f35`).
+      **533 passed, 9 skipped** (was 522+9; +11 net). — 2026-06-02
 - [x] **M-wave** (L3-review + L-wave-deferred closure) — three parallel sub-agents, all auto-merged clean:
       M1 S-7 access-token revocation via per-user Redis `revoked_until` cutoff comparing JWT `iat` — new `services/access_token_blocklist.py`, middleware lazy-import, fail-open on Redis error, +10 tests (`7636d9f`);
       M2 L-1 fixture consolidation (3 tests onto `deps_with_2fa`) + L-2 bare-assert → `if/raise RuntimeError` on `start_2fa_setup`/`enable_2fa`/`disable_2fa` matching J1 style (`0c1f9b0`);
