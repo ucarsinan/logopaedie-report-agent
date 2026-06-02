@@ -19,6 +19,7 @@ from exceptions import (
     TokenInvalidError,
 )
 from models.auth import EmailToken, User, UserSession
+from services.access_token_blocklist import AccessTokenBlocklist
 from services.audit_service import AuditService
 from services.challenge_store import ChallengeStore
 from services.email_service import EmailService, FakeEmailService
@@ -82,6 +83,7 @@ class AuthService:
         audit: AuditService,
         totp: TOTPService | None = None,
         challenges: ChallengeStore | None = None,
+        access_token_blocklist: AccessTokenBlocklist | None = None,
         auto_verify: bool = False,
     ) -> None:
         self.password = password
@@ -90,6 +92,7 @@ class AuthService:
         self.audit = audit
         self.totp = totp
         self.challenges = challenges
+        self.access_token_blocklist = access_token_blocklist
         self.auto_verify = auto_verify
 
     def _user_view(self, user: User) -> dict:
@@ -648,6 +651,13 @@ class AuthService:
             stmt = stmt.where(UserSession.refresh_token_hash != current_hash)
         db.execute(_atomic(stmt.values(revoked_at=now)))
         db.commit()
+        # I3 S-7: invalidate any access tokens issued before this moment.
+        # Refresh sessions are revoked above, but short-lived access tokens
+        # remain JWT-valid until natural expiry. The per-user Redis cutoff
+        # closes that window; subsequent requests with a pre-cutoff `iat`
+        # are rejected by the JWT middleware.
+        if self.access_token_blocklist is not None:
+            self.access_token_blocklist.revoke_all_for_user(str(user.id))
         self._audit(
             db,
             background,

@@ -835,3 +835,104 @@ async def test_disable_2fa_without_current_hash_revokes_all(deps_with_2fa):
         ua=None,
     )
     assert db.exec(select(UserSession).where(UserSession.revoked_at.is_(None))).all() == []
+
+
+# ── I3 S-7: access-token blocklist on change_password ────────────────────────
+
+
+@pytest.fixture
+def deps_with_blocklist(deps):
+    """Same as ``deps`` but with an in-memory ``AccessTokenBlocklist`` wired."""
+    import fakeredis
+
+    from services.access_token_blocklist import AccessTokenBlocklist
+
+    svc, db, email = deps
+    redis_client = fakeredis.FakeStrictRedis(decode_responses=True)
+    svc.access_token_blocklist = AccessTokenBlocklist(redis_client, ttl_seconds=900)
+    return svc, db, email, redis_client
+
+
+@pytest.mark.asyncio
+async def test_change_password_revokes_pre_change_access_tokens(deps_with_blocklist):
+    """S-7 core: an access token issued BEFORE change_password must be
+    flagged as revoked by the blocklist. A token issued AFTER must not."""
+    import time as _time
+
+    svc, db, email, _redis = deps_with_blocklist
+    await _make_verified_user(svc, db, email, "s7@example.com")
+    login = svc.login(db, email_addr="s7@example.com", password="longpassword12", ip=None, ua=None)
+    user = db.exec(select(User).where(User.email == "s7@example.com")).one()
+
+    # Decode the access token to grab its iat
+    pre_change_iat = svc.tokens.decode_access(login["access_token"])["iat"]
+
+    # Ensure wall-clock moves so post-change tokens have a strictly greater iat
+    _time.sleep(1)
+    svc.change_password(
+        db,
+        user=user,
+        current_password="longpassword12",
+        new_password="newlongpassword34",
+        current_refresh_token=login["refresh_token"],
+        ip=None,
+        ua=None,
+    )
+
+    # Old access token is now revoked
+    assert svc.access_token_blocklist is not None
+    assert svc.access_token_blocklist.is_token_revoked(str(user.id), pre_change_iat) is True
+
+    # A freshly issued access token AFTER the cutoff is accepted
+    _time.sleep(1)
+    fresh_login = svc.login(db, email_addr="s7@example.com", password="newlongpassword34", ip=None, ua=None)
+    fresh_iat = svc.tokens.decode_access(fresh_login["access_token"])["iat"]
+    assert svc.access_token_blocklist.is_token_revoked(str(user.id), fresh_iat) is False
+
+
+@pytest.mark.asyncio
+async def test_change_password_does_not_revoke_other_users_tokens(deps_with_blocklist):
+    """S-7 isolation: when user A changes their password, user B's
+    access tokens remain valid."""
+    svc, db, email, _redis = deps_with_blocklist
+    await _make_verified_user(svc, db, email, "alice@example.com")
+    await _make_verified_user(svc, db, email, "bob@example.com")
+    bob_login = svc.login(db, email_addr="bob@example.com", password="longpassword12", ip=None, ua=None)
+    alice = db.exec(select(User).where(User.email == "alice@example.com")).one()
+    bob = db.exec(select(User).where(User.email == "bob@example.com")).one()
+    bob_iat = svc.tokens.decode_access(bob_login["access_token"])["iat"]
+
+    svc.change_password(
+        db,
+        user=alice,
+        current_password="longpassword12",
+        new_password="newlongpassword34",
+        current_refresh_token=None,
+        ip=None,
+        ua=None,
+    )
+
+    # Bob's token is untouched
+    assert svc.access_token_blocklist is not None
+    assert svc.access_token_blocklist.is_token_revoked(str(bob.id), bob_iat) is False
+
+
+@pytest.mark.asyncio
+async def test_change_password_without_blocklist_still_works(deps):
+    """Backwards compat: AuthService constructed without a blocklist
+    (the deps fixture default) must not raise on change_password."""
+    svc, db, email = deps
+    assert svc.access_token_blocklist is None
+    await _make_verified_user(svc, db, email, "nobl@example.com")
+    login = svc.login(db, email_addr="nobl@example.com", password="longpassword12", ip=None, ua=None)
+    user = db.exec(select(User).where(User.email == "nobl@example.com")).one()
+    # Must not raise even though access_token_blocklist is None
+    svc.change_password(
+        db,
+        user=user,
+        current_password="longpassword12",
+        new_password="newlongpassword34",
+        current_refresh_token=login["refresh_token"],
+        ip=None,
+        ua=None,
+    )

@@ -109,6 +109,20 @@ def get_challenge_store():  # type: ignore[return]
     return ChallengeStore(get_redis())
 
 
+@lru_cache(maxsize=1)
+def get_access_token_blocklist():  # type: ignore[return]
+    """Return the per-user access-token revocation blocklist (Redis-backed).
+
+    TTL mirrors the access-token lifetime so the cutoff key auto-expires
+    once it can no longer block any non-expired token.
+    """
+    from redis_client import get_redis
+    from services.access_token_blocklist import AccessTokenBlocklist
+
+    ttl_seconds = int(get_token_service()._access_ttl.total_seconds())
+    return AccessTokenBlocklist(get_redis(), ttl_seconds=ttl_seconds)
+
+
 # ── Auth service wiring ────────────────────────────────────────────────────────
 
 from fastapi import Depends, HTTPException, Request, status  # noqa: E402
@@ -130,6 +144,7 @@ def _auth_service_singleton() -> AuthService:
         audit=get_audit_service(),
         totp=get_totp_service(),
         challenges=get_challenge_store(),
+        access_token_blocklist=get_access_token_blocklist(),
         auto_verify=not bool(os.getenv("RESEND_API_KEY")),
     )
 

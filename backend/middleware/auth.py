@@ -41,6 +41,20 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             )
             if payload.get("type") != "access":
                 return await call_next(request)
+            # I3 S-7: per-user Redis cutoff — if the user changed their
+            # password (or otherwise revoked all access tokens) after this
+            # token's `iat`, treat it as anonymous. Same fall-through as an
+            # invalid JWT so existing 401 / required-auth paths behave
+            # identically. Import lazily so middleware import doesn't pull
+            # in the Redis client at module load.
+            try:
+                from dependencies import get_access_token_blocklist
+
+                if get_access_token_blocklist().is_token_revoked(payload["sub"], int(payload["iat"])):
+                    return await call_next(request)
+            except Exception:
+                # Redis outage must not break auth — fall open and log.
+                logger.warning("access_token_blocklist check failed; falling open", exc_info=True)
             session_hash = payload.get("sid")
             request.state.user = {
                 "id": payload["sub"],
