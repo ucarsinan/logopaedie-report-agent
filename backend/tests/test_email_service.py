@@ -1,4 +1,7 @@
 import inspect
+import sys
+import types
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -56,3 +59,49 @@ async def test_fake_email_service_records_calls():
     assert len(fake.sent) == 2
     assert fake.sent[0] == ("verify", "x@example.com", "t1")
     assert fake.sent[1] == ("reset", "y@example.com", "t2")
+
+
+@pytest.mark.asyncio
+async def test_email_service_propagates_provider_error_on_verify(monkeypatch):
+    """Contract check: when the Resend SDK raises, ``send_verify_email`` must
+    propagate the exception rather than swallow it. The caller (auth route /
+    auth_service) is responsible for deciding whether to retry, 5xx, or log —
+    the service must not silently fail because that would leave the user
+    without a verification mail and no diagnostic surface."""
+    # Force the non-console branch by setting an API key.
+    monkeypatch.setenv("RESEND_API_KEY", "key_not_real_but_truthy")
+    monkeypatch.setenv("APP_URL", "http://localhost:3000")
+    monkeypatch.setenv("EMAIL_FROM", "noreply@test.local")
+
+    # Inject a fake ``resend`` module so ``Emails.send`` raises.
+    fake_resend = types.ModuleType("resend")
+    fake_resend.api_key = ""  # type: ignore[attr-defined]
+    fake_emails = types.SimpleNamespace(send=MagicMock(side_effect=RuntimeError("provider down")))
+    fake_resend.Emails = fake_emails  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "resend", fake_resend)
+
+    svc = EmailService()
+    with pytest.raises(RuntimeError, match="provider down"):
+        await svc.send_verify_email("alice@example.com", "tok123")
+    # The send was attempted exactly once (no silent retry inside the service).
+    assert fake_emails.send.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_email_service_propagates_provider_error_on_reset(monkeypatch):
+    """Same failure contract for ``send_password_reset``: provider errors
+    must surface to the caller, not be absorbed by the service."""
+    monkeypatch.setenv("RESEND_API_KEY", "key_not_real_but_truthy")
+    monkeypatch.setenv("APP_URL", "http://localhost:3000")
+    monkeypatch.setenv("EMAIL_FROM", "noreply@test.local")
+
+    fake_resend = types.ModuleType("resend")
+    fake_resend.api_key = ""  # type: ignore[attr-defined]
+    fake_emails = types.SimpleNamespace(send=MagicMock(side_effect=ConnectionError("smtp unreachable")))
+    fake_resend.Emails = fake_emails  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "resend", fake_resend)
+
+    svc = EmailService()
+    with pytest.raises(ConnectionError, match="smtp unreachable"):
+        await svc.send_password_reset("bob@example.com", "resettok")
+    assert fake_emails.send.call_count == 1
