@@ -32,23 +32,27 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
-### From 2026-06-01 I3 security/perf (still open — low-severity / owner-decision)
+### Still open after M-wave (all non-agent-actionable)
 
 - [ ] **S-8** (informational) — `get_optional_user` does not check
       `locked_until` / `email_verified` / `revoked_at`. Documented
       trade-off from `c0980ab`. Only safe while every consumer reads
       `user.id` and nothing else; add a runtime guard if more
       handlers adopt `AuthIdentity`.
-- [ ] **Optional X-RateLimit-* headers** — slowapi plumbing exists
-      (`headers_enabled=True`) but `_build_limiter` doesn't enable
-      it. K2 added `Retry-After` only.
-- [ ] **TRUSTED_PROXY deploy-env audit** — K2's S-6 fix means
-      production `TRUSTED_PROXY` must be set explicitly or XFF is
-      ignored. On Vercel edge IPs rotate, so all traffic may bucket
-      under one IP and collapse per-IP rate limits. Operator needs
-      to either (a) determine the actual proxy IP, or (b) redesign
-      the rate-limit strategy (e.g., bucket by user_id for
-      authenticated routes).
+- [ ] **X-RateLimit-* response headers** — slowapi 0.1.9
+      `headers_enabled=True` is incompatible with FastAPI dict
+      handlers (raises `parameter response must be Response`).
+      L2's broad attempt broke 85 tests. Requires either slowapi
+      version bump OR per-route refactor returning `JSONResponse`.
+      Deferred indefinitely.
+- [ ] **`.env.example` `TRUSTED_PROXY` entry** — env-file pattern
+      denylisted from agent writes. Operator must add manually
+      before the next production deploy or accept the safe-but-
+      collapsed per-instance rate-limit bucketing.
+- [ ] **`login_2fa:755` compound assert** — `assert self.totp is
+      not None and self.challenges is not None`. Same class as M2's
+      L-2 fix but out of M2's named scope. Small hygiene follow-up
+      (split into two `if/raise`s for clearer error messages).
 
 ### Open follow-ups
 
@@ -66,6 +70,11 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **M-wave** (L3-review + L-wave-deferred closure) — three parallel sub-agents, all auto-merged clean:
+      M1 S-7 access-token revocation via per-user Redis `revoked_until` cutoff comparing JWT `iat` — new `services/access_token_blocklist.py`, middleware lazy-import, fail-open on Redis error, +10 tests (`7636d9f`);
+      M2 L-1 fixture consolidation (3 tests onto `deps_with_2fa`) + L-2 bare-assert → `if/raise RuntimeError` on `start_2fa_setup`/`enable_2fa`/`disable_2fa` matching J1 style (`0c1f9b0`);
+      M3 derive_age_group `[0, 120]` years clinical guard + 2 boundary tests + `_audit` docstring (M-1) + `rate_limit_exceeded_handler` comment (M-2 Retry-After semantic) (`c4890f0`).
+      **522 passed, 9 skipped** (was 510+9). The complete I1+I2+I3 audit cycle from 2026-06-01 is now closed end-to-end. — 2026-06-02
 - [x] **L-wave** (post-K-wave deferred closure attempt — partial). Three parallel agents dispatched; two hit Anthropic socket-close errors mid-run.
       L1 (S-7 access-token revocation) discarded — only stubbed service file, no commit.
       L2 (disable_2fa P-3 + X-RateLimit-* headers) **disable_2fa portion salvaged inline** as `24ce58f` (same bulk `sa.update` pattern as change_password/enable_2fa); `headers_enabled=True` + SlowAPIMiddleware addition **dropped** (broke 85 tests via slowapi's `parameter response must be Response` error — not solvable by middleware-order alone).

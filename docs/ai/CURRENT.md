@@ -8,57 +8,62 @@
 
 ## Last Updated
 
-- **Date:** 2026-06-01 (afternoon — L-wave, partial)
+- **Date:** 2026-06-02 (morning — M-wave)
 - **Updated by:** Claude Code
-- **Session focus:** L-wave dispatched 3 parallel agents to close
-  the remaining K-wave-deferred items. **2 of 3 agents hit Anthropic
-  network errors** (socket closed unexpectedly mid-run) before
-  committing — L1 (S-7 access-token revocation) had only stubbed
-  the `AccessTokenBlocklist` service file and not finished the
-  dependency-injection wiring, so it was discarded. L2 (disable_2fa
-  P-3 + X-RateLimit-* headers) finished writing its changes in the
-  worktree but never committed; **the disable_2fa portion was
-  salvaged inline**, while the `headers_enabled=True` + new
-  `SlowAPIMiddleware` parts were dropped — they broke 85 existing
-  tests with slowapi's `parameter response must be an instance of
-  starlette.responses.Response` error, the agent's own
-  middleware-fix attempt didn't catch every route. L3 (independent
-  code review of J/K-waves, 7 commits) ran to completion and
-  produced a useful structured report; **H-1 frontend type
-  mismatch fix applied inline**, H-2 (`.env.example` for
-  `TRUSTED_PROXY`) blocked by the env-file permission denylist —
-  documented as TASKS.md follow-up.
+- **Session focus:** M-wave (3 parallel agents) closed every remaining
+  actionable L-wave / L3-review item. **M1** retried S-7 successfully
+  (L1 had died on network mid-implementation last time): per-user
+  Redis revocation cutoff via `iat`-claim comparison, no jti needed.
+  **M2** replaced 3 bare `assert self.totp is not None` guards with
+  `if/raise RuntimeError` (matches J1's S-4 pattern) and consolidated
+  3 K1 tests onto K3's `deps_with_2fa` fixture. **M3** added a
+  `[0, 120]` years plausibility guard to `derive_age_group` (clinical
+  misclassification risk for future / pre-1906 DOBs) and documented
+  the `_audit` RuntimeError → HTTP 500 and `Retry-After`
+  bucket-window semantics. All three auto-merged cleanly.
 
 ---
 
 ## Current Goal
 
-No agent-driven goal active. What landed this session is small but
-real: `disable_2fa` now uses the same bulk `sa.update` pattern as
-`change_password` and `enable_2fa` (K1 left it untouched), and the
-`ReportListResponse.total` TypeScript type now correctly reflects
-the nullable contract introduced by K1's `include_total` opt-in
-(future-proofs the frontend before any caller adopts the opt-in).
+No agent-driven goal active. The full audit-cycle started by I1–I3
+on 2026-06-01 is now closed end-to-end:
 
-What did NOT land but is well-scoped for next attempt:
-
-- **S-7 access-token revocation** — Redis blocklist with per-user
-  `revoked_until` cutoff key, comparing JWT `iat` claim. The L1
-  agent had picked the correct approach (the simpler one from the
-  brief, not jti-tracking) and stubbed the service file before the
-  socket closed. Re-dispatch should reuse the same brief.
-- **X-RateLimit-* response headers** — slowapi has the plumbing
-  (`headers_enabled=True`) but every route handler in this project
-  returns a plain dict or `Mapping`; slowapi rejects that path.
-  Real fix requires routes to return `JSONResponse(content=..., ...)`
-  or adopt the `SlowAPIMiddleware` carefully with response-type
-  inspection. L2's middleware attempt didn't work — needs a deeper
-  refactor or a slowapi version bump.
+- I1 critical (0017 missing FK drops) — fixed `bf04e8b`
+- I1 H-1 frontend type — fixed `b39c72b` (L-wave)
+- I1 H-2 `.env.example` for `TRUSTED_PROXY` — still blocked by env-file
+  permission denylist (manual operator addition needed)
+- I1 M-1/M-2 docstring notes — added `c4890f0` (M3)
+- I1 M-3 `derive_age_group` clinical guard — fixed `c4890f0` (M3)
+- I1 L-1 fixture consolidation — fixed `0c1f9b0` (M2)
+- I1 L-2 bare-assert hardening — fixed `0c1f9b0` (M2; one compound
+  assert still in `login_2fa:755`, deferred)
+- I3 S-1/S-2/S-3/S-4/S-5/S-6 — fixed in J/K waves
+- I3 S-7 — fixed `7636d9f` (M1)
+- I3 S-8 — accepted trade-off (informational, scope confined to
+  `user.id`)
+- I3 P-1/P-3/P-5 + Retry-After + headers_enabled (partial) — fixed
+  in K-wave
+- I2 deferred (test gaps) — closed in J3 + K3
 
 **M-6** (anamnesis completion logic) remains the outstanding audit
 item and is still blocked on owner-driven WIP in
 `backend/services/anamnesis_engine.py`, `phonological_analyzer.py`,
-and `anamnesis_catalog.py`.
+and `anamnesis_catalog.py`. Treat as untouchable until the owner
+explicitly hands them over.
+
+What remains in TASKS.md "Next" (all non-agent-actionable):
+
+- Drop redundant single-column `ix_*_user_id` indexes — needs Neon
+  EXPLAIN, owner-decision.
+- Vercel preview deploy — pre-existing config issue.
+- `TRUSTED_PROXY` deploy-env audit — operator-side.
+- X-RateLimit-* response headers — requires slowapi version bump or
+  per-route refactor (L2's broad `headers_enabled=True` broke 85
+  tests; deferred).
+- `assert self.totp is not None and self.challenges is not None` on
+  `login_2fa:755` — same class as M2's fix; out of M2's named
+  scope.
 
 ---
 
@@ -68,82 +73,90 @@ and `anamnesis_catalog.py`.
 main
 ```
 
-Local `main` is **2 ahead of `origin/main`** (`24ce58f` + `b39c72b`,
-plus this docs commit).
+Local `main` is **3 ahead of `origin/main`** (M-wave + this docs
+commit). About to push: `7636d9f` + `0c1f9b0` + `c4890f0` + this
+docs commit.
 
-Today's session commits (newest first):
+Today's M-wave commits (newest first):
 
-- `b39c72b` — `fix(frontend): widen ReportListResponse.total to nullable for include_total opt-in`
-- `24ce58f` — `fix(backend): disable_2fa bulk session revoke via sa.update (K-wave deferred)`
+- `c4890f0` — `fix(backend): derive_age_group guards pathological DOB ranges + M-1/M-2 docstring notes (L3 follow-ups)`
+- `0c1f9b0` — `refactor(backend): RuntimeError for missing TOTPService + consolidate 2FA test fixture (L3 L-1+L-2)`
+- `7636d9f` — `feat(backend): access-token revocation on password change (S-7)`
+- `74c3cfc` — `docs(ai): record L-wave (partial — 2 agents crashed on socket close)` (yesterday)
 
 ---
 
 ## Verification snapshot (pre-push)
 
 - `ruff check .` → All checks passed!
-- `mypy services/auth_service.py` → Success: no issues found in 1 source file
-- `pytest -q` → **510 passed, 9 skipped** (was 508+9; +2 from L2's
-  salvaged disable_2fa tests)
-- Frontend `tsc` not separately verified — but the type change is
-  a strict widening (`number` → `number | null`) with a null-guard
-  added at the only consumer call site, so it should compile.
-
----
-
-## L3 review findings still open
-
-Apply when the network is more cooperative or via small inline
-patches:
-
-- **H-2** — `TRUSTED_PROXY` not in any deployment artifact
-  (`.env.example` blocked by repo permission denylist for env-files;
-  add manually). Without this, the first production deploy after K2
-  silently buckets all Vercel-edge traffic under one IP. Operator
-  must set `TRUSTED_PROXY` explicitly OR redesign rate-limit
-  strategy.
-- **M-1** — `_audit` partial-wiring `RuntimeError` turns into HTTP
-  500 for the client (intended, fail-loud) but the audit row is
-  lost. Worth a docstring note on `_audit`.
-- **M-2** — `Retry-After` value is the bucket window (60s for
-  `30/minute`), not time-to-next-slot. slowapi 0.1.9 API limitation;
-  client wait will be conservative-correct, not optimal.
-- **M-3** — `derive_age_group` silently misclassifies future or
-  pre-1900 birthdates into the wrong bucket (future → "kind").
-  The bucket feeds into the AI-generated clinical report. Needs
-  either a clamp or an explicit `None`/raise. Owner decision —
-  test currently pins the *current* contract.
-- **L-1** — `deps_with_2fa` fixture vs. inline TOTP wiring: 3 K1
-  tests do inline wiring instead of using K3's fixture. Cosmetic
-  refactor opportunity.
-- **L-2** — 3 service methods (`start_2fa_setup`, `enable_2fa`,
-  `disable_2fa`) still use bare `assert self.totp is not None`.
-  Same class as J1's S-4 fix on `_audit`. Strippable under
-  `python -O`.
+- `mypy <6 M-wave files>` → Success: no issues found in 6 source files
+- `pytest -q` → **522 passed, 9 skipped** (was 510+9; +10 M1 + 0 M2
+  refactor + +2 M3 boundary)
+- All three commits auto-merged without conflict markers — agents
+  stayed in disjoint code regions exactly as planned.
 
 ---
 
 ## Key things the next agent should know
 
-1. **`disable_2fa` now matches the `change_password`/`enable_2fa`
-   bulk pattern.** Same `_current_session_hash` semantics: preserved
-   when set, all sessions revoked otherwise. Tests use
-   `deps_with_2fa` fixture (K3's contribution) — the canonical
-   fixture for 2FA service-unit tests.
-2. **`ReportListResponse.total` is now `number | null`.** The only
-   current consumer (`HistoryModule.tsx`) adds `res.total ?? 0`
-   before passing to `setTotal`. Any new consumer must do the same
-   if it might call `api.reports.list({ include_total: false })`.
-3. **L1's S-7 attempt picked approach (b) from the brief**:
-   per-user `revoked_until` Redis key with cutoff vs. JWT `iat`.
-   Started writing `backend/services/access_token_blocklist.py` in
-   the worktree. The pattern is correct; the network just cut out
-   before the dependency-injection + tests landed. Re-dispatch
-   with the same brief is the right move.
-4. **L2's slowapi `headers_enabled=True` did NOT work even with
-   `SlowAPIMiddleware` registered.** 85 tests failed with
-   `parameter response must be an instance of
-   starlette.responses.Response`. The middleware ordering attempt
-   (CORS → SlowAPI → ServiceToken → JWT) didn't change the failure
-   mode. A future attempt needs to either bump slowapi or
-   selectively wrap routes that need the headers — broad-stroke
-   enablement isn't viable.
+1. **`AccessTokenBlocklist` (S-7) lives at
+   `backend/services/access_token_blocklist.py`.** Singleton wired in
+   `dependencies.py` via `@lru_cache get_access_token_blocklist()` —
+   reuses the existing `redis_client.get_redis()` and reads
+   `TokenService._access_ttl` directly (private access; could grow a
+   public accessor later if the friction matters). API surface:
+   - `revoke_all_for_user(user_id: str) -> None` — SETEX cutoff
+   - `is_token_revoked(user_id: str, token_iat: int) -> bool` — GET
+     cutoff, compare, fail-open on Redis errors
+
+2. **Middleware check is in `backend/middleware/auth.py`** after the
+   `payload["type"] == "access"` gate. Lazy import of
+   `dependencies.get_access_token_blocklist` to avoid pulling Redis
+   into module-load time. Revoked tokens fall through to the
+   anonymous path (same as non-`access` types) — the middleware
+   contract of never raising is preserved; downstream `get_current_user`
+   produces the 401 naturally.
+
+3. **`change_password` is the only writer to the blocklist so far.**
+   S-7's scope was deliberately limited to that one path. If
+   `disable_2fa` / `enable_2fa` / `confirm_password_reset` ever need
+   the same semantic, the integration is a one-line
+   `self._access_token_blocklist.revoke_all_for_user(...)` after the
+   existing session revoke.
+
+4. **`derive_age_group` returns `None` for OOR dates.** Range is
+   `[today, today - 120 years]`. The sole caller
+   (`PatientService.create_patient` at `patient_service.py:81`)
+   already had an `or age_group` fallback, so no caller updates were
+   needed. The new behavior is documented in the function's
+   docstring; the K3 contract-pin tests were renamed from
+   `*_returns_kind` / `*_returns_erwachsen` to `*_returns_none`.
+
+5. **`assert self.totp is not None` → `if/raise RuntimeError`** in
+   `start_2fa_setup`, `enable_2fa`, `disable_2fa`. Message style
+   matches J1's S-4 fix on `_audit`. **One compound assert remains
+   in `login_2fa:755`** (`self.totp is not None and self.challenges
+   is not None`) — M2 noted it but it was out of named scope. A
+   future hygiene pass should convert it (likely needs to split into
+   two `if/raise`s for clearer error messages).
+
+6. **Three K1 P-3 tests now use K3's `deps_with_2fa` fixture.**
+   `test_start_2fa_setup_emits_audit_event`,
+   `test_enable_2fa_bulk_revokes_other_sessions_keeps_current`,
+   `test_enable_2fa_without_current_hash_revokes_all`. Dropped the
+   inline `monkeypatch.setenv("SESSION_ENCRYPTION_KEY", ...)` +
+   `svc.totp = TOTPService()` boilerplate.
+
+7. **`_audit` docstring now documents that the RuntimeError → HTTP
+   500.** The intentional fail-loud trade-off (request crashes, audit
+   row lost) was implicit before — now explicit in the docstring.
+
+8. **`rate_limit_exceeded_handler` comment now documents the
+   `Retry-After` bucket-window semantic.** slowapi 0.1.9 exposes only
+   the fixed-window length (e.g., 60s for `30/minute`), not
+   time-to-next-slot. Client backoff will be conservative-correct.
+
+9. **`backend/.env.example` still missing `TRUSTED_PROXY` entry**
+   (denylisted from agent writes). Operator should add manually
+   before the next production deploy or accept the safe-but-collapsed
+   per-instance rate-limit bucketing.

@@ -8,6 +8,124 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-02 (morning — M-wave)
+- **Updated by:** Claude Code
+- **Handoff to:** next agent. **M-wave closed every remaining
+  actionable L-wave / L3-review follow-up.** S-7 retry (M1) landed
+  cleanly — per-user Redis revocation cutoff comparing JWT `iat`
+  claim. L-1 fixture consolidation + L-2 bare-assert hardening (M2)
+  refactored 3 service methods and 3 tests. M-3 clinical guard +
+  M-1/M-2 docstring notes (M3) closed the `derive_age_group`
+  misclassification risk and documented two intentional trade-offs.
+  All three commits auto-merged with no conflict markers.
+  **The entire I1+I2+I3 audit cycle from 2026-06-01 is now closed
+  end-to-end** except `.env.example` `TRUSTED_PROXY` (denylisted
+  from agent writes) and out-of-scope items (M-6 owner-WIP, Vercel
+  preview, redundant index drop needing Neon EXPLAIN,
+  X-RateLimit-* refactor needing slowapi bump or per-route work).
+
+---
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-06-02 (morning — M-wave)
+**Role(s):** Coordinator + Integrator + Scribe (3 parallel sub-agents
+M1/M2/M3, all clean auto-merge)
+
+### What was done
+
+- **M1 (`7636d9f`)** — S-7 access-token revocation. L1's first
+  attempt died mid-implementation on socket-close; M1 re-dispatch
+  with locked approach (b) (per-user Redis cutoff, no jti). New
+  `backend/services/access_token_blocklist.py`; singleton wired in
+  `dependencies.py`; check fires in `backend/middleware/auth.py`
+  after `type=="access"` gate (lazy import). On revocation, falls
+  through to anonymous path — preserves middleware non-throwing
+  contract. Fail-open on Redis errors (logged). Reuses existing
+  `redis_client.get_redis()` singleton and `TokenService._access_ttl`.
+  +10 tests across 3 test files.
+- **M2 (`0c1f9b0`)** — L-2 hardening + L-1 consolidation. 3 bare
+  `assert self.totp is not None` → `if/raise RuntimeError(...)`
+  matching J1 S-4 style in `start_2fa_setup:712`,
+  `disable_2fa:860`, `enable_2fa:918`. 3 K1 P-3 tests migrated off
+  inline `monkeypatch.setenv("SESSION_ENCRYPTION_KEY", ...)` +
+  `svc.totp = TOTPService()` onto K3's `deps_with_2fa` fixture.
+  One compound assert (`login_2fa:755`) noted but out of scope.
+- **M3 (`c4890f0`)** — M-3 clinical guard + M-1/M-2 docstring
+  notes. `derive_age_group` now returns `None` outside `[today,
+  today - 120 years]`. K3's contract-pin tests renamed
+  `*_returns_kind`/`*_returns_erwachsen` → `*_returns_none`; +2
+  boundary tests. Sole caller already had `or age_group` fallback,
+  no caller update needed. `_audit` docstring documents
+  RuntimeError → HTTP 500 + lost audit (intentional).
+  `rate_limit_exceeded_handler` comment documents Retry-After
+  bucket-window semantic (slowapi 0.1.9 API limit).
+
+### Files changed
+
+#### `7636d9f` — M1 / S-7
+
+- `backend/services/access_token_blocklist.py` (new)
+- `backend/services/auth_service.py` — change_password integration
+  + new optional `access_token_blocklist` ctor param
+- `backend/dependencies.py` — `@lru_cache get_access_token_blocklist()`
+- `backend/middleware/auth.py` — blocklist check, fail-open
+- `backend/tests/test_access_token_blocklist.py` (new, 6 unit tests)
+- `backend/tests/test_auth_service.py` — 3 integration tests
+- `backend/tests/test_auth_middleware.py` — 1 integration test
+
+#### `0c1f9b0` — M2 / L-1 + L-2
+
+- `backend/services/auth_service.py` — 3 bare-assert → if/raise
+- `backend/tests/test_auth_service.py` — 3 tests refactored
+
+#### `c4890f0` — M3 / M-3 + M-1 + M-2
+
+- `backend/services/patient_service.py` — `[0, 120]` guard
+- `backend/tests/test_patient_service.py` — renames + 2 boundary
+- `backend/services/auth_service.py` — `_audit` docstring
+- `backend/main.py` — `rate_limit_exceeded_handler` comment
+
+### What is NOT done yet
+
+- `backend/.env.example` `TRUSTED_PROXY` entry — denylisted from
+  agent writes
+- Compound `assert` at `login_2fa:755` — small hygiene follow-up
+- X-RateLimit-* response headers — slowapi version bump or
+  per-route refactor
+- Drop redundant `ix_*_user_id` indexes — needs Neon EXPLAIN
+- Vercel preview deploy — pre-existing config issue
+- M-6 anamnesis completion — blocked on owner-WIP
+
+### Risks / Attention
+
+- M1 fail-open semantic: Redis outage allows revoked tokens to
+  slip through. Intentional (better than 500'ing all auth) but
+  worth knowing for incident response.
+- M3's `[0, 120]` years window is hardcoded. 121-year-old would
+  silently miss bucket — not realistic but worth a comment if
+  bumping the bound.
+- One Redis GET added per authenticated request (M1). Comparable
+  cost to `c0980ab`'s optimistic `get_optional_user` trade-off.
+
+### Next concrete action
+
+Push the M-wave + this docs commit. No immediate agent-actionable
+work remaining — every TASKS.md "Next" item is operator-decision
+or owner-WIP-blocked.
+
+### Ideal next prompt
+
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. The audit cycle is
+> fully closed. Decide between (a) the `login_2fa` compound-assert
+> hygiene follow-up (15 min), (b) waiting for owner direction on
+> operator-side items, or (c) a fresh feature/refactor request.
+
+---
+
+## Last Updated (previous — L-wave)
+
 - **Date:** 2026-06-01 (afternoon — L-wave partial)
 - **Updated by:** Claude Code
 - **Handoff to:** next agent. L-wave dispatched 3 parallel agents
