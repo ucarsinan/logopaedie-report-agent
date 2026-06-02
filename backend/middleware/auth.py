@@ -53,8 +53,14 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 if get_access_token_blocklist().is_token_revoked(payload["sub"], int(payload["iat"])):
                     return await call_next(request)
             except Exception:
-                # Redis outage must not break auth — fall open and log.
-                logger.warning("access_token_blocklist check failed; falling open", exc_info=True)
+                # Redis outage must not break auth — fall open. Logged at
+                # ERROR (not WARNING) so production monitoring catches
+                # regressions in the blocklist code path. The fail-open
+                # posture is deliberate: aggressive availability > tight
+                # regression-detection here (an AttributeError bug silently
+                # bypassing S-7 is acceptable for ~15min until access_token
+                # expires; an auth-blocking 500 storm is not).
+                logger.error("access_token_blocklist check failed; falling open", exc_info=True)
             session_hash = payload.get("sid")
             request.state.user = {
                 "id": payload["sub"],
