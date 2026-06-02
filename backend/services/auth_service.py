@@ -128,6 +128,11 @@ class AuthService:
         back to the sync path and re-introduce the per-request commit we just
         removed; raise here so misuse fails loud even under ``python -O``
         (which strips ``assert``).
+
+        When the invariant fails, the RuntimeError propagates up to FastAPI's
+        unhandled exception handler and returns HTTP 500 to the caller. The
+        audit row is lost. This is intentional: misuse should fail loud and
+        visibly rather than degrade silently to the sync audit path (M-1).
         """
         if (background is None) != (db_factory is None):
             raise RuntimeError(

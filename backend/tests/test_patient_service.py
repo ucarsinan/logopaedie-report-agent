@@ -202,25 +202,26 @@ def test_get_active_or_404_excludes_soft_deleted_patient(engine, enc_svc):
         assert exc.value.status_code == 404
 
 
-def test_derive_age_group_future_birthdate_returns_kind(engine, enc_svc):
-    """A date in the future yields a negative age, which the
-    ``years < 13`` branch silently maps to "kind". Documenting the actual
-    behavior — the function does NOT validate that dob <= today.
+def test_derive_age_group_future_birthdate_returns_none(engine, enc_svc):
+    """M-3: a date in the future yields negative years; the plausibility
+    guard rejects it rather than silently mapping to "kind". Clinical
+    reports must not consume a wrong age bucket from a typo'd DOB.
     """
     from services.patient_service import derive_age_group
 
     future = "2999-01-01"
-    assert derive_age_group(future) == "kind"
+    assert derive_age_group(future) is None
 
 
-def test_derive_age_group_pre_1900_returns_erwachsen(engine, enc_svc):
-    """Very old birthdates parse fine and fall through to "erwachsen" —
-    ``date.fromisoformat`` accepts years from 0001 upward. Pinning the
-    contract: no exception, no None, just the adult bucket.
+def test_derive_age_group_pre_1906_returns_none(engine, enc_svc):
+    """M-3: birthdates beyond the 120-year window fall outside the
+    plausible range and return None instead of silently bucketing as
+    "erwachsen". ``date.fromisoformat`` would otherwise accept years
+    down to 0001 with no validation.
     """
     from services.patient_service import derive_age_group
 
-    assert derive_age_group("1800-06-15") == "erwachsen"
+    assert derive_age_group("1800-06-15") is None
 
 
 def test_derive_age_group_empty_string_returns_none(engine, enc_svc):
@@ -231,3 +232,28 @@ def test_derive_age_group_empty_string_returns_none(engine, enc_svc):
 
     assert derive_age_group("") is None
     assert derive_age_group("   ") is None
+
+
+def test_derive_age_group_today_returns_kind(engine, enc_svc):
+    """Boundary case at the low end: a newborn (DOB == today) has age 0,
+    which is well within ``[0, 120]`` and falls into the "kind" bucket.
+    """
+    from datetime import UTC, datetime
+
+    from services.patient_service import derive_age_group
+
+    today_iso = datetime.now(UTC).date().isoformat()
+    assert derive_age_group(today_iso) == "kind"
+
+
+def test_derive_age_group_exactly_120_years_old_returns_erwachsen(engine, enc_svc):
+    """Boundary case at the high end: exactly 120 years old is still
+    inside the inclusive plausibility window and buckets as "erwachsen".
+    """
+    from datetime import UTC, datetime
+
+    from services.patient_service import derive_age_group
+
+    today = datetime.now(UTC).date()
+    dob = today.replace(year=today.year - 120).isoformat()
+    assert derive_age_group(dob) == "erwachsen"

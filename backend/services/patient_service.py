@@ -17,6 +17,13 @@ def derive_age_group(birthdate: str) -> str | None:
     Returns "kind" (<13), "jugendlich" (13-17) or "erwachsen" (18+), or None if
     the birthdate cannot be parsed. Deriving from the DOB keeps the age group
     clinically correct instead of relying on a static "erwachsen" default.
+
+    Returns None when the computed age is outside the plausible window
+    ``[0, 120]`` years. Clinical reports must not silently accept future
+    or pre-1906 dates and produce a wrong age bucket — e.g. a transcription
+    error turning ``1990`` into ``9990`` would otherwise mislabel an adult
+    as "kind" (negative years < 13), and pre-1906 inputs would fall through
+    to the "erwachsen" catch-all without anyone noticing the typo (M-3).
     """
     try:
         dob = date.fromisoformat(birthdate.strip()[:10])
@@ -24,6 +31,8 @@ def derive_age_group(birthdate: str) -> str | None:
         return None
     today = datetime.now(UTC).date()
     years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if years < 0 or years > 120:
+        return None
     if years < 13:
         return "kind"
     if years < 18:

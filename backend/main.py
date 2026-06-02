@@ -167,6 +167,15 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) 
     # seconds is ``.get_expiry()``. There's no per-bucket ``retry_after`` on
     # the exception itself, so we surface the limit window as the conservative
     # client-side back-off — enough to let any client wait out the window.
+    #
+    # M-2: ``Retry-After`` reports the rate-limit BUCKET window (e.g. 60s for
+    # a "30/minute" rule), not the time until the next slot opens in a
+    # sliding-window sense. slowapi 0.1.9 exposes only
+    # ``exc.limit.limit.get_expiry()`` which is the fixed-window length.
+    # Clients backing off by this value will wait up to one full window longer
+    # than strictly necessary — conservative-correct, not optimal. A true
+    # sliding-window calculation would require either a slowapi version bump
+    # or per-bucket state tracking we don't currently keep.
     retry_after = 60
     # Defensive: never let header building turn a 429 into a 500.
     with contextlib.suppress(Exception):
