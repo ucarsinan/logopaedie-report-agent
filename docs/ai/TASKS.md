@@ -60,14 +60,11 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       L2's broad attempt broke 85 tests. Requires either slowapi
       version bump OR per-route refactor returning `JSONResponse`.
       Deferred indefinitely.
-- [ ] **`.env.example` `TRUSTED_PROXY` entry** — env-file pattern
-      denylisted from agent writes. Operator must add manually
-      before the next production deploy or accept the safe-but-
-      collapsed per-instance rate-limit bucketing.
-- [ ] **`login_2fa:755` compound assert** — `assert self.totp is
-      not None and self.challenges is not None`. Same class as M2's
-      L-2 fix but out of M2's named scope. Small hygiene follow-up
-      (split into two `if/raise`s for clearer error messages).
+- [x] **`.env.example` `TRUSTED_PROXY` entry** — resolved by setting
+      env vars directly in Vercel dashboard (2026-06-03). TRUSTED_PROXY,
+      SERVICE_TOKEN, JWT_SECRET, SESSION_ENCRYPTION_KEY, PATIENT_ENCRYPTION_KEY,
+      RATE_LIMIT_REDIS_URL all added to Vercel production.
+- [x] **`login_2fa:755` compound assert** — fixed in N1 as `c941910`.
 
 ### Open follow-ups
 
@@ -84,6 +81,15 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 ---
 
 ## Done
+
+- [x] **O-wave** (2026-06-03) — Vercel production fix + CI green-up:
+      SESSION_ENCRYPTION_KEY added to `_set_env` autouse fixture (`1c19ff2`);
+      mypy 0010/0011 errors fixed (`95a71fb`);
+      TRUSTED_PROXY + RATE_LIMIT_REDIS_URL + SERVICE_TOKEN + JWT_SECRET +
+      SESSION_ENCRYPTION_KEY + PATIENT_ENCRYPTION_KEY added to Vercel production;
+      `EmailStr` replaced with local `Annotated[str, AfterValidator]` to remove
+      `email-validator` Vercel vendoring issue (`5298d30`).
+      Vercel production: livez 200, health 401, frontend 200. — 2026-06-03
 
 - [x] **N-wave** (post-M-wave hygiene + review + test coverage uplift) — three parallel sub-agents:
       N1 login_2fa compound-assert split + full service-layer sweep (only that 1 match existed outside owner-WIP) (`c941910`);

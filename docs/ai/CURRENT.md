@@ -8,48 +8,38 @@
 
 ## Last Updated
 
-- **Date:** 2026-06-02 (afternoon — N-wave)
+- **Date:** 2026-06-03 (morning — O-wave: Vercel production fix)
 - **Updated by:** Claude Code
-- **Session focus:** N-wave continued past audit-closure with hygiene
-  + review + test coverage uplift. N1 finished M2's bare-assert sweep
-  on `login_2fa:770` (compound split into two if/raise blocks; full
-  service-layer grep confirmed it was the only remaining match). N2
-  independent review of M-wave found 4 follow-ups (H-1 bare-except
-  scope, H-2 same-second iat edge, M-1 private attr access, M-3
-  leap-year test fragility). H-1 attempted inline narrowing broke 51
-  tests (`redis.exceptions.ConnectionError` doesn't inherit from
-  built-in `ConnectionError`); reverted to `except Exception` +
-  elevated log WARNING → ERROR for production monitoring visibility.
-  N3 added +9 P2-tier service tests (email/password/challenge_store/
-  report_comparator). Net: **533 passed, 9 skipped** (+11 to 522).
+- **Session focus:** Diagnosed and fixed Vercel production backend
+  (FUNCTION_INVOCATION_FAILED). Root causes uncovered and resolved
+  in sequence: (1) TRUSTED_PROXY missing → added `vercel-edge`;
+  (2) RATE_LIMIT_REDIS_URL missing → added `memory://`; (3) SERVICE_TOKEN,
+  JWT_SECRET, SESSION_ENCRYPTION_KEY, PATIENT_ENCRYPTION_KEY all missing
+  → generated and added; (4) `email-validator` not bundled by Vercel's
+  experimentalServices vendoring despite being in requirements.txt →
+  replaced `EmailStr` import from pydantic with a local `Annotated[str,
+  AfterValidator(_check_email)]` type in `routers/auth.py`.
+  Also fixed: SESSION_ENCRYPTION_KEY missing from `_set_env` autouse
+  fixture in conftest.py (caused `test_429_response_includes_retry_after_header`
+  to fail with lru_cache ordering change from N3). Fixed 3 pre-existing
+  mypy errors in `alembic/versions/0010`/`0011` that were causing CI failure.
+  **Vercel production is now fully operational:** `/api/livez` → 200,
+  `/api/health` → 401 (correctly requires SERVICE_TOKEN), frontend → 200.
+  **533 passed, 9 skipped** (unchanged — all fixes were infra/config).
 
 ---
 
 ## Current Goal
 
-No agent-driven goal active. The full audit-cycle is closed; N-wave
-was speculative hygiene/coverage work and produced clean small wins.
+No agent-driven goal active. Vercel production is now fully operational.
+MVP presentation is ready for next week.
 
-Open from N2 review (small inline fixes when convenient — ~20min
-batch):
-
-- **H-2** — `is_token_revoked` boundary `<` → `<=` for same-second
-  inclusive
+Open from N2 review (small inline fixes when convenient — ~20min batch):
+- **H-2** — `is_token_revoked` boundary `<` → `<=` for same-second inclusive
 - **M-1** — public `access_ttl_seconds` accessor on `TokenService`
-- **M-3** — `date(today.year - 120, today.month, min(today.day, 28))`
-  in the boundary test for Feb 29 safety
+- **M-3** — leap-year-safe date construction in `test_derive_age_group_exactly_120_years_old_returns_erwachsen`
 
-**M-6** (anamnesis completion logic) remains the outstanding audit
-item and is still blocked on owner-driven WIP in
-`backend/services/anamnesis_engine.py`, `phonological_analyzer.py`,
-and `anamnesis_catalog.py`.
-
-What remains in TASKS.md "Next" (all non-agent-actionable):
-
-- Drop redundant `ix_*_user_id` indexes — needs Neon EXPLAIN.
-- Vercel preview deploy — pre-existing config issue.
-- `TRUSTED_PROXY` deploy-env audit — operator-side.
-- X-RateLimit-* response headers — slowapi version bump.
+**M-6** (anamnesis completion logic) still blocked on owner-driven WIP.
 
 ---
 
@@ -59,71 +49,53 @@ What remains in TASKS.md "Next" (all non-agent-actionable):
 main
 ```
 
-Local `main` is **4 ahead of `origin/main`** (N-wave + this docs
-commit). About to push: `c941910` + `11540a4` + `fd46f35` + this
-docs commit.
+Local `main` is in sync with `origin/main` at `5298d30`.
 
-Today's N-wave commits (newest first):
-
-- `fd46f35` — `fix(backend): elevate access_token_blocklist fail-open log to ERROR (N2 H-1 partial)`
-- `11540a4` — `test(backend): cover P2 service test gaps (email/password/challenge_store/report_comparator)`
-- `c941910` — `refactor(backend): split login_2fa compound assert + sweep similar asserts (post-M-wave hygiene)`
-- `221e67a` — `docs(ai): record M-wave (S-7 + L-1/L-2 hygiene + M-3 clinical guard)` (this morning)
+O-wave commits (newest first, all pushed):
+- `5298d30` — `fix(backend): replace EmailStr with local Annotated type to remove email-validator dependency on Vercel`
+- `0d34df8` — `fix(backend): use pydantic[email] extra to ensure email-validator is bundled on Vercel` (superseded by 5298d30)
+- `742048b` — `chore: trigger redeploy with complete production env vars`
+- `2bfc04e` — `chore: trigger redeploy after TRUSTED_PROXY env var added`
+- `95a71fb` — `fix(backend): resolve mypy type errors in alembic migrations 0010/0011`
+- `1c19ff2` — `fix(backend): add SESSION_ENCRYPTION_KEY to _set_env autouse fixture`
 
 ---
 
-## Verification snapshot (pre-push)
+## Verification snapshot
 
 - `ruff check .` → All checks passed!
-- `mypy middleware/auth.py` → Success: no issues found in 1 source file
-- `pytest -q` → **533 passed, 9 skipped** (was 522+9; +2 N1 + +9 N3 = +11)
-- After H-1 attempted narrow: 51 failures (network errors propagated)
-- After H-1 revert + ERROR-level log: 533 passed restored
+- `mypy . --ignore-missing-imports` → **0 errors** (was 3 pre-existing in 0010/0011)
+- `pytest -q` → **533 passed, 9 skipped**
+- Vercel production: `/api/livez` → 200, `/api/health` → 401 (correct), frontend → 200
 
 ---
 
 ## Key things the next agent should know
 
-1. **`login_2fa` invariant guards are now explicit `if/raise`.** The
-   compound `assert self.totp is not None and self.challenges is not
-   None` is gone; replaced by two separate `if/raise RuntimeError`
-   blocks at `auth_service.py:770-783` matching the J1/M2 message
-   style. Tests pin both failure modes.
+1. **Vercel production env vars are all set** (added 2026-06-03):
+   - `TRUSTED_PROXY=vercel-edge` — satisfies boot guard; rate limiter
+     falls back to socket IP (Vercel edge IP = shared bucket, acceptable for MVP)
+   - `RATE_LIMIT_REDIS_URL=memory://` — Vercel's experimentalServices
+     bundler does NOT include `redis` package at runtime; in-memory
+     fallback is intentional for this deployment
+   - `SERVICE_TOKEN`, `JWT_SECRET`, `SESSION_ENCRYPTION_KEY`,
+     `PATIENT_ENCRYPTION_KEY` — all newly generated random values
 
-2. **The full service-layer bare-assert sweep is done.** N1 grepped
-   `^\s*assert ` across `backend/services/` (excluding owner-WIP) and
-   found exactly 1 match (the compound login_2fa one). No category-(b)
-   algorithmic asserts or debug helpers exist outside owner-WIP.
+2. **`EmailStr` is no longer from pydantic.** `routers/auth.py` defines
+   a local `EmailStr = Annotated[str, AfterValidator(_check_email)]` with
+   a simple regex. Reason: Vercel's experimentalServices vendoring does NOT
+   bundle `email_validator` even when listed in requirements.txt or
+   specified as `pydantic[email]` extra. The local type is functionally
+   equivalent for input validation.
 
-3. **`access_token_blocklist` fail-open is deliberately broad.** The
-   `except Exception` in `middleware/auth.py:55` catches everything
-   including programming errors. N2's H-1 recommendation to narrow
-   was tried but broke 51 tests (`redis.exceptions.ConnectionError`
-   is NOT a Python `ConnectionError` subclass). Reverted, but log
-   level is now ERROR (not WARNING) with `exc_info=True` so
-   production monitoring catches code-path regressions. The
-   project's posture is **availability > regression detection**: a
-   silent S-7 bypass for up to access_token_ttl (~15min) is
-   preferable to a 500 storm on every authenticated request.
+3. **`mypy` is now fully clean** (0 errors on all 72 source files).
+   The alembic 0010/0011 errors are fixed: 0011's set comprehensions
+   filter `None` explicitly; 0010's `Column` type uses `TypeEngine[Any]`.
 
-4. **N3 contract findings worth knowing** (none are bugs; tests
-   pin the actual contract):
-   - `EmailService.send_verify_email` / `send_password_reset`
-     **re-raise** provider errors — they do NOT swallow + log.
-     Callers own retry/log/5xx decisions.
-   - `PasswordService.hash("")` succeeds — argon2id accepts empty
-     string. Reject empties at the validation layer above.
-   - `PasswordService.verify` never raises on malformed hash —
-     returns `False` for missing hash, non-argon2 prefix, or
-     `(ValueError, UnknownHashError)`.
-   - `ChallengeStore` SETEX uses `nx=True` — duplicate `put` is
-     silently ignored. (Not part of N3's tested scope but worth
-     knowing.)
+4. **`SESSION_ENCRYPTION_KEY` added to `_set_env` autouse fixture** in
+   `conftest.py`. Root cause: `get_totp_service()` is `@lru_cache(maxsize=1)`
+   — its first call initializes the singleton. With N3's test additions
+   changing collection order, `test_429_response_includes_retry_after_header`
+   was the first to trigger it before any other test set the env var.
 
-5. **3 small follow-ups from N2 review** are batched in TASKS.md
-   under "From 2026-06-02 N2 review":
-   - H-2: same-second iat boundary inclusive
-   - M-1: public TTL accessor on TokenService
-   - M-3: leap-year-safe date construction in boundary test
-   Each is 1-5 lines. A future agent (or you) could batch them as
-   a single cleanup commit.
+5. **All N-wave key facts still apply** (see previous HANDOFF entry).

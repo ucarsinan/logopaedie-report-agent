@@ -8,6 +8,89 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-03 (morning — O-wave: Vercel production fix)
+- **Updated by:** Claude Code
+- **Handoff to:** next agent. O-wave diagnosed and fixed the Vercel
+  production backend (all requests returning FUNCTION_INVOCATION_FAILED).
+  Six sequential root causes resolved: missing env vars (TRUSTED_PROXY,
+  RATE_LIMIT_REDIS_URL, SERVICE_TOKEN, JWT_SECRET, SESSION_ENCRYPTION_KEY,
+  PATIENT_ENCRYPTION_KEY), and `email-validator` not being bundled by
+  Vercel's experimentalServices vendoring mechanism. Also fixed a CI
+  regression (SESSION_ENCRYPTION_KEY missing from conftest autouse fixture)
+  and 3 pre-existing mypy errors in alembic migrations. **Vercel production
+  is now fully operational.** MVP presentation is next week.
+
+## Session Summary
+
+**Agent:** Claude Code
+**Date:** 2026-06-03 (O-wave)
+**Role(s):** Coordinator + Diagnostician + Inline-fixer + Scribe
+
+### What was done
+
+- **CI fix (`1c19ff2`)** — `SESSION_ENCRYPTION_KEY` added to `_set_env`
+  autouse fixture in `backend/tests/conftest.py`. Root cause: `get_totp_service()`
+  is `@lru_cache`; N3 test additions changed collection order so
+  `test_429_response_includes_retry_after_header` initialized the singleton
+  before any test set the env var.
+
+- **mypy fix (`95a71fb`)** — 3 pre-existing errors in alembic 0010/0011
+  fixed. `mypy . --ignore-missing-imports` now exits 0 (72 files, 0 errors).
+
+- **Vercel env vars** — 6 env vars added to Vercel production via CLI:
+  `TRUSTED_PROXY=vercel-edge`, `RATE_LIMIT_REDIS_URL=memory://`,
+  `SERVICE_TOKEN`, `JWT_SECRET`, `SESSION_ENCRYPTION_KEY`,
+  `PATIENT_ENCRYPTION_KEY` (last 4 are newly generated random values).
+
+- **EmailStr fix (`5298d30`)** — Vercel's experimentalServices bundler
+  does NOT vendor `email_validator` despite it being in requirements.txt
+  or specified as `pydantic[email]` extra. Fix: local
+  `EmailStr = Annotated[str, AfterValidator(_check_email)]` in `routers/auth.py`
+  with regex `^[^@\s]+@[^@\s]+\.[^@\s]+$`. `email-validator` removed from
+  `requirements.txt`.
+
+### Files changed
+
+- `backend/tests/conftest.py` — `SESSION_ENCRYPTION_KEY` in `_set_env`
+- `backend/alembic/versions/0011_hot_query_indexes.py` — None filter in set comprehensions
+- `backend/alembic/versions/0010_therapy_plan_user_id.py` — `TypeEngine[Any]` annotation
+- `backend/routers/auth.py` — local `EmailStr` type, removed pydantic EmailStr import
+- `backend/requirements.txt` — removed `email-validator`, plain `pydantic>=2.12,<3`
+
+### What is NOT done yet
+
+- H-2, M-1, M-3 (small N2 follow-ups, ~20min batch)
+- M-6 (anamnesis completion — owner WIP blocked)
+- Drop redundant `ix_*_user_id` indexes (needs Neon EXPLAIN)
+- Vercel rate limiting is in-memory per-instance (acceptable for MVP demo)
+
+### Risks / Attention
+
+- **RATE_LIMIT_REDIS_URL=memory://** — rate limiting is not distributed.
+  Each Vercel cold start has its own bucket. Fix for production: add
+  `limits[redis]` to requirements.txt and set RATE_LIMIT_REDIS_URL to
+  the Upstash URL.
+
+- **EmailStr regex** is simpler than pydantic's full validator. Accepts
+  some technically invalid addresses. Acceptable for MVP.
+
+### Next concrete action
+
+No urgent work. MVP presentation next week. Optional: H-2/M-1/M-3
+cleanup batch (~20min).
+
+### Ideal next prompt
+
+> The MVP presentation is next week and Vercel production is working.
+> Check `docs/ai/CURRENT.md` and `TASKS.md`. Options: (a) batch the 3
+> small N2 follow-ups (H-2 iat boundary, M-1 TTL accessor, M-3 leap-year
+> test) as a ~20min cleanup; (b) work on M-6 if owner WIP is ready;
+> (c) fix distributed rate limiting for post-MVP production readiness.
+
+---
+
+## Last Updated (previous — N-wave)
+
 - **Date:** 2026-06-02 (afternoon — N-wave)
 - **Updated by:** Claude Code
 - **Handoff to:** next agent. **N-wave continued hygiene + review +
