@@ -31,7 +31,7 @@ def upgrade() -> None:
     def _existing_indexes(table: str) -> set[str]:
         if table not in inspector.get_table_names():
             return set()
-        return {ix["name"] for ix in inspector.get_indexes(table)}
+        return {ix["name"] for ix in inspector.get_indexes(table) if ix["name"] is not None}
 
     reports_indexes = _existing_indexes("reports")
     if "reports" in inspector.get_table_names():
@@ -79,7 +79,7 @@ def downgrade() -> None:
     def _existing_indexes(table: str) -> set[str]:
         if table not in inspector.get_table_names():
             return set()
-        return {ix["name"] for ix in inspector.get_indexes(table)}
+        return {ix["name"] for ix in inspector.get_indexes(table) if ix["name"] is not None}
 
     plans_indexes = _existing_indexes("therapyplanrecord")
     if "idx_therapyplanrecord_user_created" in plans_indexes:

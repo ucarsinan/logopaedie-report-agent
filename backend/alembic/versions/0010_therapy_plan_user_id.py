@@ -7,6 +7,8 @@ Create Date: 2026-05-28
 
 from __future__ import annotations
 
+from typing import Any
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -22,6 +24,9 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
 
     if "therapyplanrecord" not in inspector.get_table_names():
+        user_id_col_type: sa.types.TypeEngine[Any] = (
+            sa.Uuid() if bind.dialect.name == "postgresql" else sa.String(length=36)
+        )
         op.create_table(
             "therapyplanrecord",
             sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -29,11 +34,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("report_id", sa.Integer(), sa.ForeignKey("reports.id"), nullable=True),
             sa.Column("plan_data", sa.String(), nullable=False),
-            sa.Column(
-                "user_id",
-                sa.Uuid() if bind.dialect.name == "postgresql" else sa.String(length=36),
-                nullable=False,
-            ),
+            sa.Column("user_id", user_id_col_type, nullable=False),
         )
         op.create_index("ix_therapyplanrecord_patient_pseudonym", "therapyplanrecord", ["patient_pseudonym"])
         op.create_index("ix_therapyplanrecord_user_id", "therapyplanrecord", ["user_id"])
