@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import hmac
+import re as _re
 from datetime import UTC, datetime
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
+from pydantic.functional_validators import AfterValidator
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
@@ -25,6 +28,15 @@ from models.auth import User, UserSession
 from services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _check_email(v: str) -> str:
+    if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+        raise ValueError("invalid email address")
+    return v.lower()
+
+
+EmailStr = Annotated[str, AfterValidator(_check_email)]
 
 GENERIC_REGISTER_MSG = "If the email is new, check your inbox to verify."
 
