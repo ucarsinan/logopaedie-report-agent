@@ -64,6 +64,7 @@ def _set_env(monkeypatch):
     from cryptography.fernet import Fernet
 
     monkeypatch.setenv("PATIENT_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
 
 @pytest.fixture()
