@@ -8,6 +8,121 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-29 (multi-agent dirty-scope close-out)
+- **Updated by:** Codex
+- **Handoff to:** next agent. The remaining dirty scopes were split with three explorer agents, corrected where needed, checked, and committed locally. Nothing was pushed.
+
+## Session Summary
+
+**Agent:** Codex
+**Date:** 2026-06-29
+**Role(s):** Coordinator + Implementer + Tester + Scribe
+
+### What was done
+
+- Spawned three explorer agents:
+  - Backend N2 cleanup review: approved with a minor comment-drift note.
+  - Claim/presentation review: initially blocked on residual overclaims; Q&A and presentation source were corrected, PDF regenerated.
+  - Docs/testing + AI-state review: confirmed separate `docs(testing)` and `docs(ai)` scopes and found testing-doc drift, which was corrected.
+- Committed `c34b896 fix(backend): tighten token and health edge cases`.
+- Committed `e2c13d0 docs: align demo claims and presentation`.
+- Committed `14d491a docs(testing): add manual qa test catalog`.
+- Updated `PROJECT_REALITY.md`, `CURRENT.md`, `TASKS.md`, and this handoff for the final Scribe commit.
+
+### Files changed
+
+- Backend cleanup/test alignment: `backend/dependencies.py`, `backend/middleware/auth.py`, `backend/services/access_token_blocklist.py`, `backend/services/token_service.py`, backend token/patient/health tests.
+- Demo claim/presentation cleanup: `.gitattributes`, `README.md`, landing components, `docs/qa-catalog.md`, `scripts/generate_presentation.py`, `docs/mvp-presentation.pdf`.
+- Manual QA docs: `docs/testing/*`.
+- AI state: `PROJECT_REALITY.md`, `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, `docs/ai/HANDOFF.md`.
+
+### What is NOT done yet
+
+- No push was performed.
+- `scripts/verify.sh` is still missing.
+- Real Vercel Preview deploy verification still requires explicit human approval.
+- M-6 remains blocked on owner-driven anamnesis/phonology WIP.
+
+### Risks / Attention
+
+- The repo remains a portfolio/demo MVP for synthetic data, not real patient-data practice software.
+- Do not touch owner-WIP files listed in `TASKS.md`.
+- A full all-suite verification was not rerun in this close-out; targeted checks passed.
+
+### Verification
+
+- Backend targeted Ruff: passed.
+- Backend targeted pytest: `20 passed in 6.49s`.
+- Frontend landing lint: passed.
+- `ruff check scripts/generate_presentation.py`: passed.
+- `python3 -m py_compile scripts/generate_presentation.py`: passed.
+- `python3 scripts/generate_presentation.py`: regenerated the PDF.
+- PDF text check: 10 pages; banned claim phrases list was empty.
+- Claim/testing drift `rg` checks: no stale matches.
+- `git diff --check`: passed for staged scopes.
+
+### Next concrete action
+
+Push the local commits if approved, or first add/restore `scripts/verify.sh` if you want a canonical single verification command before pushing.
+
+### Ideal next prompt
+
+> Read `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, `docs/ai/HANDOFF.md`, and `PROJECT_REALITY.md`. The dirty scopes have been split into local commits. Run the agreed final verification, then push `main` if clean. Do not deploy Vercel Preview unless I explicitly approve it.
+
+---
+
+## Last Updated
+
+- **Date:** 2026-06-29 (reality/status audit)
+- **Updated by:** Codex
+- **Handoff to:** next agent. A read-only project status/reality audit was performed for the user, with `PROJECT_REALITY.md` and AI state updated. No product code was edited.
+
+## Session Summary
+
+**Agent:** Codex
+**Date:** 2026-06-29
+**Role(s):** Reviewer + Scribe
+
+### What was done
+
+- Read required AI context files and applied `der-rat`, project status, and project reality audit workflows.
+- Inspected `git status`, `git diff --stat`, key diffs, README, project docs, backend Groq wiring, route/app structure, CI, and deployment config.
+- Verified current external constraints from GDPR Art. 9, Groq data-retention/location docs, and Vercel Services docs.
+- Concluded: the project is reality-aligned as a portfolio/demo MVP using synthetic data; it is not ready or appropriately architected for real patient data.
+- Updated `PROJECT_REALITY.md`, `CURRENT.md`, `TASKS.md`, and this handoff.
+
+### Files changed
+
+- `PROJECT_REALITY.md` — refreshed audit conclusion and next logical step.
+- `docs/ai/CURRENT.md` — recorded the status/reality audit.
+- `docs/ai/TASKS.md` — added a task to split/land remaining dirty scopes intentionally.
+- `docs/ai/HANDOFF.md` — added this handoff.
+
+### What is NOT done yet
+
+- No tests were rerun during this audit.
+- The working tree remains dirty; remaining scopes still need intentional commits or removal.
+- Real Vercel Preview deploy verification still requires explicit human approval.
+- M-6 remains blocked on owner-driven anamnesis/phonology WIP.
+
+### Risks / Attention
+
+- Do not treat Groq/Vercel/Neon/Upstash as cleared for real patient data.
+- Several docs now describe claim cleanup as complete, but some matching files remain uncommitted in the working tree.
+- Continue avoiding owner-WIP files listed in `TASKS.md`.
+
+### Next concrete action
+
+Split the remaining dirty files into intentional commit groups, then run the relevant checks per group before any deploy work.
+
+### Ideal next prompt
+
+> Read `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, `docs/ai/HANDOFF.md`, and `PROJECT_REALITY.md`. The project is validated as a portfolio/demo MVP, not production practice software. Propose exact commit groups for the remaining dirty files and the checks for each group; do not stage anything yet.
+
+---
+
+## Last Updated
+
 - **Date:** 2026-06-29 (final Git close-out pushed)
 - **Updated by:** Codex
 - **Handoff to:** next agent. Committed and pushed the AI handoff update and minimal frontend proxy fix. Remaining backend cleanup, claim-copy, presentation, and manual-testing changes are still unstaged by design.

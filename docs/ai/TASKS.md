@@ -67,11 +67,16 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       human approval to run `vercel deploy`. Expected smoke: Preview deployment
       Ready, frontend 200, `/api/livez` 200, `/api/health` 401 without service
       token.
-
 ---
 
 ## Done
 
+- [x] **Split and land remaining dirty scopes** (2026-06-29) — Used three
+      parallel explorer agents to audit backend N2 cleanup, claim/presentation
+      cleanup, and docs/testing + AI-state scope. Landed separate commits for
+      backend token/health edge cases, demo claim/presentation alignment, and
+      manual QA docs. AI-state/reality docs are handled in the final Scribe
+      commit for this session. No broad `git add .` was used.
 - [x] **Vercel Preview local hardening** (2026-06-29) — Investigated old
       Preview Error deployments with two explorer agents and Vercel CLI.
       Old logs were unavailable; current `vercel build --yes` with Preview

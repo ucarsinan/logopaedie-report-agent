@@ -10,15 +10,17 @@
 
 - **Date:** 2026-06-29
 - **Updated by:** Codex
-- **Session focus:** Completed Git close-out for the AI handoff update and Vercel frontend proxy hardening. Committed and pushed `docs(ai): update workflow handoff for git close-out` plus `fix(frontend): default backend proxy to api on vercel`. Remaining unrelated backend, claim-copy, presentation, and manual-testing files are still intentionally unstaged.
+- **Session focus:** Completed multi-agent split/commit of the remaining dirty scopes: backend token/health cleanup, demo-claim/presentation cleanup, manual QA docs, and AI reality-state update.
 
 ---
 
 ## Current Goal
 
-Reality-check status: **claim cleanup complete; synthetic smoke validation complete; small N2 cleanup complete; Vercel Preview local build path hardened**.
+Reality-check status: **project is coherent as a portfolio/demo MVP; it is not coherent as production practice software for real patient data**.
 
 The MVP is consistently described as a portfolio/demo app using Groq directly for synthetic demo data. Local and public smoke checks confirm the demo shell is reachable and the report flow can be exercised with synthetic mocked backend data. Do not process real patient data through the current Groq/Vercel/Neon/Upstash setup.
+
+The 2026-06-29 audit found that the approach and roadmap are reality-aligned if the scope remains "portfolio demo with synthetic data". For real practice use, the project would need a provider/compliance redesign before further feature growth.
 
 The local dev servers used for the 2026-06-28 smoke were stopped before handoff.
 
@@ -28,7 +30,7 @@ The PowerPoint-style presentation PDF has been regenerated at `docs/mvp-presenta
 
 Vercel Preview deploy status: local `vercel build --yes` now passes with Preview settings. A real `vercel deploy` was **not** run because it changes external deployment state and needs explicit human approval.
 
-Git close-out status: `main` was pushed to `origin/main` through commit `81ba9d2`. The first push attempt failed because the untracked proxy test remained visible while the matching unstaged implementation was hidden by the pre-push stash; this was fixed by committing the proxy implementation and test together.
+Git close-out status: local `main` is ahead of `origin/main` by the new scope commits. Nothing was pushed in this session.
 
 ---
 
@@ -38,7 +40,7 @@ Git close-out status: `main` was pushed to `origin/main` through commit `81ba9d2
 main
 ```
 
-Local `main` is in sync with `origin/main`.
+Local `main` is ahead of `origin/main` by the unpushed commits from this session.
 
 ---
 
@@ -92,6 +94,19 @@ Local `main` is in sync with `origin/main`.
   `git diff --check` -> passed.
 - Push verification 2026-06-29:
   Pre-push hook passed `backend · pytest`, `frontend · eslint`, and `frontend · vitest`; `git push` updated `origin/main` from `6fbe4c8` to `81ba9d2`.
+- Reality/status audit 2026-06-29:
+  `git status --short --branch` showed a dirty `main`; `git diff --stat` showed 9 tracked files changed plus untracked `PROJECT_REALITY.md`, presentation, QA/testing docs, and `scripts/generate_presentation.py`. No new test suite was run in this audit.
+- Multi-agent split/commit session 2026-06-29:
+  - Agent reviews: backend N2 scope approved; AI-state/testing split approved; claim/presentation required extra cleanup and was corrected before commit.
+  - Committed `c34b896 fix(backend): tighten token and health edge cases`.
+  - Committed `e2c13d0 docs: align demo claims and presentation`.
+  - Committed `14d491a docs(testing): add manual qa test catalog`.
+  - Backend targeted check: `20 passed in 6.49s`.
+  - Backend targeted Ruff: all checks passed.
+  - Frontend landing lint: passed.
+  - Presentation generator: `ruff check` passed; `py_compile` passed; `python3 scripts/generate_presentation.py` regenerated `docs/mvp-presentation.pdf`.
+  - PDF text check: 10 pages; banned claim phrases list was empty.
+  - Claim/testing drift `rg` checks: no matches for old `status:"ok"`, Pydantic `EmailStr`, false DSGVO/production claims, or stale landing claims.
 
 ---
 
