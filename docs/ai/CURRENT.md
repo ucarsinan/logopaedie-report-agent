@@ -10,7 +10,7 @@
 
 - **Date:** 2026-06-29
 - **Updated by:** Codex
-- **Session focus:** Prepared Git close-out plan for the uncommitted Agentic Workflow / demo-hardening changes. Confirmed nothing was staged, committed, or pushed. `./scripts/verify.sh` was requested but is missing, so final verification is blocked until that script is restored or an alternate check command is approved.
+- **Session focus:** Completed Git close-out for the AI handoff update and Vercel frontend proxy hardening. Committed and pushed `docs(ai): update workflow handoff for git close-out` plus `fix(frontend): default backend proxy to api on vercel`. Remaining unrelated backend, claim-copy, presentation, and manual-testing files are still intentionally unstaged.
 
 ---
 
@@ -28,7 +28,7 @@ The PowerPoint-style presentation PDF has been regenerated at `docs/mvp-presenta
 
 Vercel Preview deploy status: local `vercel build --yes` now passes with Preview settings. A real `vercel deploy` was **not** run because it changes external deployment state and needs explicit human approval.
 
-Git close-out status: working tree has only unstaged changes on `main`; no staging/commit/push was performed in the 2026-06-29 close-out planning session.
+Git close-out status: `main` was pushed to `origin/main` through commit `81ba9d2`. The first push attempt failed because the untracked proxy test remained visible while the matching unstaged implementation was hidden by the pre-push stash; this was fixed by committing the proxy implementation and test together.
 
 ---
 
@@ -90,6 +90,8 @@ Local `main` is in sync with `origin/main`.
 - Git close-out check 2026-06-29:
   `./scripts/verify.sh` -> failed with exit 127 because `scripts/verify.sh` does not exist.
   `git diff --check` -> passed.
+- Push verification 2026-06-29:
+  Pre-push hook passed `backend · pytest`, `frontend · eslint`, and `frontend · vitest`; `git push` updated `origin/main` from `6fbe4c8` to `81ba9d2`.
 
 ---
 

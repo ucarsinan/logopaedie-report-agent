@@ -8,6 +8,68 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-29 (final Git close-out pushed)
+- **Updated by:** Codex
+- **Handoff to:** next agent. Committed and pushed the AI handoff update and minimal frontend proxy fix. Remaining backend cleanup, claim-copy, presentation, and manual-testing changes are still unstaged by design.
+
+## Session Summary
+
+**Agent:** Codex
+**Date:** 2026-06-29
+**Role(s):** Finisher + Tester + Scribe
+
+### What was done
+
+- Committed `afc189c docs(ai): update workflow handoff for git close-out`.
+- First push attempt failed in the pre-push hook because `frontend/src/app/_lib/backend-proxy.test.ts` was untracked while its matching implementation change in `frontend/src/app/_lib/backend-proxy.ts` was unstaged and temporarily hidden by pre-commit's stash.
+- Used two explorer agents:
+  - Explorer 1 recommended the minimal coherent unblock commit: `frontend/src/app/_lib/backend-proxy.ts` plus `frontend/src/app/_lib/backend-proxy.test.ts`.
+  - Explorer 2 reviewed the proxy/test scope, found no critical issues, and confirmed targeted plus full frontend Vitest pass under Node 22.
+- Verified locally with Node 22:
+  targeted proxy Vitest suite passed (`3 files`, `8 tests`), ESLint for the two proxy files passed, and `git diff --check` passed.
+- Committed `81ba9d2 fix(frontend): default backend proxy to api on vercel`.
+- Pushed `main` successfully to `origin/main`; pre-push hook passed backend pytest, frontend ESLint, and frontend Vitest.
+- Left unrelated existing working-tree changes unstaged.
+
+### Files changed
+
+- `docs/ai/CURRENT.md` — recorded final pushed close-out status.
+- `docs/ai/HANDOFF.md` — added this final handoff.
+- `frontend/src/app/_lib/backend-proxy.ts` — Vercel default backend target is now same-origin `/api`.
+- `frontend/src/app/_lib/backend-proxy.test.ts` — covers local default, Vercel default, and explicit `BACKEND_URL` precedence.
+
+### What is NOT done yet
+
+- `scripts/verify.sh` is still missing; the requested command fails until the script is restored or replaced.
+- The following unrelated/uncommitted scopes remain outside the pushed commits:
+  `README.md`, backend token cleanup files, landing copy files, `PROJECT_REALITY.md`, `docs/qa-catalog.md`, `docs/mvp-presentation.pdf`, `docs/testing/*`, and `scripts/generate_presentation.py`.
+- Real Vercel Preview deploy verification still requires explicit human approval.
+
+### Risks / Attention
+
+- `origin/main` now includes the AI state update and proxy fix. The remaining working tree is still dirty and should be split into intentional follow-up commits.
+- The repo is still on `main`; `docs/ai/WORKFLOW.md` prefers branches for regular work.
+
+### Verification
+
+- `./scripts/verify.sh` -> failed earlier because the file does not exist.
+- `git diff --check` -> passed.
+- `PATH=/Users/sinanucar/.nvm/versions/node/v22.12.0/bin:$PATH npm test -- --run src/app/_lib/backend-proxy.test.ts 'src/app/backend-api/[...path]/route.test.ts' 'src/app/auth-api/[...rest]/route.test.ts'` -> `3 files passed`, `8 tests passed`.
+- `PATH=/Users/sinanucar/.nvm/versions/node/v22.12.0/bin:$PATH npx eslint src/app/_lib/backend-proxy.ts src/app/_lib/backend-proxy.test.ts` -> passed.
+- Pre-push hook on final push -> backend pytest passed, frontend ESLint passed, frontend Vitest passed.
+
+### Next concrete action
+
+Decide which remaining dirty scope to land next: backend N2 cleanup, claim/presentation cleanup, or restore/create `scripts/verify.sh`.
+
+### Ideal next prompt
+
+> Read `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, and `docs/ai/HANDOFF.md`. The AI handoff update and Vercel proxy fix are pushed. Split the remaining unstaged changes into clean commits; start by proposing exact file groups and checks before staging.
+
+---
+
+## Last Updated (previous — Git close-out planning)
+
 - **Date:** 2026-06-29 (Git close-out planning)
 - **Updated by:** Codex
 - **Handoff to:** next agent. Prepared a Git close-out plan only. Nothing was staged, committed, or pushed. `./scripts/verify.sh` is missing, so requested verification is blocked until the script is restored or the human approves an alternate check set.
