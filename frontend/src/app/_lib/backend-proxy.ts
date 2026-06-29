@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 
-const DEFAULT_BACKEND_URL = "http://localhost:8001";
+const LOCAL_BACKEND_URL = "http://localhost:8001";
 
 export const AUTH_REFRESH_PATH = "/auth-api/refresh";
+
+function defaultBackendUrl(): string {
+  return process.env.VERCEL ? "/api" : LOCAL_BACKEND_URL;
+}
 
 export function backendTarget(req: Request, path: string): string {
   const rawBase =
     process.env.BACKEND_URL ??
     process.env.NEXT_PUBLIC_BACKEND_URL ??
-    DEFAULT_BACKEND_URL;
+    defaultBackendUrl();
   const base = rawBase.replace(/\/+$/, "");
 
   if (base.startsWith("/")) {
