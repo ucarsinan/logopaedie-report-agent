@@ -60,9 +60,6 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ### Other
 
-- [ ] Add/restore `scripts/verify.sh` or document the canonical replacement
-      command before final Git close-out. A close-out planning run on
-      2026-06-29 could not execute it because the file does not exist.
 - [ ] Verify Vercel Preview deploy after local hardening — requires explicit
       human approval to run `vercel deploy`. Expected smoke: Preview deployment
       Ready, frontend 200, `/api/livez` 200, `/api/health` 401 without service
@@ -71,6 +68,13 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **Canonical repo verification script** (2026-06-29) — Added
+      `scripts/verify.sh` as the one-command local check: Git whitespace,
+      backend Ruff/format, mypy, pytest with temp SQLite DB, Alembic
+      upgrade/check with temp SQLite DB, frontend ESLint, Vitest, typecheck,
+      offline Next production build, and presentation script checks. Also
+      aligned pre-commit Ruff hooks to run from `backend/` so hook behavior
+      matches the canonical backend Ruff context.
 - [x] **Split and land remaining dirty scopes** (2026-06-29) — Used three
       parallel explorer agents to audit backend N2 cleanup, claim/presentation
       cleanup, and docs/testing + AI-state scope. Landed separate commits for

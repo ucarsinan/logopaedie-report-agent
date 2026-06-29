@@ -8,6 +8,67 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-29 (final multi-agent verify + push close-out)
+- **Updated by:** Codex
+- **Handoff to:** next agent. The missing canonical verify script was added, full local verification passed, and `main` was pushed. Vercel Preview deploy remains intentionally unrun.
+
+## Session Summary
+
+**Agent:** Codex
+**Date:** 2026-06-29
+**Role(s):** Coordinator + Implementer + Tester + Scribe + Finisher
+
+### What was done
+
+- Used three explorer agents to check the final close-out path:
+  verify-script scope, push readiness, and AI-state handoff updates.
+- Added `scripts/verify.sh` as the canonical one-command local verification.
+- Fixed the offline build path by removing `next/font/google` from the app shell and using system font tokens in CSS.
+- Aligned pre-commit Ruff hooks to run from `backend/`, matching the backend Ruff context used by the verify script.
+- Committed `5c50d7a chore: add offline verify script`.
+- Updated `PROJECT_REALITY.md`, `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, and this handoff for the final Scribe state.
+- Pushed `main` to `origin/main` after verification.
+
+### Files changed
+
+- `.pre-commit-config.yaml` — Ruff hooks now run locally from `backend/`.
+- `scripts/verify.sh` — canonical local verification command.
+- `frontend/src/app/layout.tsx` and `frontend/src/app/globals.css` — remove network-dependent Google font build path.
+- `backend/tests/test_alembic_migrations.py` and migration test files `0005`, `0006`, `0012`-`0018` — Ruff import ordering aligned with backend context.
+- `PROJECT_REALITY.md`, `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, `docs/ai/HANDOFF.md` — final close-out status.
+
+### What is NOT done yet
+
+- Real Vercel Preview deploy verification still requires explicit human approval.
+- M-6 remains blocked on owner-driven anamnesis/phonology WIP.
+- The repo remains a portfolio/demo MVP for synthetic data, not production practice software for real patient data.
+
+### Risks / Attention
+
+- Do not run `vercel deploy` without explicit approval.
+- Do not touch owner-WIP files listed in `docs/ai/TASKS.md`.
+- Keep demo/compliance claims conservative: no "practice-ready", "production-ready", or "100% DSGVO" language unless the architecture and legal basis change.
+
+### Verification
+
+- `./scripts/verify.sh` passed end-to-end:
+  backend Ruff/format, mypy, backend pytest (`535 passed, 9 skipped`),
+  Alembic upgrade/check, frontend ESLint, frontend Vitest (`50 files`, `185 tests`),
+  frontend typecheck, Next production build, and presentation script checks.
+- Commit hook on `5c50d7a` passed: whitespace, EOF, YAML, large-file, merge-conflict, Ruff check, Ruff format.
+
+### Next concrete action
+
+Run a real Vercel Preview deploy only if explicitly approved, otherwise wait for owner unblock on M-6.
+
+### Ideal next prompt
+
+> Read `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, `docs/ai/HANDOFF.md`, and `PROJECT_REALITY.md`. The repo has a green `./scripts/verify.sh` and `main` is pushed. Do not deploy Vercel Preview unless I explicitly approve it; otherwise continue only after the M-6 owner-WIP is unblocked.
+
+---
+
+## Last Updated
+
 - **Date:** 2026-06-29 (multi-agent dirty-scope close-out)
 - **Updated by:** Codex
 - **Handoff to:** next agent. The remaining dirty scopes were split with three explorer agents, corrected where needed, checked, and committed locally. Nothing was pushed.

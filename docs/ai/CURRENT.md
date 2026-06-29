@@ -10,7 +10,7 @@
 
 - **Date:** 2026-06-29
 - **Updated by:** Codex
-- **Session focus:** Completed multi-agent split/commit of the remaining dirty scopes: backend token/health cleanup, demo-claim/presentation cleanup, manual QA docs, and AI reality-state update.
+- **Session focus:** Completed multi-agent final close-out: added canonical `scripts/verify.sh`, aligned pre-commit Ruff execution with backend context, verified the full repo, and pushed `main`.
 
 ---
 
@@ -30,7 +30,7 @@ The PowerPoint-style presentation PDF has been regenerated at `docs/mvp-presenta
 
 Vercel Preview deploy status: local `vercel build --yes` now passes with Preview settings. A real `vercel deploy` was **not** run because it changes external deployment state and needs explicit human approval.
 
-Git close-out status: local `main` is ahead of `origin/main` by the new scope commits. Nothing was pushed in this session.
+Git close-out status: `scripts/verify.sh` now exists and passed the full local check set. `main` was pushed to `origin/main` after the final close-out commits.
 
 ---
 
@@ -40,7 +40,7 @@ Git close-out status: local `main` is ahead of `origin/main` by the new scope co
 main
 ```
 
-Local `main` is ahead of `origin/main` by the unpushed commits from this session.
+`main` is expected to be in sync with `origin/main` after the final push from this session.
 
 ---
 
@@ -90,8 +90,10 @@ Local `main` is ahead of `origin/main` by the unpushed commits from this session
 - `pytest -q` → **533 passed, 9 skipped**
 - Vercel production: `/api/livez` → 200, `/api/health` → 401 (correct), frontend → 200
 - Git close-out check 2026-06-29:
-  `./scripts/verify.sh` -> failed with exit 127 because `scripts/verify.sh` does not exist.
-  `git diff --check` -> passed.
+  `./scripts/verify.sh` now exists and passed end-to-end:
+  backend Ruff/format, mypy, backend pytest (`535 passed, 9 skipped`),
+  Alembic upgrade/check, frontend ESLint, frontend Vitest (`50 files`, `185 tests`),
+  frontend typecheck, Next production build, and presentation script checks.
 - Push verification 2026-06-29:
   Pre-push hook passed `backend · pytest`, `frontend · eslint`, and `frontend · vitest`; `git push` updated `origin/main` from `6fbe4c8` to `81ba9d2`.
 - Reality/status audit 2026-06-29:
@@ -107,6 +109,12 @@ Local `main` is ahead of `origin/main` by the unpushed commits from this session
   - Presentation generator: `ruff check` passed; `py_compile` passed; `python3 scripts/generate_presentation.py` regenerated `docs/mvp-presentation.pdf`.
   - PDF text check: 10 pages; banned claim phrases list was empty.
   - Claim/testing drift `rg` checks: no matches for old `status:"ok"`, Pydantic `EmailStr`, false DSGVO/production claims, or stale landing claims.
+- Multi-agent final close-out 2026-06-29:
+  - Explorer agents recommended adding a canonical verify command before final push, keeping Vercel deploy out of scope, and updating AI state after close-out.
+  - Added `5c50d7a chore: add offline verify script`.
+  - `scripts/verify.sh` uses temp SQLite DBs, in-memory rate limiting, backend Ruff/mypy/pytest/Alembic checks, frontend lint/Vitest/typecheck/build, and presentation script checks.
+  - Removed the network-dependent `next/font/google` usage from the app shell so `next build` works offline with system font tokens.
+  - Changed pre-commit Ruff hooks to run from `backend/`, matching the canonical backend Ruff context and avoiding Alembic import-sorting drift.
 
 ---
 
