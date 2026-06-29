@@ -22,6 +22,10 @@ class TokenService:
         self._access_ttl = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "15")))
         self._leeway = int(os.getenv("JWT_LEEWAY_SECONDS", "0"))
 
+    @property
+    def access_ttl_seconds(self) -> int:
+        return int(self._access_ttl.total_seconds())
+
     def encode_access(self, user_id: UUID, session_hash: str | None = None) -> str:
         now = datetime.now(UTC)
         payload: dict = {

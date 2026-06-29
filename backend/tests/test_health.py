@@ -1,7 +1,7 @@
-"""Tests for health endpoint."""
+"""Tests for public liveness endpoint."""
 
 
-def test_health(client):
-    res = client.get("/health")
+def test_livez(client):
+    res = client.get("/livez")
     assert res.status_code == 200
-    assert res.json() == {"status": "ok"}
+    assert res.json() == {"status": "alive"}

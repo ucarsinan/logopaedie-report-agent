@@ -54,10 +54,19 @@ def test_is_token_revoked_true_when_iat_below_cutoff(
     assert blocklist.is_token_revoked("user-1", token_iat=old_iat) is True
 
 
-def test_is_token_revoked_false_when_iat_at_or_after_cutoff(
+def test_is_token_revoked_true_when_iat_equals_cutoff(
+    blocklist: AccessTokenBlocklist, redis_client: fakeredis.FakeStrictRedis
+) -> None:
+    """Same-second tokens must be revoked at the inclusive cutoff boundary."""
+    cutoff = int(time.time())
+    redis_client.setex(AccessTokenBlocklist._key("user-1"), 900, str(cutoff))
+    assert blocklist.is_token_revoked("user-1", token_iat=cutoff) is True
+
+
+def test_is_token_revoked_false_when_iat_after_cutoff(
     blocklist: AccessTokenBlocklist,
 ) -> None:
-    """A fresh access token (iat >= cutoff) must still be accepted."""
+    """A fresh access token (iat > cutoff) must still be accepted."""
     blocklist.revoke_all_for_user("user-1")
     future_iat = int(time.time()) + 60
     assert blocklist.is_token_revoked("user-1", token_iat=future_iat) is False

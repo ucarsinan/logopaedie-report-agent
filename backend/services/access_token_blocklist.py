@@ -4,7 +4,7 @@ When a user changes their password (or another action invalidates their
 active access tokens), we SETEX a "revoked_until" key with the current
 unix timestamp and a TTL equal to the access-token lifetime. The auth
 dependency compares each incoming token's ``iat`` claim against this
-cutoff and rejects tokens issued before it. After the TTL expires, the
+cutoff and rejects tokens issued at or before it. After the TTL expires, the
 key disappears and no comparison is needed (tokens older than the TTL
 are already expired by JWT validation).
 
@@ -48,7 +48,7 @@ class AccessTokenBlocklist:
     def revoke_all_for_user(self, user_id: str) -> None:
         """Set the revocation cutoff to NOW.
 
-        All access tokens for this user with ``iat < now`` are subsequently
+        All access tokens for this user with ``iat <= now`` are subsequently
         rejected. TTL == access token lifetime, so the key disappears once
         it can no longer block any non-expired token.
         """
@@ -77,4 +77,4 @@ class AccessTokenBlocklist:
             cutoff = int(raw_str)
         except (TypeError, ValueError):
             return False
-        return token_iat < cutoff
+        return token_iat <= cutoff

@@ -119,7 +119,7 @@ def get_access_token_blocklist():  # type: ignore[return]
     from redis_client import get_redis
     from services.access_token_blocklist import AccessTokenBlocklist
 
-    ttl_seconds = int(get_token_service()._access_ttl.total_seconds())
+    ttl_seconds = get_token_service().access_ttl_seconds
     return AccessTokenBlocklist(get_redis(), ttl_seconds=ttl_seconds)
 
 

@@ -22,6 +22,13 @@ def test_jwt_encode_contains_sub_and_exp(svc):
     assert "exp" in decoded and "iat" in decoded
 
 
+def test_access_ttl_seconds_exposes_configured_access_lifetime(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-secret-32-chars-minimum-length!")
+    monkeypatch.setenv("ACCESS_TOKEN_TTL_MINUTES", "7")
+
+    assert TokenService().access_ttl_seconds == 420
+
+
 def test_jwt_decode_rejects_bad_signature(svc):
     uid = uuid4()
     tok = svc.encode_access(uid)

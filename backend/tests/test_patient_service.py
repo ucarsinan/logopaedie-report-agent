@@ -250,10 +250,10 @@ def test_derive_age_group_exactly_120_years_old_returns_erwachsen(engine, enc_sv
     """Boundary case at the high end: exactly 120 years old is still
     inside the inclusive plausibility window and buckets as "erwachsen".
     """
-    from datetime import UTC, datetime
+    from datetime import UTC, date, datetime
 
     from services.patient_service import derive_age_group
 
     today = datetime.now(UTC).date()
-    dob = today.replace(year=today.year - 120).isoformat()
+    dob = date(today.year - 120, today.month, min(today.day, 28)).isoformat()
     assert derive_age_group(dob) == "erwachsen"

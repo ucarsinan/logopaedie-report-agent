@@ -42,8 +42,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             if payload.get("type") != "access":
                 return await call_next(request)
             # I3 S-7: per-user Redis cutoff — if the user changed their
-            # password (or otherwise revoked all access tokens) after this
-            # token's `iat`, treat it as anonymous. Same fall-through as an
+            # password (or otherwise revoked all access tokens) at or after
+            # this token's `iat`, treat it as anonymous. Same fall-through as an
             # invalid JWT so existing 401 / required-auth paths behave
             # identically. Import lazily so middleware import doesn't pull
             # in the Redis client at module load.
