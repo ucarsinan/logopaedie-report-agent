@@ -1,15 +1,4 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.15
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-        files: ^backend/
-        stages: [pre-commit]
-      - id: ruff-format
-        files: ^backend/
-        stages: [pre-commit]
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -27,6 +16,20 @@ repos:
 
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: bash -c 'cd backend && if [[ -x .venv/bin/ruff ]]; then RUFF=.venv/bin/ruff; else RUFF=ruff; fi; "$RUFF" check --fix "${@/#backend\//}"' --
+        language: system
+        files: ^backend/
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: ruff format
+        entry: bash -c 'cd backend && if [[ -x .venv/bin/ruff ]]; then RUFF=.venv/bin/ruff; else RUFF=ruff; fi; "$RUFF" format "${@/#backend\//}"' --
+        language: system
+        files: ^backend/
+        stages: [pre-commit]
+
       - id: backend-pytest
         name: backend · pytest
         entry: bash -c 'cd backend && GROQ_API_KEY=test-key-not-real pytest -q --tb=short'

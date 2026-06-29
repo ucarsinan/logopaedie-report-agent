@@ -28,6 +28,8 @@
   --error-surface:     #fef2f2;
   --error-border:      #fecaca;
   --error-text:        #b91c1c;
+  --font-geist-sans:   ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono:   "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 /* ── Dark mode tokens ── */

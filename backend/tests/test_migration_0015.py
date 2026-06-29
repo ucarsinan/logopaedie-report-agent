@@ -25,11 +25,11 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from alembic.config import Config
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
+from alembic.config import Config
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

@@ -40,12 +40,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from alembic.config import Config
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, text
 
 from alembic import command
+from alembic.config import Config
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 _ALEMBIC_DIR = BACKEND_DIR / "alembic"
