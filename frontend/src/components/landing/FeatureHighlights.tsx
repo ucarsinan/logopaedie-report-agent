@@ -8,7 +8,7 @@ const CLINICAL_FEATURES = [
     ),
     title: "Sprachaufnahme → Bericht",
     description:
-      "Groq Whisper transkribiert die Therapiesitzung in Echtzeit. Llama-3.3-70b strukturiert daraus einen professionellen Befundbericht.",
+      "Groq Whisper transkribiert Demo-Audio. Llama-3.3-70b strukturiert daraus einen Befundbericht-Entwurf.",
   },
   {
     icon: (
@@ -20,7 +20,7 @@ const CLINICAL_FEATURES = [
     ),
     title: "SOAP-Notes automatisch",
     description:
-      "Strukturierte klinische Dokumentation im S-O-A-P-Format — in Sekunden generiert, sofort exportierbar.",
+      "Strukturierte Dokumentationsentwürfe im S-O-A-P-Format — in Sekunden generiert, sofort exportierbar.",
   },
   {
     icon: (
@@ -69,7 +69,7 @@ const TECH_FEATURES = [
     ),
     title: "PDF Export",
     description:
-      "Professionelle PDFs via ReportLab — mit Patientendaten, Diagnose, Abschnittsgliederung und Unterschriftsfeld.",
+      "PDF-Entwürfe via ReportLab — mit Demodaten, Diagnose, Abschnittsgliederung und Unterschriftsfeld.",
   },
   {
     icon: (
@@ -91,7 +91,7 @@ const TECH_FEATURES = [
     ),
     title: "API-first Backend",
     description:
-      "9 FastAPI-Router, 35 pytest-Tests, Rate Limiting via slowapi, vollständige OpenAPI-Dokumentation.",
+      "FastAPI-Router, pytest-Suite, Rate Limiting via slowapi und OpenAPI-Dokumentation.",
   },
 ];
 

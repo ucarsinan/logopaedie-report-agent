@@ -25,8 +25,8 @@ const STACK_LAYERS = [
 
 const STATS = [
   {
-    value: "35+",
-    label: "Backend Tests",
+    value: "CI",
+    label: "Test Suite",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -35,8 +35,8 @@ const STATS = [
     ),
   },
   {
-    value: "9",
-    label: "API Router",
+    value: "API",
+    label: "FastAPI Backend",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -77,10 +77,10 @@ export function ArchitectureCallout() {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-bold text-foreground">
-                Gebaut für den Praxiseinsatz
+                Portfolio-Demo mit Praxisbezug
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Produktionsreifer Stack — vollständig auf GitHub
+                Production-style Engineering — vollständig auf GitHub
               </p>
             </div>
             <a

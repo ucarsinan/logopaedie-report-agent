@@ -1,13 +1,13 @@
 # Logopädie Report Agent
 
-> AI-powered clinical documentation for speech therapists — guided anamnesis, automatic report generation, therapy plans, SOAP notes, and phonological analysis.
+> AI-powered documentation demo for speech therapy workflows — guided anamnesis, report drafts, therapy plans, SOAP notes, and phonological analysis.
 
 [![CI](https://github.com/ucarsinan/logopaedie-report-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ucarsinan/logopaedie-report-agent/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Node](https://img.shields.io/badge/node-22+-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Backend Tests](https://img.shields.io/badge/backend%20tests-157-brightgreen)
-![Frontend Tests](https://img.shields.io/badge/frontend%20tests-59-brightgreen)
+![Backend Tests](https://img.shields.io/badge/backend%20tests-CI--covered-brightgreen)
+![Frontend Tests](https://img.shields.io/badge/frontend%20tests-CI--covered-brightgreen)
 
 **[Live Demo →](https://logopaedie-report-agent.vercel.app/)**
 
@@ -15,9 +15,9 @@
 
 ## What This Is
 
-Speech therapists spend a significant part of their day writing structured clinical reports. This tool automates that workflow: the therapist speaks or types, an AI guides the anamnesis interview, and a formatted report is generated in seconds.
+Speech therapists spend a significant part of their day writing structured reports. This portfolio demo shows how that workflow can be assisted with synthetic data: the therapist speaks or types, an AI guides the anamnesis interview, and a formatted draft report is generated in seconds.
 
-Built as a portfolio project to demonstrate **production-grade AI integration** (Groq Whisper + Llama), **DSGVO-aware data architecture** (Fernet encryption, soft-delete, consent tracking), and a **complete multi-user auth system** (JWT + TOTP 2FA, session management, audit log) — all deployed as a monorepo on Vercel.
+Built as a portfolio project to demonstrate **production-style AI integration** (Groq Whisper + Llama), **privacy-aware demo architecture** (Fernet encryption, soft-delete, consent tracking), and a **complete multi-user auth system** (JWT + TOTP 2FA, session management, audit log) — all deployed as a monorepo on Vercel. It is not production practice software and should not be used with real patient data without a separate compliance architecture and legal review.
 
 ![Report Generation Flow](frontend/public/screenshots/screenshot-bericht.png)
 
@@ -47,7 +47,7 @@ Built as a portfolio project to demonstrate **production-grade AI integration** 
 | AI | Groq API — Whisper large-v3 (STT) + Llama-3.3-70b (NLP) |
 | Persistence | Upstash Redis (sessions, Fernet-encrypted) · Neon PostgreSQL (reports, patients) |
 | Auth | JWT (HS256) + TOTP (PyOTP) + Resend (transactional email) |
-| CI/CD | GitHub Actions (6 parallel jobs: lint, typecheck, test — backend + frontend) |
+| CI/CD | GitHub Actions (lint, typecheck, tests, build, E2E) |
 | Deploy | Vercel Services (monorepo: Next.js frontend + FastAPI backend) |
 
 ---
@@ -71,14 +71,14 @@ Browser (React 19)
 ```text
 backend/
 ├── main.py              # FastAPI app + exception handlers
-├── routers/             # 9 APIRouter modules
-├── services/            # 11 business logic services
+├── routers/             # APIRouter modules
+├── services/            # Business logic services
 ├── models/              # Pydantic schemas + SQLModel tables
 ├── middleware/          # JWT auth + rate limiting (slowapi + Redis)
-└── tests/               # 157 pytest tests
+└── tests/               # pytest suite
 
 frontend/src/
-├── features/            # 9 feature modules (chat, report, phonology, patients, ...)
+├── features/            # Feature modules (chat, report, phonology, patients, ...)
 ├── components/          # Shared UI components
 ├── providers/           # SessionProvider, ThemeProvider, AuthProvider
 ├── hooks/               # Custom hooks
@@ -149,8 +149,8 @@ cd frontend && npm run dev
 ### 4. Tests
 
 ```bash
-cd backend && python -m pytest          # 157 backend tests
-cd frontend && npm test                  # 59 frontend tests
+cd backend && python -m pytest          # backend pytest suite
+cd frontend && npm test                  # frontend Vitest suite
 ```
 
 ---
@@ -172,7 +172,7 @@ Full multi-user auth: email + password registration, email verification, optiona
 | `DATABASE_URL` | Neon PostgreSQL connection string |
 | `KV_REST_API_URL` | Upstash Redis REST URL |
 | `KV_REST_API_TOKEN` | Upstash Redis REST token |
-| `BACKEND_URL` | Backend URL as seen from the frontend proxy (locally `http://localhost:8001`) |
+| `BACKEND_URL` | Optional backend URL as seen from the frontend proxy. Locally it defaults to `http://localhost:8001`; on Vercel it defaults to same-origin `/api`. |
 
 > **Email:** Resend requires one-time domain verification at [resend.com/domains](https://resend.com/domains) before sending from a custom address.
 
@@ -189,7 +189,7 @@ vercel deploy
 ### Deploy checklist
 
 1. Set all env vars listed above in the **backend** service environment.
-2. Set `BACKEND_URL` in the **frontend** service environment (use the Vercel-generated backend service URL).
+2. For Vercel Services, leave `BACKEND_URL` unset or set it to `/api` so the frontend proxy uses the same-origin backend service. Do not set `NEXT_PUBLIC_API_URL` to an absolute backend host in Preview.
 3. Run Alembic migrations: `alembic upgrade head`.
 4. Smoke-test: register → verify email → login → enable 2FA → login with 2FA code.
 
