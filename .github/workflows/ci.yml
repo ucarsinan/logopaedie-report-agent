@@ -51,7 +51,9 @@ jobs:
       run:
         working-directory: backend
     env:
+      DATABASE_URL: sqlite:///${{ runner.temp }}/logopaedie-pytest.db
       GROQ_API_KEY: test-key-not-real
+      RATE_LIMIT_REDIS_URL: memory://
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -68,7 +70,7 @@ jobs:
       # (we ship 1.18.x via requirements-dev.txt).
       - name: Verify alembic migrations match SQLModel metadata
         env:
-          DATABASE_URL: sqlite:///./ci_check.db
+          DATABASE_URL: sqlite:///${{ runner.temp }}/logopaedie-alembic.db
         run: |
           alembic upgrade head
           alembic check

@@ -10,7 +10,7 @@
 
 - **Date:** 2026-06-29
 - **Updated by:** Codex
-- **Session focus:** Completed multi-agent final close-out: added canonical `scripts/verify.sh`, aligned pre-commit Ruff execution with backend context, verified the full repo, and pushed `main`.
+- **Session focus:** Implemented a small multi-agent CI/tooling fix: aligned the backend CI test and Alembic environments with `scripts/verify.sh`, and refreshed stale CI action-version documentation.
 
 ---
 
@@ -30,17 +30,17 @@ The PowerPoint-style presentation PDF has been regenerated at `docs/mvp-presenta
 
 Vercel Preview deploy status: local `vercel build --yes` now passes with Preview settings. A real `vercel deploy` was **not** run because it changes external deployment state and needs explicit human approval.
 
-Git close-out status: `scripts/verify.sh` now exists and passed the full local check set. `main` was pushed to `origin/main` after the final close-out commits.
+Latest local work: branch `codex/ci-verify-env` contains a CI/tooling patch. It has not been pushed.
 
 ---
 
 ## Current Branch
 
 ```text
-main
+codex/ci-verify-env
 ```
 
-`main` is expected to be in sync with `origin/main` after the final push from this session.
+Local branch created from synced `main`; not pushed.
 
 ---
 
@@ -115,6 +115,12 @@ main
   - `scripts/verify.sh` uses temp SQLite DBs, in-memory rate limiting, backend Ruff/mypy/pytest/Alembic checks, frontend lint/Vitest/typecheck/build, and presentation script checks.
   - Removed the network-dependent `next/font/google` usage from the app shell so `next build` works offline with system font tokens.
   - Changed pre-commit Ruff hooks to run from `backend/`, matching the canonical backend Ruff context and avoiding Alembic import-sorting drift.
+- Multi-agent CI/tooling fix 2026-06-29:
+  - M-6 was confirmed still blocked by owner-WIP; no protected anamnesis/phonology files were touched.
+  - Updated `.github/workflows/ci.yml` so backend CI tests use a temp SQLite DB under `${{ runner.temp }}` and `RATE_LIMIT_REDIS_URL=memory://`.
+  - Updated the Alembic CI check to use a separate temp SQLite DB under `${{ runner.temp }}` instead of writing `backend/ci_check.db`.
+  - Updated `docs/ai/PROJECT.md` to reflect that CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, `actions/setup-python@v6`, and Node 22 for frontend jobs.
+  - Verification: `git diff --check`, `bash -n scripts/verify.sh`, YAML parse check, targeted backend `/livez` pytest with temp DB (`1 passed`), `alembic upgrade head`, `alembic check`, and `test ! -e backend/ci_check.db` all passed.
 
 ---
 

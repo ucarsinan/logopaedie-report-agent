@@ -8,6 +8,67 @@
 
 ## Last Updated
 
+- **Date:** 2026-06-29 (CI verifier environment alignment)
+- **Updated by:** Codex
+- **Handoff to:** next agent. A small CI/tooling fix was implemented on branch `codex/ci-verify-env`. No deploy was run and no owner-WIP files were touched.
+
+## Session Summary
+
+**Agent:** Codex
+**Date:** 2026-06-29
+**Role(s):** Coordinator + Implementer + Tester + Scribe
+
+### What was done
+
+- Used multiple explorer agents to confirm M-6 remains blocked and identify a safe non-product implementation task.
+- Created branch `codex/ci-verify-env` from synced `main`.
+- Updated `.github/workflows/ci.yml` so backend CI tests use a temp SQLite DB under `${{ runner.temp }}` and `RATE_LIMIT_REDIS_URL=memory://`.
+- Updated the Alembic CI check to use a separate temp SQLite DB under `${{ runner.temp }}` instead of writing `backend/ci_check.db`.
+- Updated `docs/ai/PROJECT.md` to remove the stale `actions/*@v4` / Node 20 warning and record the current CI action versions.
+- Updated `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, and this handoff.
+
+### Files changed
+
+- `.github/workflows/ci.yml` — backend CI env now matches the canonical verifier safety model.
+- `docs/ai/PROJECT.md` — current CI action-version note.
+- `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, `docs/ai/HANDOFF.md` — session state.
+
+### What is NOT done yet
+
+- Branch `codex/ci-verify-env` has not been pushed.
+- Real GitHub Actions backend-test job has not been observed after this local change.
+- Vercel Preview deploy remains intentionally unrun.
+- M-6 remains blocked on owner-driven anamnesis/phonology WIP.
+
+### Risks / Attention
+
+- Do not touch protected owner-WIP files listed in `docs/ai/TASKS.md`.
+- The CI YAML uses GitHub expression syntax in env values; local YAML parse and reviewer checks passed, but final proof is a GitHub Actions run.
+- No product behavior changed.
+
+### Verification
+
+- `git diff --check` -> passed.
+- `bash -n scripts/verify.sh` -> passed.
+- Ruby YAML parse for `.github/workflows/ci.yml` -> `yaml ok`.
+- Targeted backend pytest with temp DB and in-memory rate limiting:
+  `1 passed in 0.66s`.
+- Alembic temp DB verification: `alembic upgrade head` and `alembic check` passed.
+- `test ! -e backend/ci_check.db` -> passed.
+- Explorer review of CI YAML found no critical issues and rated risk Low.
+
+### Next concrete action
+
+Commit and optionally push branch `codex/ci-verify-env`, then let GitHub Actions validate the backend-test job.
+
+### Ideal next prompt
+
+> Read `docs/ai/CURRENT.md`, `docs/ai/TASKS.md`, and `docs/ai/HANDOFF.md`. Continue from branch `codex/ci-verify-env`: verify the small CI/tooling diff, commit it if not already committed, and only push if I approve. Do not touch M-6 owner-WIP files or run Vercel deploy.
+
+---
+
+## Last Updated
+
 - **Date:** 2026-06-29 (final multi-agent verify + push close-out)
 - **Updated by:** Codex
 - **Handoff to:** next agent. The missing canonical verify script was added, full local verification passed, and `main` was pushed. Vercel Preview deploy remains intentionally unrun.

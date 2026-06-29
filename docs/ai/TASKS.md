@@ -68,6 +68,11 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] **CI backend env alignment with canonical verifier** (2026-06-29) —
+      Updated backend CI tests and Alembic check to use temporary SQLite DBs
+      under `${{ runner.temp }}` and `RATE_LIMIT_REDIS_URL=memory://`, matching
+      the local `scripts/verify.sh` safety model. Also refreshed the stale
+      `docs/ai/PROJECT.md` CI action-version note.
 - [x] **Canonical repo verification script** (2026-06-29) — Added
       `scripts/verify.sh` as the one-command local check: Git whitespace,
       backend Ruff/format, mypy, pytest with temp SQLite DB, Alembic

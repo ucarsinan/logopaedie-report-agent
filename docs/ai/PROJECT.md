@@ -186,7 +186,7 @@ Frontend honors `NEXT_PUBLIC_API_URL` (override the default `/backend-api` base 
 - `NEXT_PUBLIC_API_URL` is baked into the production bundle; do NOT set an absolute host in the E2E CI job (breaks `/backend-api/*` Playwright mocks).
 - Vercel `experimentalServices` is beta and may change without notice.
 - E2E tests require `npx playwright install chromium`.
-- `actions/checkout@v4` + `actions/setup-node@v4` use Node 20 — GitHub will force Node 24 on **2026-06-02**; bump action versions before then.
+- CI currently uses `actions/checkout@v6`, `actions/setup-node@v6`, `actions/setup-python@v6`, and Node 22 for frontend jobs.
 
 ---
 
