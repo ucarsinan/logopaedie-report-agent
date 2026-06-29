@@ -32,21 +32,6 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
       are picked, drop the now-redundant single-column `ix_reports_user_id`,
       `ix_patients_user_id`, and `ix_therapyplanrecord_user_id` in a follow-up.
 
-### From 2026-06-02 N2 review (still open — small inline fixes)
-
-- [ ] **H-2** — `is_token_revoked` exclusive boundary: token issued
-      at exact same second as `change_password` survives. Change `<`
-      to `<=` in `backend/services/access_token_blocklist.py:80` to
-      make the boundary inclusive.
-- [ ] **M-1** — `get_access_token_blocklist` reads private
-      `TokenService._access_ttl`. Add a public `access_ttl_seconds`
-      property (or use `timedelta.total_seconds()` accessor) on
-      `TokenService` and read through it.
-- [ ] **M-3** — `test_derive_age_group_exactly_120_years_old_returns_erwachsen`
-      uses `today.replace(year=today.year - 120)` which can raise
-      `ValueError` on Feb 29 of specific leap years. Replace with
-      `date(today.year - 120, today.month, min(today.day, 28))`.
-
 ### Still open after M-wave (all non-agent-actionable)
 
 - [ ] **S-8** (informational) — `get_optional_user` does not check
@@ -75,13 +60,51 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ### Other
 
-- [ ] Fix the pre-existing Vercel preview deploy failure (separate
-      deployment-config issue; ignore for CI green-up).
+- [ ] Add/restore `scripts/verify.sh` or document the canonical replacement
+      command before final Git close-out. A close-out planning run on
+      2026-06-29 could not execute it because the file does not exist.
+- [ ] Verify Vercel Preview deploy after local hardening — requires explicit
+      human approval to run `vercel deploy`. Expected smoke: Preview deployment
+      Ready, frontend 200, `/api/livez` 200, `/api/health` 401 without service
+      token.
 
 ---
 
 ## Done
 
+- [x] **Vercel Preview local hardening** (2026-06-29) — Investigated old
+      Preview Error deployments with two explorer agents and Vercel CLI.
+      Old logs were unavailable; current `vercel build --yes` with Preview
+      settings succeeds. Added BFF fallback so Vercel runtime defaults to
+      same-origin `/api` when `BACKEND_URL` is unset, while local dev still
+      defaults to `http://localhost:8001`. Added proxy-target tests and updated
+      README deploy guidance. No external deploy was run.
+- [x] **N2 cleanup batch H-2/M-1/M-3** (2026-06-28) — Made
+      `AccessTokenBlocklist.is_token_revoked` inclusive at the same-second
+      boundary (`iat <= cutoff`) with a regression test; added
+      `TokenService.access_ttl_seconds` and updated
+      `get_access_token_blocklist` to use it instead of `_access_ttl`;
+      made the exactly-120-years-old age-group test leap-year-safe.
+      Targeted pytest: `18 passed`; targeted Ruff: all checks passed.
+- [x] **Live synthetic-data smoke test** (2026-06-28) — Verified local
+      backend `/livez` 200 and `/health` 401, local frontend `/` and
+      `/module/report?demo=true` 200, targeted backend/PDF tests
+      `4 passed`, browser report flow with synthetic `/backend-api/*`
+      mocks through generated report preview, and Vercel public `/`,
+      `/api/livez`, `/api/health` behavior. No real Groq chat/generate
+      or patient data used.
+- [x] **Project reality check** (2026-06-26) — Audited repo/docs/state against
+      the real problem and current implementation. Added `PROJECT_REALITY.md`.
+      Recommendation: `validate` before more implementation; strongest risk is
+      compliance/product-readiness claim drift, not lack of a working demo.
+- [x] **Reality audit follow-up: claim cleanup** (2026-06-26) — With two
+      parallel worker agents, synchronized README, landing copy,
+      `docs/qa-catalog.md`, `scripts/generate_presentation.py`, and regenerated
+      `docs/mvp-presentation.pdf`. Removed false `AIProvider`/`LocalProvider`
+      implemented wording, stale README/Landing test counters, and current-state
+      "100% DSGVO"/practice-ready overclaims.
+- [x] **Local project startup** (2026-06-12) — Started backend on `127.0.0.1:8001` using a local SQLite override to avoid external Neon side effects, and frontend on `127.0.0.1:3001` because `3000` was occupied by another Next.js app. Repaired the local Next SWC package by reinstalling `@next/swc-darwin-arm64@16.2.1` in `frontend/node_modules`.
+- [x] **MVP Presentation PDF & Q&A Catalog** (2026-06-08) — Generated a 10-slide PowerPoint-style presentation PDF at `docs/mvp-presentation.pdf` (compiled via a custom ReportLab script `scripts/generate_presentation.py` and verified as exactly 10 pages) and created a comprehensive German Q&A catalog at `docs/qa-catalog.md` covering tech stack, AI pipeline, security, and GDPR compliance.
 - [x] **O-wave** (2026-06-03) — Vercel production fix + CI green-up:
       SESSION_ENCRYPTION_KEY added to `_set_env` autouse fixture (`1c19ff2`);
       mypy 0010/0011 errors fixed (`95a71fb`);
