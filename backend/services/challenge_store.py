@@ -7,7 +7,7 @@ from typing import Protocol
 
 class RedisLike(Protocol):
     def set(self, name: str, value: str, ex: int | None = ..., nx: bool = ...) -> bool | None: ...
-    def execute_command(self, *args: object) -> object: ...
+    def getdel(self, name: str) -> object: ...
 
 
 class ChallengeStore:
@@ -25,7 +25,7 @@ class ChallengeStore:
         self._client.set(self._key(challenge_id), user_id, ex=ttl_seconds, nx=True)
 
     def consume(self, challenge_id: str) -> str | None:
-        raw = self._client.execute_command("GETDEL", self._key(challenge_id))
+        raw = self._client.getdel(self._key(challenge_id))
         if raw is None:
             return None
         if isinstance(raw, bytes):
