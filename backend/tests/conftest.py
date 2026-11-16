@@ -67,6 +67,42 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
 
+def _clear_redis_backed_singletons() -> None:
+    """Drop cached dependencies that hold on to a Redis client instance."""
+    deps = sys.modules.get("dependencies")
+    if deps is None:
+        return
+    for name in ("get_challenge_store", "get_access_token_blocklist", "_auth_service_singleton"):
+        # A test may have monkeypatched the dependency with a plain function.
+        cache_clear = getattr(getattr(deps, name), "cache_clear", None)
+        if cache_clear is not None:
+            cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _offline_redis(request, monkeypatch):
+    """Back ``redis_client.get_redis()`` with a fresh fakeredis per test.
+
+    The real client is the Upstash REST client: pointed at the fake
+    ``KV_REST_API_URL`` above it retries each failed call after a 3 s sleep,
+    and the auth middleware checks the access-token blocklist on every
+    authenticated request — so without this every such request stalls for
+    3 s. ``test_redis_client.py`` exercises the real constructor and opts out.
+    """
+    if request.module.__name__.endswith("test_redis_client"):
+        yield
+        return
+    import fakeredis
+
+    import redis_client
+
+    fake = fakeredis.FakeStrictRedis(decode_responses=True)
+    _clear_redis_backed_singletons()
+    monkeypatch.setattr(redis_client, "get_redis", lambda: fake)
+    yield fake
+    _clear_redis_backed_singletons()
+
+
 @pytest.fixture()
 def mock_redis():
     """Mock the Redis client used by session_store."""

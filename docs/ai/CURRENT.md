@@ -8,9 +8,12 @@
 
 ## Last Updated
 
-- **Date:** 2026-06-29
-- **Updated by:** Codex
-- **Session focus:** Completed multi-agent final close-out: added canonical `scripts/verify.sh`, aligned pre-commit Ruff execution with backend context, verified the full repo, and pushed `main`.
+- **Date:** 2026-11-16
+- **Updated by:** Claude Code
+- **Session focus:** Branch `fix/upstash-redis-rest-client`: backend tests no longer reach the network. Since `redis_client.get_redis()` returns the Upstash REST client, every authenticated test request hit the fake `KV_REST_API_URL` and slept 3 s (`rest_retry_interval`) before the blocklist check fell open — the pre-push hook looked hung. `tests/conftest.py::_offline_redis` now backs `get_redis()` with a fresh fakeredis per test (opt-out: `test_redis_client.py`), guarded by `tests/test_offline_redis.py`. Backend 540 passed / 9 skipped in ~100 s; frontend eslint clean, vitest 185/185.
+- **Open (not changed):** in production an Upstash outage still costs each authenticated request ≥ 3 s before the blocklist fails open; consider `rest_retries=0` plus a short timeout for that path.
+
+Previous update (2026-06-29, Codex): completed multi-agent final close-out: added canonical `scripts/verify.sh`, aligned pre-commit Ruff execution with backend context, verified the full repo, and pushed `main`.
 
 ---
 
