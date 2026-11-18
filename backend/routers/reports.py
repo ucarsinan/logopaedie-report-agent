@@ -1,7 +1,7 @@
 """Persisted reports endpoints."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +14,15 @@ from models.patient import Patient
 from models.report_record import ReportRecord
 
 router = APIRouter(tags=["reports"])
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Treat a naive ISO timestamp as UTC.
+
+    ``created_at`` is a timezone-aware column; newer SQLModel/Pydantic versions
+    reject comparing it with a naive datetime instead of coercing silently.
+    """
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
 
 @router.get("/reports")
@@ -46,13 +55,13 @@ async def list_reports(
             q = q.where(ReportRecord.patient_id == patient_id)
         if from_date:
             try:
-                dt = datetime.fromisoformat(from_date)
+                dt = _as_utc(datetime.fromisoformat(from_date))
                 q = q.where(col(ReportRecord.created_at) >= dt)
             except ValueError:
                 pass
         if to_date:
             try:
-                dt = datetime.fromisoformat(to_date)
+                dt = _as_utc(datetime.fromisoformat(to_date))
                 q = q.where(col(ReportRecord.created_at) <= dt)
             except ValueError:
                 pass

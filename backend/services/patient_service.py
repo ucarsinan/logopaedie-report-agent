@@ -77,7 +77,7 @@ class PatientService:
         guardian_name: str | None = None,
     ) -> Patient:
         year = datetime.now(UTC).year
-        kwargs = dict(
+        kwargs: dict[str, Any] = dict(
             user_id=user_id,
             realname_enc=self._enc.encrypt(realname),
             birthdate_enc=self._enc.encrypt(birthdate),
