@@ -34,7 +34,9 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 ignore = ["E501", "B008", "RUF001"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend"]
+# The repo groups `alembic` imports with first-party code (backend/alembic/
+# holds the migration scripts). Pin it so `alembic.config` sorts the same way.
+known-first-party = ["backend", "alembic"]
 
 [tool.mypy]
 python_version = "3.12"

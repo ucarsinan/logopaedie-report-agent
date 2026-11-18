@@ -68,6 +68,8 @@ Tasks ready to be picked up by an agent once the WIP above clears. Ordered by pr
 
 ## Done
 
+- [x] CI baseline repair: naive report date filters treated as UTC, mypy `Patient(**kwargs)`, Ruff `alembic` isort classification, E2E job pinned to `ubuntu-24.04` (branch `fix/ci-baseline-2026-11`) — 2026-11-18
+
 - [x] **Canonical repo verification script** (2026-06-29) — Added
       `scripts/verify.sh` as the one-command local check: Git whitespace,
       backend Ruff/format, mypy, pytest with temp SQLite DB, Alembic

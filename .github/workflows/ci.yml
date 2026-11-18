@@ -123,7 +123,7 @@ jobs:
 
   frontend-e2e:
     name: Frontend E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest is 26.04; Playwright 1.59 ships no Chromium for it
     defaults:
       run:
         working-directory: frontend

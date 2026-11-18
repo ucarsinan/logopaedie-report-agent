@@ -8,6 +8,23 @@
 
 ## Last Updated
 
+- **Date:** 2026-11-18 (CI baseline repair on `fix/ci-baseline-2026-11`)
+- **Updated by:** Claude Code
+- **Handoff to:** next agent. `main` CI was red for reasons outside any feature branch; this branch restores a green baseline. Merge it before PR #7 (`fix/upstash-redis-rest-client`), then rebase PR #7 if CI needs a rerun.
+
+### 2026-11-18 CI baseline repair
+
+- **Report date filters:** newer SQLModel/Pydantic (resolved from the unpinned ranges: sqlmodel 0.0.50, pydantic 2.14.3) reject comparing the timezone-aware `created_at` column with a naive datetime. `routers/reports.py::_as_utc` now treats naive `from_date`/`to_date` as UTC; regression test `test_filter_accepts_naive_and_aware_dates`.
+- **mypy:** `services/patient_service.py` annotates the `Patient(**kwargs)` dict as `dict[str, Any]` (newer SQLModel types the constructor per field).
+- **Ruff I001:** `backend/alembic/` made isort classification of `alembic.config` inconsistent. `pyproject.toml` pins `alembic` as first-party, matching the existing import layout; no code moved.
+- **E2E job:** `ubuntu-latest` now resolves to Ubuntu 26.04, for which Playwright 1.59 ships no Chromium. The E2E job is pinned to `ubuntu-24.04`; other jobs unchanged.
+- **Verified locally:** `./scripts/verify.sh` exit 0 (backend 535 passed / 9 skipped, frontend 185/185, build) plus `npx playwright test` 32/32 with local Chromium.
+- **Open:** backend requirements are ranges, so this can recur; consider a lock file. `tests/test_reports_extra.py` fails when run alone (FK to `patients` not registered) — test isolation issue, unchanged.
+
+---
+
+Previous update:
+
 - **Date:** 2026-06-29 (final multi-agent verify + push close-out)
 - **Updated by:** Codex
 - **Handoff to:** next agent. The missing canonical verify script was added, full local verification passed, and `main` was pushed. Vercel Preview deploy remains intentionally unrun.
