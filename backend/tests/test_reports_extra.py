@@ -195,6 +195,28 @@ class TestReportFilters:
         assert res.status_code == 200
         assert res.json()["total"] == 0
 
+    def test_filter_accepts_naive_and_aware_dates(self, reports_client):
+        """Naive timestamps are treated as UTC; explicit offsets are kept."""
+        _insert_records(
+            reports_client._engine,
+            [
+                ReportRecord(
+                    pseudonym="P",
+                    report_type="befundbericht",
+                    content_json="{}",
+                    user_id=TEST_USER_ID,
+                ),
+            ],
+        )
+        for query in (
+            "from_date=2000-01-01T00:00:00",
+            "from_date=2000-01-01T00:00:00%2B00:00",
+            "to_date=2099-01-01T00:00:00%2B02:00",
+        ):
+            res = reports_client.get(f"/reports?{query}")
+            assert res.status_code == 200, query
+            assert res.json()["total"] == 1, query
+
     def test_filter_invalid_date_ignored(self, reports_client):
         """Invalid date strings should be silently ignored (no 500)."""
         res = reports_client.get("/reports?from_date=not-a-date&to_date=also-not-a-date")
